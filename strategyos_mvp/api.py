@@ -4852,6 +4852,8 @@ def _summary_with_governed_claim_snapshot(
     try:
         source_access = repository.run_source_access(run_id, context=context)
         if not source_access["allowed"]:
+            if set(source_access.get("reasons") or ()) == {"bulk_revised_inputs_require_recompute"}:
+                raise HTTPException(409, "This briefing has revised inputs and needs recalculation. Use its historical claim snapshot to inspect the original analysis.")
             raise HTTPException(
                 status_code=403,
                 detail="Source permissions do not allow this complete briefing. Use authorized claim-level views.",
@@ -4884,6 +4886,11 @@ def _summary_with_governed_claim_snapshot(
         raise HTTPException(
             status_code=403,
             detail="Your source permissions do not allow this complete briefing.",
+        )
+    if snapshot.get("requires_recompute"):
+        raise HTTPException(
+            status_code=409,
+            detail="This briefing has revised inputs and needs recalculation. Its historical snapshot remains available; no stale current values were returned.",
         )
     if not snapshot.get("records"):
         raise HTTPException(

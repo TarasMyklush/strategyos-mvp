@@ -2783,7 +2783,33 @@ def persist_shadow_claim(
                 f"claim:{revision_id}:upsert",
             ),
         )
+    if previous:
+        queue_claim_revision_refresh(cur, tenant_id=tenant_id,
+            family_id=family_id, replacement_id=revision_id)
     return str(revision_id), True
+
+
+def queue_claim_revision_refresh(cur: Any, *, tenant_id: Any, family_id: Any,
+                                 replacement_id: Any) -> None:
+    """Refresh historical lineage annotations after a new family revision.
+
+    Both ledger writers call this in the revision transaction. Projections retain
+    history, but their stale/current annotations cannot remain silently unchanged.
+    Authoritative reads independently check freshness while delivery is pending.
+    """
+    cur.execute("""with recursive affected(id) as (
+        select id from strategyos_claim_revisions
+        where tenant_id=%s and claim_family_id=%s and id<>%s
+        union
+        select d.derived_claim_revision_id from strategyos_claim_dependencies d
+        join affected a on d.input_claim_revision_id=a.id
+    ) insert into strategyos_claim_projection_outbox
+        (tenant_id,claim_revision_id,projection_type,operation,payload,idempotency_key)
+        select %s,a.id,p.kind,'upsert',jsonb_build_object('replacement_revision_id',%s::text),
+            'revision-refresh:' || %s::text || ':' || a.id::text || ':' || p.kind
+        from affected a cross join (values ('graph'),('vector'),('cache')) p(kind)
+        on conflict(tenant_id,projection_type,idempotency_key) do nothing""",
+        (tenant_id,family_id,replacement_id,tenant_id,str(replacement_id),str(replacement_id)))
 
 
 def _record_claim_backfill_exception(

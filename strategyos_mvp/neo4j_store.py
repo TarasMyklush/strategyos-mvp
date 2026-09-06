@@ -113,6 +113,7 @@ def project_claim_record(record: Mapping[str, Any], operation: str) -> None:
                 "label": str(record.get("label") or ""),
                 "metric_key": str(record.get("metric_key") or ""),
                 "claim_kind": str(record.get("claim_kind") or ""),
+                "superseded_since_analysis": record.get("superseded_since_analysis"),
                 "production_method": str(record.get("production_method") or ""),
                 "value": str(record.get("value") or ""),
                 "unit": str(record.get("unit") or ""),

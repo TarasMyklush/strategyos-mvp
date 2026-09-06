@@ -84,6 +84,7 @@ def project_claim_record(record: Mapping[str, Any], operation: str) -> None:
         "claim_revision_id": revision_id,
         "family_key": record.get("family_key"),
         "point_type": "governed_claim",
+        "superseded_since_analysis": record.get("superseded_since_analysis"),
         "metric_key": record.get("metric_key"),
         "claim_kind": str(record.get("claim_kind") or ""),
         "business_unit": record.get("business_unit"),

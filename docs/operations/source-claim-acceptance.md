@@ -202,3 +202,27 @@ counts alone do not close these boundaries.
   artifact registration is denied, not silently broadened.
 - The handoff changes still require their own frozen full-suite and preview
   deployment gate; the earlier 2,025-test result does not cover them.
+
+### Temporal release and stale-calculation candidate
+
+- Preview workflow `34055434827` succeeded at
+  `0d03331d0f90437fb62a2099c08370abc6a9186c`. Authenticated snapshot, typed query,
+  local semantic retrieval, source-use denial, executive-intake denial and
+  anonymous denial probes passed after deployment. Production was untouched.
+- The browser controller returned `ERR_BLOCKED_BY_CLIENT` navigating to preview.
+  This is not an online visual-QA pass; local browser evidence is recorded separately.
+- Stale-calculation candidate: current reads reject calculations with revised
+  recursive inputs. Historical as-of reads retain exact values and display a
+  visible revised-input warning. Frozen snapshots report `requires_recompute`;
+  legacy bulk reads cannot reuse revised inputs as current prose or charts.
+- Both claim writers enqueue recursive graph/vector/cache refreshes when an input
+  family receives a new revision. Projection annotations retain history; ledger
+  reads enforce freshness independently of delivery lag.
+- Isolated PostgreSQL checks cover recursive revision invalidation, historical
+  snapshot retention, bulk-read refusal, nine dependent projection updates, and
+  an explicit new calculation restoring current eligibility without rewriting
+  the old snapshot. Browser checks verified current exclusion and historical
+  warning at 390 px with no horizontal overflow; viewport reset afterwards.
+- This detects the need for recomputation; it does not yet provide an operator
+  queue or automatically publish/reapprove a replacement analysis. Those remain
+  separate closure work. Full frozen service verification is still required.

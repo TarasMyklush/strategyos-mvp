@@ -531,6 +531,10 @@ class ClaimRepository:
                     f"claim:{revision_id}:upsert",
                 ),
             )
+        if previous:
+            from .state_store import queue_claim_revision_refresh
+            queue_claim_revision_refresh(cur, tenant_id=tenant_id,
+                family_id=family_id, replacement_id=revision_id)
         return {
             "claim_revision_id": str(revision_id),
             "revision_number": revision_number,
@@ -739,7 +743,15 @@ class ClaimRepository:
                                where a.assessment_type = 'lifecycle'
                                  and a.result in ('retracted', 'rejected', 'superseded')
                                  and a.assessed_at <= now()
-                           ) as withdrawn_evidence
+                           ) as withdrawn_evidence,
+                           exists (
+                               select 1 from run_lineage l
+                               join strategyos_claim_revisions old on old.id=l.id
+                               join strategyos_claim_revisions newer
+                                 on newer.claim_family_id=old.claim_family_id
+                                and newer.revision_number>old.revision_number
+                               where newer.recorded_at<=now()
+                           ) as revised_inputs
                     from run_sources r
                     join strategyos_source_systems ss on ss.id = r.source_system_id
                     left join strategyos_source_access_policies p
@@ -761,6 +773,8 @@ class ClaimRepository:
                 reasons.add("source_storage_denied")
             if source.get("withdrawn_evidence"):
                 reasons.add("bulk_withdrawn_evidence")
+            if source.get("revised_inputs"):
+                reasons.add("bulk_revised_inputs_require_recompute")
             if not context.roles.intersection(source.get("allowed_roles") or ()):
                 reasons.add("source_role_denied")
             if context.purpose not in (source.get("allowed_purposes") or ()):
@@ -854,6 +868,9 @@ class ClaimRepository:
                             and policy_allows(context=replace(context, purpose=UsePurpose.OPERATIONS),
                                 claim=claim, source_policies=policies).eligible)
                         record["indexing_allowed"] = bool(policies) and all(p.index_allowed for p in policies)
+                        record["superseded_since_analysis"] = not self._revision_is_current(
+                            cur, claim.revision_id, datetime.now(UTC)
+                        )
                         results.append(record)
             conn.commit()
         return results
@@ -967,6 +984,9 @@ class ClaimRepository:
                         assessments=assessments,
                     )
                     record["selection_reason"] = row["selection_reason"]
+                    record["superseded_since_analysis"] = not self._revision_is_current(
+                        cur, claim.revision_id, datetime.now(UTC)
+                    )
                     records.append(record)
             conn.commit()
         return {
@@ -977,6 +997,7 @@ class ClaimRepository:
             "metadata": snapshot.get("metadata") or {},
             "records": records,
             "denied_count": denied_count,
+            "requires_recompute": any(record["superseded_since_analysis"] for record in records),
             "page": {
                 "limit": limit,
                 "offset": offset,
@@ -1199,6 +1220,9 @@ class ClaimRepository:
                     source_details=self._source_details(cur, claim.revision_id),
                     assessments=self._assessments(cur, claim.revision_id),
                 )
+                record["superseded_since_analysis"] = not self._revision_is_current(
+                    cur, claim.revision_id, datetime.now(UTC)
+                )
             conn.commit()
         record["tenant_id"] = str(resolved_tenant_id)
         record["indexing_allowed"] = True
@@ -1346,11 +1370,13 @@ class ClaimRepository:
         """Exact input revisions retain their own lifecycle, time and BU scope.
 
         A permitted derived label must not launder a withdrawn, expired,
-        untraceable or out-of-scope input. Newer input revisions do not rewrite
-        historical calculations; explicit lifecycle withdrawals do invalidate them.
+        untraceable or out-of-scope input. Newer input revisions invalidate a
+        current calculation, while historical as-of reads retain their inputs.
         """
         if not claim.draft.input_revision_ids:
             return True
+        if not ClaimRepository._revision_is_current(cur, claim.revision_id, query.as_of_at):
+            return False
         from .claim_calculations import validate_persisted_calculation
         try:
             validate_persisted_calculation(cur, claim.draft)
@@ -1384,6 +1410,28 @@ class ClaimRepository:
             (claim.revision_id, context.tenant_id, query.as_of_at, query.as_of_at,
              query.as_of_at, sorted(context.business_units), sorted(context.business_units)),
         )
+        return bool(cur.fetchone()[0])
+
+    @staticmethod
+    def _revision_is_current(cur: Any, revision_id: str, as_of_at: datetime) -> bool:
+        """Check the exact recursive lineage, without rewriting frozen history.
+
+        A later revision in any input family requires an explicit recalculation.
+        A rejected later revision does not authorize falling back to an older one.
+        Only a boolean is exposed: inaccessible replacement values never leak.
+        """
+        cur.execute("""with recursive lineage(id) as (
+            select %s::uuid
+            union
+            select d.input_claim_revision_id from strategyos_claim_dependencies d
+            join lineage l on d.derived_claim_revision_id=l.id
+        ) select not exists (
+            select 1 from lineage l
+            join strategyos_claim_revisions r on r.id=l.id
+            join strategyos_claim_revisions newer on newer.claim_family_id=r.claim_family_id
+                and newer.revision_number>r.revision_number
+            where newer.recorded_at<=%s
+        )""", (revision_id, as_of_at))
         return bool(cur.fetchone()[0])
 
     @staticmethod
