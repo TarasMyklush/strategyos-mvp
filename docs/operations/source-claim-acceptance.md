@@ -52,6 +52,9 @@ It is not yet a full per-claim rewrite of every legacy presentation component.
 | Scoped forecast acceptance remains forecast, with missing/expired review dates failing closed | `test_forecast_review.py`, `test_forecast_review_postgres_e2e.py` |
 | Review actor/time runtime binding, no self-authorization payload and no foreign-claim existence leak | `test_forecast_review_api.py` |
 | Independent claim workspace, safe source rendering and explicit claim types | `test_claim_workspace.py`; browser acceptance required |
+| Legacy mixed Actual/Est group columns cannot become actuals or drive derived actual margin | `test_source_finance_kpis.py`, `test_finance_semantic_quarantine.py` |
+| Quarantined snapshot rows are excluded without crashing eligible reads | `test_quarantined_snapshot_postgres_e2e.py` |
+| Historical semantic audit verifies original file hashes and never rewrites approved history | `test_finance_semantics_audit.py` |
 
 Run the complete suite against dedicated disposable PostgreSQL, Neo4j and Qdrant,
 with the release-pinned local embedding model provisioned:
@@ -81,6 +84,14 @@ image, and rejects skipped tests as well as failures.
 - Source traceability is labelled “Source traced”, not “Evidence verified”.
   Explicit assessment events remain separately visible; the UI does not infer
   a review from a source's origin or successful retrieval.
+- Legacy group budget columns labelled Actual/Est and estimated cash rows need
+  explicit classification. The semantic adapter retains these as unknown and
+  removes them from actual components. Old approved snapshots require a separate
+  source-hash-checked audit and withdrawal/replacement process; new ingestion
+  rules do not retroactively correct previously published claims.
+- Storage/indexing license rights, complete producer/consumer migration,
+  independent corroboration of syndicated material, and full operating/recovery
+  acceptance must still be closed before claiming the entire plan complete.
 
 Record the exact workflow SHA and online observations at release sign-off. Test
 counts alone do not close these boundaries.

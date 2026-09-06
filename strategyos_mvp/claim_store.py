@@ -950,6 +950,11 @@ class ClaimRepository:
                 records: list[dict[str, Any]] = []
                 denied_count = 0
                 for row in rows:
+                    # Unknown is a durable quarantine lane, never an eligible
+                    # read kind. A mixed source must not crash snapshot reads.
+                    if str(row.get("claim_kind")) == str(ClaimKind.UNKNOWN):
+                        denied_count += 1
+                        continue
                     row["source_occurrence_keys"] = self._occurrence_keys(cur, row["id"])
                     row["input_revision_ids"] = self._input_revision_ids(cur, row["id"])
                     claim = self._hydrate_claim(row)

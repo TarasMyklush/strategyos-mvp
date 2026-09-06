@@ -145,7 +145,7 @@ def test_branch_deploy_normalizes_hatchet_profile_for_execution_mode() -> None:
         'if [ "${STRATEGYOS_RUN_EXECUTION_MODE}" != "hatchet" ]; then'
         in workflow
     )
-    assert "--profile '*' --project-name strategyos-branch" in workflow
+    assert "COMPOSE_PROJECT_NAME=strategyos-branch" in workflow
     assert (
         'if [ "${STRATEGYOS_RUN_EXECUTION_MODE}" = "hatchet" ]; then'
         in workflow

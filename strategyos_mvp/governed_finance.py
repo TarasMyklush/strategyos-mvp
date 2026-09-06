@@ -92,6 +92,9 @@ def finance_payload_from_claim_snapshot(
     denied or absent claim cannot leak through the older run summary.
     """
     payload = dict(legacy_payload or {})
+    # Quarantined raw values belong to the governed inspection path, not a
+    # legacy summary that bypasses per-claim authorization.
+    payload.pop("ambiguous_components", None)
     components = dict(payload.get("components") or {})
     for key in COMPONENT_KEYS:
         components.pop(key, None)

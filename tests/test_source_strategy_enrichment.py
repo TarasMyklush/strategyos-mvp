@@ -57,7 +57,7 @@ def test_legion_enrichment_contract_is_data_derived() -> None:
     assert "capabilities" in payload["executive_policy"]
 
 
-def test_revenue_plan_health_uses_the_reconciled_h1_budget_comparator() -> None:
+def test_revenue_plan_health_keeps_plan_but_does_not_restore_ambiguous_actual() -> None:
     finance = derive_source_finance_kpis(DATASET)
     payload = derive_strategy_enrichment(DATASET, finance_kpi=finance)
     revenue = next(
@@ -66,12 +66,23 @@ def test_revenue_plan_health_uses_the_reconciled_h1_budget_comparator() -> None:
         if item["kpi_id"] == "KPI-01"
     )
 
-    assert revenue["actual"] == 4006.0
+    assert revenue["actual"] is None
     assert revenue["checkpoint"] == 3904.0
-    assert revenue["score"] == 102.6
+    assert revenue["score"] is None
+    assert revenue["measurement_status"] == "missing"
     assert revenue["comparator_evidence"]["files"] == [
         "15_Budgets_Forecasts/BU_Group_Budget_2026.xlsx"
     ]
+
+
+def test_explicit_governed_revenue_retains_the_bound_comparator():
+    finance = {"authoritative": True, "components": {
+        "revenue_actual": "120000000", "revenue_plan": "100000000"}}
+    result = derive_strategy_enrichment(DATASET, finance_kpi=finance)
+    revenue = next(item for item in result["plan_health"]["commitments"] if item["kpi_id"] == "KPI-01")
+    assert revenue["actual"] == 120
+    assert revenue["checkpoint"] == 100
+    assert revenue["score"] == 120
 
 
 def test_three_planted_drifts_surface_without_answer_key_labels() -> None:

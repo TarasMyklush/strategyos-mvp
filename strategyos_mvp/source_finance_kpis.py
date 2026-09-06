@@ -28,12 +28,16 @@ def derive_source_finance_kpis(dataset_root: Path) -> dict[str, Any]:
     cash. Plans and the board floor are never manufactured from actuals.
     """
     root = Path(dataset_root)
-    # A group finance pack has a higher-quality, explicitly aligned CEO view
-    # than a division GL extract.  Prefer it when all of its required source
-    # workbooks are present; otherwise retain the existing narrow GL path.
+    # A group finance pack and a division ledger have different entity scopes.
+    # Use the narrow GL path only when no group source was supplied; an invalid
+    # group contract must never turn division numbers into group headlines.
     group_projection = _group_finance_projection(root)
     if group_projection is not None:
         return group_projection
+    if _first_matching(root, "bu_group_budget_2026", ".xlsx") is not None:
+        return _unavailable(
+            "The group finance source does not satisfy its input contract. A division ledger cannot replace group figures.", root,
+        )
     gl_path = _first_matching(root, "gl_extract", ".csv")
     coa_path = _first_matching(root, "chart_of_accounts", ".xlsx")
     cash_path = _first_matching(root, "cash_forecast", ".xlsx")
@@ -220,18 +224,20 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
         return None
 
     headers = _header_positions(rows[0])
-    required = ("businessunit", "h1budget", "h1actualestsarm", "h1var", "ebitdabudget", "ebitdah1est")
+    revenue_column = "h1actualsarm" if "h1actualsarm" in headers else "h1actualestsarm"
+    margin_column = "ebitdah1actual" if "ebitdah1actual" in headers else "ebitdah1est"
+    required = ("businessunit", "h1budget", revenue_column, "h1var", "ebitdabudget", margin_column)
     if any(key not in headers for key in required):
         return None
     units: list[dict[str, Any]] = []
     group_total: dict[str, Decimal] | None = None
     for values in rows[1:]:
         unit = str(_cell(values, headers, "businessunit") or "").strip()
-        actual = _decimal(_cell(values, headers, "h1actualestsarm"))
+        actual = _decimal(_cell(values, headers, revenue_column))
         plan = _decimal(_cell(values, headers, "h1budget"))
         variance = _decimal(_cell(values, headers, "h1var"))
         plan_margin = _decimal(_cell(values, headers, "ebitdabudget"))
-        actual_margin = _decimal(_cell(values, headers, "ebitdah1est"))
+        actual_margin = _decimal(_cell(values, headers, margin_column))
         actual_ebitda = _decimal(_cell(values, headers, "ebitdah1actualsarm"))
         plan_ebitda = _decimal(_cell(values, headers, "ebitdah1budgetsarm"))
         if actual_ebitda is None and actual is not None and actual_margin is not None:
@@ -384,7 +390,7 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
         },
         "cash_vs_floor": cash["evidence"],
     }
-    return {
+    result = {
         "authoritative": True,
         "derived_from": "deterministic_source_finance_kpi_engine",
         "reporting_period_key": period,
@@ -402,6 +408,45 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
         "evidence": evidence,
         "source_files": sorted({*([budget_file]), *trend.get("source_files", []), *cash["evidence"].get("files", [])}),
     }
+    # Numeric reconciliation cannot resolve a mixed Actual/Est column. Keep
+    # its value for governed quarantine, never as an actual display component.
+    ambiguous: dict[str, str] = {}
+    if revenue_column != "h1actualsarm":
+        ambiguous["revenue_actual"] = "Revenue column is labelled Actual/Est without an explicit actual boundary."
+    if margin_column != "ebitdah1actual" and (
+        "ebitdah1actualsarm" not in headers
+        or any(_decimal(_cell(row, headers, "ebitdah1actualsarm")) is None
+               for row in rows[1:] if str(_cell(row, headers, "businessunit") or "").strip())
+    ):
+        ambiguous["ebitda_actual"] = "EBITDA requires an estimated margin where no explicit actual amount is supplied."
+    if "revenue_actual" in ambiguous or "ebitda_actual" in ambiguous:
+        ambiguous["operating_cost_actual"] = "Cost depends on revenue or EBITDA with unresolved actual/estimate semantics."
+    if not cash.get("complete") and cash.get("value") is not None:
+        ambiguous["cash_balance"] = "Selected cash row is not explicitly labelled actual."
+    result["ambiguous_components"] = {
+        key: {"value": result["components"][key], "reason": reason}
+        for key, reason in ambiguous.items()
+    }
+    for key in ambiguous:
+        result["components"][key] = None
+    affected = {
+        "revenue": "revenue_actual" in ambiguous,
+        "ebitda_margin": bool({"revenue_actual", "ebitda_actual"} & ambiguous.keys()),
+        "operating_cost": "operating_cost_actual" in ambiguous,
+        "cash_vs_floor": "cash_balance" in ambiguous,
+    }
+    for key, blocked in affected.items():
+        if not blocked:
+            continue
+        result["actual_complete"][key] = False
+        result["evidence"][key] = {
+            **result["evidence"][key], "actual_complete": False,
+            "summary": "Actual classification needs source clarification; estimates are not actuals.",
+            "details": {"source_semantics": "ambiguous", "file": budget_file, "sha256": budget_sha},
+        }
+        result["dynamics"][key] = {"lifting": [], "dragging": [], "unavailable_reason": "Actual classification is unresolved."}
+    result["source_semantics_version"] = "2"
+    return result
 
 
 def _group_contributor_rows(
@@ -692,7 +737,7 @@ def _group_cash_floor(book: Any, budget_path: Path, root: Path) -> dict[str, Any
     if not candidates:
         return fallback
     quarter, value, floor = candidates[-1]
-    return {"value": _number(value * Decimal("1000000000")), "floor": _number(floor * Decimal("1000000000")), "complete": True, "evidence": {"files": [_relative(budget_path, root)], "summary": f"{quarter} group cash actual/forecast and approved floor from Group_Cash_Floor.", "details": {"file": _relative(budget_path, root), "sha256": _sha256(budget_path), "sheet": "Group_Cash_Floor", "quarter": quarter}}}
+    return {"value": _number(value * Decimal("1000000000")), "floor": _number(floor * Decimal("1000000000")), "complete": bool(re.fullmatch(r"\d{4}-Q[1-4]\s*\(actual\)", quarter.strip(), re.I)), "evidence": {"files": [_relative(budget_path, root)], "summary": f"{quarter} group cash actual/forecast and approved floor from Group_Cash_Floor.", "details": {"file": _relative(budget_path, root), "sha256": _sha256(budget_path), "sheet": "Group_Cash_Floor", "quarter": quarter}}}
 
 
 def _group_cash_floor_trend(book: Any) -> dict[str, Any]:
@@ -716,7 +761,7 @@ def _group_cash_floor_trend(book: Any) -> dict[str, Any]:
         value = _decimal(_cell(values, headers, "actualforecastsarb"))
         budget = _decimal(_cell(values, headers, "groupcashbudgetsarb"))
         floor = _decimal(_cell(values, headers, "floorsarb"))
-        if not quarter or value is None or budget is None or floor is None:
+        if not re.fullmatch(r"\d{4}-Q[1-4]\s*\(actual\)", quarter, re.I) or value is None or budget is None or floor is None:
             continue
         labels.append(quarter.split(" (", 1)[0])
         actual.append(_number(value * Decimal("1000000000")) or "0")
@@ -729,7 +774,7 @@ def _group_cash_floor_trend(book: Any) -> dict[str, Any]:
         "plan": budgets,
         "has_plan_series": True,
         "unit": "sar",
-        "scope_note": "Quarterly group cash actual/forecast versus budget; the approved floor remains the headline comparator.",
+        "scope_note": "Explicitly labelled quarterly group cash actuals versus budget; estimates and forecasts are excluded.",
         "plan_note": "Approved quarterly group cash budget from Group_Cash_Floor.",
     }
 
@@ -752,7 +797,7 @@ def _group_cash_floor_movers(book: Any) -> dict[str, Any]:
         actual = _decimal(_cell(values, headers, "actualforecastsarb"))
         floor = _decimal(_cell(values, headers, "floorsarb"))
         note = str(_cell(values, headers, "note") or "").strip()
-        if not quarter or actual is None or floor is None:
+        if not re.fullmatch(r"\d{4}-Q[1-4]\s*\(actual\)", quarter, re.I) or actual is None or floor is None:
             continue
         entries.append((quarter.split(" (", 1)[0], actual - floor, note))
     for quarter, headroom, note in reversed(entries[-4:]):
@@ -1073,7 +1118,8 @@ def _decimal(value: Any) -> Decimal | None:
     if value is None or isinstance(value, bool) or str(value).strip() == "":
         return None
     try:
-        return Decimal(str(value).replace(",", ""))
+        parsed = Decimal(str(value).replace(",", ""))
+        return parsed if parsed.is_finite() else None
     except (InvalidOperation, ValueError):
         return None
 

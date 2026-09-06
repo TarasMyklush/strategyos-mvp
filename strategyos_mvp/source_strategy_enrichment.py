@@ -272,14 +272,19 @@ def _plan_health(
         checkpoint = _number(row.get(definition.checkpoint_field))
         comparator_evidence: dict[str, Any] | None = None
         binding = definition.finance_binding
-        if binding and isinstance(finance_components, dict):
+        binding_required = bool(binding and isinstance(finance_kpi, dict))
+        if binding_required and isinstance(finance_components, dict):
             bound_actual = _number(finance_components.get(f"{binding}_actual"))
             bound_plan = _number(finance_components.get(f"{binding}_plan"))
-            if bound_actual is not None and bound_plan is not None:
-                actual, checkpoint = bound_actual / definition.finance_scale, bound_plan / definition.finance_scale
-                comparator_evidence = dict(finance_evidence.get(binding) or {})
+            # An unavailable governed component must not fall back to a flash
+            # or estimated workbook value through a second presentation path.
+            actual = bound_actual / definition.finance_scale if bound_actual is not None else None
+            checkpoint = bound_plan / definition.finance_scale if bound_plan is not None else None
+            comparator_evidence = dict(finance_evidence.get(binding) or {})
         lower_is_better = definition.direction == "lower_is_better"
         status = measurement_status(raw_actual, definition.quality)
+        if binding_required and actual is None:
+            status = "missing"
         score = definition.attainment(actual, checkpoint)
         computed_status = definition.status(actual, checkpoint)
         evidence = {"file": source_file, "sheet": "Glidepaths", "kpi_id": kpi_id}

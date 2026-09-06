@@ -36,6 +36,20 @@ must report zero created claims and zero created snapshots.
 
 ## Required acceptance evidence
 
+Before materializing a historical group-finance run, audit its source semantics:
+
+```sh
+python -m strategyos_mvp.finance_semantics_audit --run-id <run-uuid>
+```
+
+This command is read-only. It compares the files against the recorded run hashes
+and identifies actual claims based on ambiguous Actual/Est inputs. Do not approve
+the old classification merely because the numerical reconciliation is zero.
+Do not overwrite an approved snapshot. Withdraw invalid assertions with audited
+lifecycle events and publish a new analysis only after the source interpretation
+has been resolved. The new adapter preserves unresolved values in the unknown
+lane and never infers forecast authors or actual boundaries.
+
 - `strategyos_claim_reconciliations.status = 'passed'` for the selected run.
 - `difference_sar = 0`, record counts match, and no unreviewed backfill exceptions.
 - The snapshot endpoint returns only claims allowed for the test identity.

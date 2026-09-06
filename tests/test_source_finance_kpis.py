@@ -285,8 +285,8 @@ def test_group_budget_becomes_the_ceo_projection_without_double_counting_total(t
     ws = wb.active
     ws.title = "BU_Budget_2026"
     ws.append([
-        "Business Unit", "H1 Budget", "H1 Actual/Est (SAR M)", "H1 Var",
-        "EBITDA Budget %", "EBITDA H1 Est %", "Note",
+        "Business Unit", "H1 Budget", "H1 Actual (SAR M)", "H1 Var",
+        "EBITDA Budget %", "EBITDA H1 Actual %", "Note",
     ])
     ws.append(["North", 100, 105, 5, 10, 12, "Demand ahead"])
     ws.append(["South", 200, 195, -5, 20, 18, "Mix pressure"])
@@ -295,7 +295,7 @@ def test_group_budget_becomes_the_ceo_projection_without_double_counting_total(t
     ws.append(["GROUP (consolidated, bottom-up)", 300, 300, 0, 16.7, 16, "Consolidated"])
     cash = wb.create_sheet("Group_Cash_Floor")
     cash.append(["Quarter", "Group cash budget (SAR B)", "Actual/Forecast (SAR B)", "Floor (SAR B)"])
-    cash.append(["2026-Q2 (est)", 1.2, 1.4, 1.0])
+    cash.append(["2026-Q2 (actual)", 1.2, 1.4, 1.0])
     wb.save(tmp_path / "BU_Group_Budget_2026.xlsx")
 
     payload = derive_source_finance_kpis(tmp_path)
@@ -346,12 +346,12 @@ def test_group_cash_floor_history_is_a_governed_chart_not_a_synthetic_series():
     trend = _group_cash_floor_trend(workbook)
 
     assert trend == {
-        "labels": ["2025-Q4", "2026-Q1", "2026-Q2"],
-        "actual": ["1320000000.00", "1370000000.00", "1410000000.00"],
-        "plan": ["1300000000.00", "1340000000.00", "1380000000.00"],
+        "labels": ["2025-Q4", "2026-Q1"],
+        "actual": ["1320000000.00", "1370000000.00"],
+        "plan": ["1300000000.00", "1340000000.00"],
         "has_plan_series": True,
         "unit": "sar",
-        "scope_note": "Quarterly group cash actual/forecast versus budget; the approved floor remains the headline comparator.",
+        "scope_note": "Explicitly labelled quarterly group cash actuals versus budget; estimates and forecasts are excluded.",
         "plan_note": "Approved quarterly group cash budget from Group_Cash_Floor.",
     }
 
@@ -406,7 +406,6 @@ def test_group_cash_movers_are_populated_from_governed_floor_headroom():
 
     assert movers["dragging"] == []
     assert [(item["name"], item["delta"]) for item in movers["lifting"]] == [
-        ("2026-Q2 group cash", "SAR 210.0M above floor"),
         ("2026-Q1 group cash", "SAR 170.0M above floor"),
     ]
 
@@ -456,7 +455,7 @@ def test_group_cost_component_driver_table_is_discovered_by_schema(tmp_path):
 def test_exact_ebitda_amounts_take_precedence_over_rounded_margins(tmp_path):
     from openpyxl import Workbook
     wb=Workbook();ws=wb.active;ws.title='BU_Budget_2026'
-    ws.append(['Business Unit','H1 Budget','H1 Actual/Est (SAR M)','H1 Var','EBITDA Budget %','EBITDA H1 Est %','EBITDA H1 Budget (SAR M)','EBITDA H1 Actual (SAR M)'])
+    ws.append(['Business Unit','H1 Budget','H1 Actual (SAR M)','H1 Var','EBITDA Budget %','EBITDA H1 Est %','EBITDA H1 Budget (SAR M)','EBITDA H1 Actual (SAR M)'])
     ws.append(['North',100,105,5,10,12,10.04,12.56])
     ws.append(['GROUP',100,105,5,10,12,10.04,12.56])
     wb.save(tmp_path/'BU_Group_Budget_2026.xlsx')
@@ -465,3 +464,27 @@ def test_exact_ebitda_amounts_take_precedence_over_rounded_margins(tmp_path):
     assert result['components']['ebitda_plan']=='10040000.00'
     assert result['components']['operating_cost_actual']=='92440000.00'
     assert result['evidence']['operating_cost']['details']['contributors']['operating_cost'][0]['value_sar']=='92440000.00'
+
+
+def test_mixed_actual_estimate_is_quarantined_without_division_fallback(tmp_path):
+    from openpyxl import Workbook
+    wb = Workbook()
+    sheet = wb.active
+    sheet.title = "BU_Budget_2026"
+    sheet.append(["Business Unit", "H1 Budget", "H1 Actual/Est (SAR M)", "H1 Var",
+                  "EBITDA Budget %", "EBITDA H1 Est %"])
+    sheet.append(["North", 100, 105, 5, 10, 12])
+    cash = wb.create_sheet("Group_Cash_Floor")
+    cash.append(["Quarter", "Group cash budget (SAR B)", "Actual/Forecast (SAR B)", "Floor (SAR B)"])
+    cash.append(["2026-Q1 (actual)", 1, 1.1, 1])
+    cash.append(["2026-Q2 (est)", 1, 1.2, 1])
+    wb.save(tmp_path / "BU_Group_Budget_2026.xlsx")
+    result = derive_source_finance_kpis(tmp_path)
+    assert result["source_semantics_version"] == "2"
+    assert result["components"]["revenue_plan"] == "100000000.00"
+    for key in ("revenue_actual", "ebitda_actual", "operating_cost_actual", "cash_balance"):
+        assert result["components"][key] is None
+        assert result["ambiguous_components"][key]["value"] is not None
+        assert result["ambiguous_components"][key]["reason"]
+    assert not any(result["actual_complete"].values())
+    assert result["dynamics"]["revenue"]["lifting"] == []

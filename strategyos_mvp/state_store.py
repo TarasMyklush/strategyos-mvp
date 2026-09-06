@@ -3013,6 +3013,7 @@ def persist_finance_kpi_claims(
     claims = 0
     exceptions = 0
     component_revisions: dict[str, str] = {}
+    ambiguous_components = finance_payload.get("ambiguous_components") or {}
     from .source_claims import decimal_value
     from .claim_calculations import margin_percent
     def component_decimal(value: Any) -> Decimal | None:
@@ -3022,10 +3023,19 @@ def persist_finance_kpi_claims(
             return None
     for component_key, (metric_key, claim_kind, evidence_key) in _FINANCE_KPI_COMPONENTS.items():
         value = components.get(component_key)
+        ambiguity = ambiguous_components.get(component_key)
+        evidence_payload = evidence.get(evidence_key) if isinstance(evidence.get(evidence_key), dict) else {}
+        details = evidence_payload.get("details") or {}
+        if (claim_kind == ClaimKind.ACTUAL and not ambiguity
+                and finance_payload.get("source_semantics_version") != "2"
+                and details.get("sheet") in {"BU_Budget_2026", "Group_Cash_Floor"}):
+            ambiguity = {"value": value, "reason": "Legacy group source interpretation predates the actual/estimate semantic contract; re-import is required."}
+        if ambiguity:
+            value = ambiguity.get("value")
+            claim_kind = ClaimKind.UNKNOWN
         if value in (None, ""):
             continue
         amount = component_decimal(value)
-        evidence_payload = evidence.get(evidence_key) if isinstance(evidence.get(evidence_key), dict) else {}
         source_document_id, source_path = _kpi_source_document(evidence_ids, evidence_payload)
         if amount is None:
             exceptions += 1
@@ -3076,11 +3086,14 @@ def persist_finance_kpi_claims(
                 "legacy_projection": "run_summary.finance_kpi.components",
                 "run_id": str(run_id),
                 "component_key": component_key,
+                "source_semantics_version": finance_payload.get("source_semantics_version"),
+                "quarantine_reasons": [ambiguity.get("reason")] if ambiguity else [],
                 "reporting_period_key": finance_payload.get("reporting_period_key"),
                 "source_path": source_path,
             },
         )
-        component_revisions[component_key] = revision_id
+        if claim_kind != ClaimKind.UNKNOWN:
+            component_revisions[component_key] = revision_id
         claims += int(created)
 
     ebitda_revision = component_revisions.get("ebitda_actual")
