@@ -239,6 +239,7 @@ def _write_source_pack_run_context(dataset_root: Path, source_pack_payload: dict
                 "acceptance_readiness": source_pack_payload.get("acceptance_readiness") or {},
                 "tenant_context": source_pack_payload.get("tenant_context") or {},
                 "ingestion_job": source_pack_payload.get("ingestion_job") or {},
+                "source_contract": source_pack_payload.get("source_contract") or {},
             },
             indent=2,
         ),
@@ -342,6 +343,7 @@ def _execute_strategyos_workflow(
         summary["source_pack"] = {
             "source_pack_id": source_pack_payload.get("source_pack_id"),
             "source_kind": source_pack_payload.get("source_kind"),
+            "source_contract": source_pack_payload.get("source_contract"),
             "normalized_dataset_root": source_pack_payload.get("normalized_dataset_root"),
             "task_readiness": source_pack_payload.get("task_readiness"),
             "run_resolution": source_pack_payload.get("run_resolution"),

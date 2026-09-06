@@ -5,7 +5,7 @@ import hashlib
 import json
 import threading
 from dataclasses import asdict
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -16,6 +16,14 @@ from .evidence import row_locator, sha256_file
 from .ingestion import DataBundle
 from .models import AuditEvent, Finding
 from .oracle_finance import OracleCanonicalSnapshot
+from .source_claims import (
+    ClaimDraft,
+    ClaimKind,
+    ProductionMethod,
+    SourceAccessPolicy,
+    SourceRegistration,
+    stable_key,
+)
 
 
 def create_run(
@@ -1151,7 +1159,7 @@ def persist_run_summary(
         ensure_data_schema(conn)
         with conn.cursor() as cur:
             tenant_id = upsert_tenant(cur)
-            source_system_id = upsert_source_system(cur, tenant_id)
+            source_system_id = upsert_source_system(cur, tenant_id, summary=summary)
             persisted_run_id = upsert_run_summary(cur, summary, run_id=run_id)
             counts: dict[str, int] = {}
             if bundle is not None:
@@ -1321,11 +1329,54 @@ def data_management_status(run_id: str | None = None) -> dict[str, Any]:
 def ensure_data_schema(conn: Any) -> None:
     sql = schema_path().read_text(encoding="utf-8")
     with conn.cursor() as cur:
-        for statement in sql.split(";"):
-            statement = statement.strip()
-            if statement:
-                cur.execute(statement)
+        _execute_sql_statements(cur, sql)
+        apply_schema_migrations(cur)
     conn.commit()
+
+
+def _execute_sql_statements(cur: Any, sql: str) -> None:
+    for statement in sql.split(";"):
+        statement = statement.strip()
+        if statement:
+            cur.execute(statement)
+
+
+def migration_path() -> Path:
+    return schema_path().parent / "migrations"
+
+
+def apply_schema_migrations(cur: Any) -> list[str]:
+    """Apply immutable, checksummed migrations under one transaction lock."""
+    root = migration_path()
+    if not root.is_dir():
+        return []
+    cur.execute("select pg_advisory_xact_lock(68371429)")
+    applied: list[str] = []
+    for path in sorted(root.glob("[0-9][0-9][0-9][0-9]_*.sql")):
+        version = path.stem.split("_", 1)[0]
+        payload = path.read_bytes()
+        checksum = hashlib.sha256(payload).hexdigest()
+        cur.execute(
+            "select checksum_sha256 from strategyos_schema_migrations where version = %s",
+            (version,),
+        )
+        row = cur.fetchone()
+        if row is not None:
+            if str(row[0]) != checksum:
+                raise RuntimeError(
+                    f"Applied schema migration {version} no longer matches its recorded checksum."
+                )
+            continue
+        _execute_sql_statements(cur, payload.decode("utf-8"))
+        cur.execute(
+            """
+            insert into strategyos_schema_migrations (version, checksum_sha256)
+            values (%s, %s)
+            """,
+            (version, checksum),
+        )
+        applied.append(version)
+    return applied
 
 
 def upsert_tenant(cur: Any) -> str:
@@ -1341,17 +1392,310 @@ def upsert_tenant(cur: Any) -> str:
     return cur.fetchone()[0]
 
 
-def upsert_source_system(cur: Any, tenant_id: str) -> str:
+def upsert_source_system(
+    cur: Any, tenant_id: str, *, summary: dict[str, Any] | None = None
+) -> str:
+    source_pack = dict((summary or {}).get("source_pack") or {})
+    source_contract = dict(
+        source_pack.get("source_contract")
+        or (summary or {}).get("source_contract")
+        or {}
+    )
+    if source_contract:
+        source_key = text_value(source_contract.get("source_key")) or "unclassified-source"
+        display_name = text_value(source_contract.get("display_name")) or "Unclassified source pack"
+        origin_category = text_value(source_contract.get("origin_category")) or "unknown"
+        capture_method = text_value(source_contract.get("capture_method")) or "unknown"
+        cur.execute(
+            """
+            insert into strategyos_source_systems
+                (tenant_id, name, system_type, source_key, origin_category, capture_method,
+                 governed_owner, provider_name, authorization_basis, license_policy_ref, metadata)
+            values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+            on conflict (tenant_id, source_key) do update set
+                name = excluded.name,
+                origin_category = excluded.origin_category,
+                capture_method = excluded.capture_method,
+                governed_owner = excluded.governed_owner,
+                provider_name = excluded.provider_name,
+                authorization_basis = excluded.authorization_basis,
+                license_policy_ref = excluded.license_policy_ref,
+                metadata = excluded.metadata,
+                status = 'active'
+            returning id
+            """,
+            (
+                tenant_id,
+                display_name,
+                f"source_pack:{source_key}",
+                source_key,
+                origin_category,
+                capture_method,
+                source_contract.get("governed_owner"),
+                source_contract.get("provider_name"),
+                source_contract.get("authorization_basis"),
+                source_contract.get("license_policy_ref"),
+                json_blob(
+                    {
+                        "classification_status": source_contract.get(
+                            "classification_status"
+                        ),
+                        "confirmed_by": source_contract.get("confirmed_by"),
+                        "confirmed_at": source_contract.get("confirmed_at"),
+                    }
+                ),
+            ),
+        )
+        source_system_id = cur.fetchone()[0]
+        persist_source_registration_version(
+            cur,
+            tenant_id=tenant_id,
+            source_system_id=source_system_id,
+            source=SourceRegistration(
+                tenant_id=str(tenant_id),
+                source_key=source_key,
+                display_name=display_name,
+                origin_category=origin_category,
+                capture_method=capture_method,
+                governed_owner=source_contract.get("governed_owner"),
+                provider_name=source_contract.get("provider_name"),
+                authorization_basis=source_contract.get("authorization_basis"),
+                license_policy_ref=source_contract.get("license_policy_ref"),
+                metadata={
+                    "classification_status": source_contract.get(
+                        "classification_status"
+                    )
+                },
+            ),
+            recorded_by=text_value(source_contract.get("confirmed_by")) or "system",
+            rationale="Source-pack registration received by governed ingestion.",
+        )
+        access_policy = source_contract.get("access_policy")
+        if source_contract.get("classification_status") == "confirmed" and isinstance(
+            access_policy, dict
+        ):
+            persist_source_access_policy(
+                cur,
+                tenant_id=tenant_id,
+                source_system_id=source_system_id,
+                source_key=source_key,
+                policy_payload=access_policy,
+                recorded_by=text_value(source_contract.get("confirmed_by"))
+                or "operator",
+                rationale="Operator-confirmed source-pack access contract.",
+            )
+        return source_system_id
+    source_key = "internal-finance-dataset"
+    legacy_policy_roles = [
+        "tenant_admin",
+        "system",
+        "operator",
+        "reviewer",
+        "analyst",
+        "auditor",
+        "executive",
+        "bu",
+    ]
+    legacy_policy_purposes = [
+        "operations",
+        "executive_briefing",
+        "analysis",
+        "scenario",
+        "export",
+    ]
+    legacy_policy_fingerprint = stable_key(
+        "source-policy",
+        source_key,
+        sorted(legacy_policy_roles),
+        sorted(legacy_policy_purposes),
+        [],
+        True,
+        False,
+        False,
+    )
     cur.execute(
         """
-        insert into strategyos_source_systems (tenant_id, name, system_type)
-        values (%s, %s, %s)
-        on conflict (tenant_id, name, system_type) do update set status = 'active'
+        insert into strategyos_source_systems
+            (tenant_id, name, system_type, source_key, origin_category, capture_method,
+             governed_owner, authorization_basis)
+        values (%s, %s, %s, %s, 'internal_system', 'folder_import', 'tenant_operator',
+                'Existing authenticated StrategyOS finance dataset intake')
+        on conflict (tenant_id, name, system_type) do update set
+            status = 'active',
+            source_key = excluded.source_key,
+            origin_category = excluded.origin_category,
+            capture_method = excluded.capture_method,
+            governed_owner = excluded.governed_owner,
+            authorization_basis = excluded.authorization_basis
         returning id
         """,
-        (tenant_id, CONFIG.source_system_name, "finance_dataset"),
+        (tenant_id, CONFIG.source_system_name, "finance_dataset", source_key),
     )
-    return cur.fetchone()[0]
+    source_system_id = cur.fetchone()[0]
+    persist_source_registration_version(
+        cur,
+        tenant_id=tenant_id,
+        source_system_id=source_system_id,
+        source=SourceRegistration(
+            tenant_id=str(tenant_id),
+            source_key=source_key,
+            display_name=CONFIG.source_system_name,
+            origin_category="internal_system",
+            capture_method="folder_import",
+            governed_owner="tenant_operator",
+            authorization_basis="Existing authenticated StrategyOS finance dataset intake",
+        ),
+        recorded_by="system:migration",
+        rationale="Legacy source registered for shadow-claim compatibility.",
+    )
+    cur.execute(
+        """
+        insert into strategyos_source_access_policies
+            (tenant_id, source_system_id, policy_version, policy_fingerprint,
+             allowed_roles, allowed_purposes,
+             export_allowed, external_model_allowed, quote_allowed, recorded_by, rationale)
+        values (%s, %s, 1, %s, %s, %s,
+                true, false, false, 'system:migration',
+                'Legacy-parity policy; external-model use remains denied until explicitly authorized.')
+        on conflict (source_system_id, policy_version) do nothing
+        """,
+        (
+            tenant_id,
+            source_system_id,
+            legacy_policy_fingerprint,
+            legacy_policy_roles,
+            legacy_policy_purposes,
+        ),
+    )
+    return source_system_id
+
+
+def persist_source_access_policy(
+    cur: Any,
+    *,
+    tenant_id: str,
+    source_system_id: str,
+    source_key: str,
+    policy_payload: dict[str, Any],
+    recorded_by: str,
+    rationale: str,
+) -> int:
+    policy = SourceAccessPolicy(
+        source_key=source_key,
+        allowed_roles=frozenset(policy_payload.get("allowed_roles") or []),
+        allowed_purposes=frozenset(policy_payload.get("allowed_purposes") or []),
+        allowed_business_units=frozenset(
+            policy_payload.get("allowed_business_units") or []
+        ),
+        export_allowed=bool(policy_payload.get("export_allowed", False)),
+        external_model_allowed=bool(
+            policy_payload.get("external_model_allowed", False)
+        ),
+        quote_allowed=bool(policy_payload.get("quote_allowed", False)),
+    )
+    cur.execute(
+        """
+        select policy_version from strategyos_source_access_policies
+        where source_system_id = %s and policy_fingerprint = %s
+        """,
+        (source_system_id, policy.fingerprint),
+    )
+    existing = cur.fetchone()
+    if existing is not None:
+        return int(existing[0])
+    cur.execute(
+        "select coalesce(max(policy_version), 0) from strategyos_source_access_policies where source_system_id = %s",
+        (source_system_id,),
+    )
+    version = int(cur.fetchone()[0]) + 1
+    cur.execute(
+        "update strategyos_source_access_policies set effective_to = now() where source_system_id = %s and effective_to is null",
+        (source_system_id,),
+    )
+    cur.execute(
+        """
+        insert into strategyos_source_access_policies
+            (tenant_id, source_system_id, policy_version, policy_fingerprint,
+             allowed_roles, allowed_purposes, allowed_business_units, export_allowed,
+             external_model_allowed, quote_allowed, recorded_by, rationale)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """,
+        (
+            tenant_id,
+            source_system_id,
+            version,
+            policy.fingerprint,
+            sorted(policy.allowed_roles),
+            sorted(str(item) for item in policy.allowed_purposes),
+            sorted(policy.allowed_business_units),
+            policy.export_allowed,
+            policy.external_model_allowed,
+            policy.quote_allowed,
+            recorded_by,
+            rationale,
+        ),
+    )
+    return version
+
+
+def persist_source_registration_version(
+    cur: Any,
+    *,
+    tenant_id: str,
+    source_system_id: str,
+    source: SourceRegistration,
+    recorded_by: str,
+    rationale: str,
+) -> int:
+    cur.execute(
+        """
+        select registration_version
+        from strategyos_source_registration_versions
+        where source_system_id = %s and registration_fingerprint = %s
+        """,
+        (source_system_id, source.fingerprint),
+    )
+    existing = cur.fetchone()
+    if existing is not None:
+        return int(existing[0])
+    cur.execute(
+        "select coalesce(max(registration_version), 0) from strategyos_source_registration_versions where source_system_id = %s",
+        (source_system_id,),
+    )
+    version = int(cur.fetchone()[0]) + 1
+    cur.execute(
+        "update strategyos_source_registration_versions set effective_to = now() where source_system_id = %s and effective_to is null",
+        (source_system_id,),
+    )
+    cur.execute(
+        """
+        insert into strategyos_source_registration_versions
+            (tenant_id, source_system_id, registration_version, registration_fingerprint,
+             display_name, origin_category, capture_method, governed_owner, provider_name,
+             authorization_basis, license_policy_ref, retention_class, sensitivity_class,
+             metadata, recorded_by, rationale)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s)
+        """,
+        (
+            tenant_id,
+            source_system_id,
+            version,
+            source.fingerprint,
+            source.display_name,
+            source.origin_category,
+            source.capture_method,
+            source.governed_owner,
+            source.provider_name,
+            source.authorization_basis,
+            source.license_policy_ref,
+            source.retention_class,
+            source.sensitivity_class,
+            json_blob(dict(source.metadata)),
+            recorded_by,
+            rationale,
+        ),
+    )
+    return version
 
 
 def upsert_run_summary(
@@ -1464,6 +1808,14 @@ def persist_evidence_documents(
         for item in summary.get("source_uploads", [])
     }
     evidence_ids: dict[str, str] = {}
+    cur.execute(
+        "select source_key from strategyos_source_systems where id = %s and tenant_id = %s",
+        (source_system_id, tenant_id),
+    )
+    source_system_row = cur.fetchone()
+    if source_system_row is None:
+        raise RuntimeError("Ingestion source registration was not found.")
+    source_key = str(source_system_row[0])
     for rel_path, manifest in bundle.evidence.manifest.items():
         object_uri = source_uri_map.get(Path(rel_path).name)
         cur.execute(
@@ -1496,6 +1848,41 @@ def persist_evidence_documents(
         )
         evidence_id = cur.fetchone()[0]
         evidence_ids[rel_path] = evidence_id
+        received_at = manifest.get("ingested_at") or datetime.now(UTC)
+        occurrence_key = stable_key(
+            "occurrence",
+            tenant_id,
+            source_key,
+            rel_path,
+            manifest["sha256"],
+        )
+        cur.execute(
+            """
+            insert into strategyos_evidence_occurrences
+                (tenant_id, source_system_id, evidence_document_id, ingestion_batch_id,
+                 occurrence_key, source_native_id, source_native_version, original_uri,
+                 received_at, metadata)
+            values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+            on conflict (tenant_id, occurrence_key) do nothing
+            """,
+            (
+                tenant_id,
+                source_system_id,
+                evidence_id,
+                batch_id,
+                occurrence_key,
+                rel_path,
+                manifest["sha256"],
+                f"dataset://{rel_path}",
+                received_at,
+                json_blob(
+                    {
+                        "source_disposition": manifest.get("source_disposition"),
+                        "classification": manifest.get("classification"),
+                    }
+                ),
+            ),
+        )
         cur.execute(
             """
             insert into strategyos_ingestion_batch_documents (batch_id, evidence_document_id)
@@ -1518,6 +1905,7 @@ def persist_finance_records(
         "finance_entities": 0,
         "finance_transactions": 0,
         "finance_balances": 0,
+        "canonical_claim_revisions": 0,
     }
     counts["finance_entities"] += persist_entities(
         cur,
@@ -1603,16 +1991,20 @@ def persist_finance_records(
         None,
         None,
     )
-    counts["finance_balances"] += persist_trial_balance(
+    trial_balance_counts = persist_trial_balance(
         cur,
         tenant_id,
         batch_id,
         evidence_ids.get("02_ERP_Extracts/Trial_Balance_June_2026.xlsx"),
         bundle,
     )
-    counts["finance_balances"] += persist_cash_forecast(
+    counts["finance_balances"] += trial_balance_counts["records"]
+    counts["canonical_claim_revisions"] += trial_balance_counts["claims"]
+    cash_forecast_counts = persist_cash_forecast(
         cur, tenant_id, batch_id, evidence_ids, bundle
     )
+    counts["finance_balances"] += cash_forecast_counts["records"]
+    counts["canonical_claim_revisions"] += cash_forecast_counts["claims"]
     return counts
 
 
@@ -1911,8 +2303,9 @@ def persist_trial_balance(
     batch_id: str,
     source_document_id: str | None,
     bundle: DataBundle,
-) -> int:
+) -> dict[str, int]:
     count = 0
+    claim_count = 0
     for idx, row in bundle.trial_balance.iterrows():
         account = text_value(row.get("Account")) or f"trial_balance:{idx}"
         cur.execute(
@@ -1936,8 +2329,28 @@ def persist_trial_balance(
                 json_blob(row_to_dict(row)),
             ),
         )
+        amount = money_value(row.get("Net"))
+        if amount is not None:
+            claim_count += int(
+                persist_shadow_claim(
+                    cur,
+                    tenant_id=tenant_id,
+                    batch_id=batch_id,
+                    subject_type="finance_account",
+                    subject_key=account,
+                    metric_key="finance.trial_balance.net",
+                    claim_kind=ClaimKind.ACTUAL,
+                    value_numeric=amount,
+                    unit="SAR",
+                    currency="SAR",
+                    source_document_id=source_document_id,
+                    source_locator=row_locator(idx),
+                    dimensions={"account": account},
+                    metadata={"legacy_projection": "strategyos_finance_balances"},
+                )
+            )
         count += 1
-    return count
+    return {"records": count, "claims": claim_count}
 
 
 def persist_cash_forecast(
@@ -1946,8 +2359,9 @@ def persist_cash_forecast(
     batch_id: str,
     evidence_ids: dict[str, str],
     bundle: DataBundle,
-) -> int:
+) -> dict[str, int]:
     count = 0
+    claim_count = 0
     source_document_id = evidence_ids.get(
         "07_Cash_Forecast/CFO_Cash_Forecast_June_2026.xlsx"
     )
@@ -1955,6 +2369,9 @@ def persist_cash_forecast(
         for idx, row in df.iterrows():
             payload = row_to_dict(row) | {"sheet_name": sheet_name}
             natural_key = f"{sheet_name}:{idx}"
+            amount = money_value(row.get("Balance (SAR)")) or money_value(
+                row.get("H2_Total_LC")
+            )
             cur.execute(
                 """
                 insert into strategyos_finance_balances
@@ -1970,15 +2387,183 @@ def persist_cash_forecast(
                     natural_key,
                     text_value(row.get("Account")) or sheet_name,
                     sheet_name,
-                    money_value(row.get("Balance (SAR)"))
-                    or money_value(row.get("H2_Total_LC")),
+                    amount,
                     source_document_id,
                     f"{sheet_name} sheet row {idx + 2}",
                     json_blob(payload),
                 ),
             )
+            if amount is not None:
+                claim_count += int(
+                    persist_shadow_claim(
+                        cur,
+                        tenant_id=tenant_id,
+                        batch_id=batch_id,
+                        subject_type="cash_forecast_line",
+                        subject_key=natural_key,
+                        metric_key="finance.cash_forecast.balance",
+                        claim_kind=ClaimKind.FORECAST,
+                        value_numeric=amount,
+                        unit="SAR",
+                        currency="SAR",
+                        source_document_id=source_document_id,
+                        source_locator=f"{sheet_name} sheet row {idx + 2}",
+                        author_identity="source-role:cfo",
+                        dimensions={"sheet_name": sheet_name},
+                        metadata={"legacy_projection": "strategyos_finance_balances"},
+                    )
+                )
             count += 1
-    return count
+    return {"records": count, "claims": claim_count}
+
+
+def persist_shadow_claim(
+    cur: Any,
+    *,
+    tenant_id: str,
+    batch_id: str,
+    subject_type: str,
+    subject_key: str,
+    metric_key: str,
+    claim_kind: ClaimKind,
+    value_numeric: Any,
+    unit: str,
+    currency: str | None,
+    source_document_id: str | None,
+    source_locator: str | None,
+    author_identity: str | None = None,
+    business_unit: str | None = None,
+    dimensions: dict[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> bool:
+    """Shadow-write one immutable claim without changing existing read paths."""
+    occurrence_key: str | None = None
+    occurrence_id: str | None = None
+    if source_document_id is not None:
+        cur.execute(
+            """
+            select eo.id, eo.occurrence_key, ss.source_key
+            from strategyos_evidence_occurrences eo
+            join strategyos_source_systems ss on ss.id = eo.source_system_id
+            where eo.tenant_id = %s and eo.evidence_document_id = %s and eo.ingestion_batch_id = %s
+            order by eo.created_at desc
+            limit 1
+            """,
+            (tenant_id, source_document_id, batch_id),
+        )
+        occurrence = cur.fetchone()
+        if occurrence is not None:
+            occurrence_id, occurrence_key, assertion_namespace = occurrence
+        else:
+            assertion_namespace = "unclassified-source"
+    else:
+        assertion_namespace = "unclassified-source"
+    draft = ClaimDraft(
+        tenant_id=str(tenant_id),
+        assertion_namespace=str(assertion_namespace),
+        subject_type=subject_type,
+        subject_key=subject_key,
+        metric_key=metric_key,
+        claim_kind=claim_kind,
+        production_method=ProductionMethod.IMPORTED,
+        value_numeric=str(value_numeric),
+        unit=unit,
+        currency=currency,
+        business_unit=business_unit,
+        dimensions=dimensions or {},
+        author_identity=author_identity,
+        source_occurrence_keys=(str(occurrence_key),) if occurrence_key else (),
+        metadata=metadata or {},
+    )
+    cur.execute(
+        """
+        insert into strategyos_claim_families
+            (tenant_id, family_key, assertion_namespace, claim_kind_lane,
+             subject_type, subject_key, metric_key, business_unit, dimensions)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+        on conflict (tenant_id, family_key) do nothing
+        """,
+        (
+            tenant_id,
+            draft.family_key,
+            draft.assertion_namespace,
+            draft.claim_kind,
+            subject_type,
+            subject_key,
+            metric_key,
+            business_unit,
+            json_blob(dimensions or {}),
+        ),
+    )
+    cur.execute(
+        "select id from strategyos_claim_families where tenant_id = %s and family_key = %s for update",
+        (tenant_id, draft.family_key),
+    )
+    family_id = cur.fetchone()[0]
+    cur.execute(
+        "select id from strategyos_claim_revisions where claim_family_id = %s and fingerprint = %s",
+        (family_id, draft.fingerprint),
+    )
+    if cur.fetchone() is not None:
+        return False
+    cur.execute(
+        "select id, revision_number from strategyos_claim_revisions where claim_family_id = %s order by revision_number desc limit 1",
+        (family_id,),
+    )
+    previous = cur.fetchone()
+    revision_number = int(previous[1]) + 1 if previous else 1
+    cur.execute(
+        """
+        insert into strategyos_claim_revisions
+            (tenant_id, claim_family_id, revision_number, fingerprint, claim_kind,
+             production_method, value_numeric, unit, scale, currency, author_identity,
+             traceability_state, supersedes_revision_id, metadata)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s, %s, %s::jsonb)
+        returning id
+        """,
+        (
+            tenant_id,
+            family_id,
+            revision_number,
+            draft.fingerprint,
+            draft.claim_kind,
+            draft.production_method,
+            draft.value_numeric,
+            draft.unit,
+            draft.currency,
+            draft.author_identity,
+            "present" if occurrence_id else "incomplete",
+            previous[0] if previous else None,
+            json_blob(dict(draft.metadata) | {"source_locator": source_locator}),
+        ),
+    )
+    revision_id = cur.fetchone()[0]
+    if occurrence_id is not None:
+        cur.execute(
+            """
+            insert into strategyos_claim_evidence_links
+                (claim_revision_id, evidence_occurrence_id, relationship_type, source_locator)
+            values (%s, %s, 'supports', %s)
+            """,
+            (revision_id, occurrence_id, source_locator),
+        )
+    for projection in ("graph", "vector", "cache"):
+        cur.execute(
+            """
+            insert into strategyos_claim_projection_outbox
+                (tenant_id, claim_revision_id, projection_type, operation, payload, idempotency_key)
+            values (%s, %s, %s, 'upsert', %s::jsonb, %s)
+            on conflict do nothing
+            """,
+            (
+                tenant_id,
+                revision_id,
+                projection,
+                json_blob({"claim_revision_id": str(revision_id), "family_key": draft.family_key}),
+                f"claim:{revision_id}:upsert",
+            ),
+        )
+    return True
 
 
 def persist_findings(cur: Any, run_id: str, findings: list[Finding]) -> int:

@@ -742,3 +742,9 @@ create index if not exists idx_strategyos_agent_artifact_links_task on strategyo
 create index if not exists idx_strategyos_agent_events_v2_aggregate on strategyos_agent_events_v2(aggregate_type, aggregate_id, aggregate_version);
 create index if not exists idx_strategyos_agent_events_v2_tenant_occurred on strategyos_agent_events_v2(tenant_id, occurred_at desc);
 create index if not exists idx_strategyos_agent_outbox_unpublished on strategyos_agent_outbox(published_at) where published_at is null;
+
+create table if not exists strategyos_schema_migrations (
+    version text primary key,
+    checksum_sha256 text not null,
+    applied_at timestamptz not null default now()
+);

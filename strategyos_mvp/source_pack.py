@@ -49,6 +49,7 @@ from .source_governance import (
     governed_context_path,
     initial_source_disposition,
 )
+from .source_claims import OriginCategory, SourceAccessPolicy
 from .source_quality import build_acceptance_readiness, build_source_quality_report
 from .tasks import (
     blocked_task_items_for_empty_source_pack,
@@ -243,13 +244,18 @@ def _source_id(source_pack_id: str, relative_path: str, sha256_value: str) -> st
     ).hexdigest()[:16]
 
 
-def _deterministic_source_pack_id(entries: list[dict[str, Any]]) -> str:
+def _deterministic_source_pack_id(
+    entries: list[dict[str, Any]], *, source_key: str | None = None
+) -> str:
     hasher = sha256()
     # Identical deliveries from separate tenants must never share a directory.
     from .access_scope import principal_scope
     principal = principal_scope.get()
     if principal and not principal.get("auth_disabled"):
         hasher.update(str(principal.get("tenant_id") or "").encode("utf-8") + b"\0")
+    if source_key:
+        hasher.update(b"source-key\0")
+        hasher.update(source_key.encode("utf-8") + b"\0")
     for entry in sorted(entries, key=lambda item: str(item["relative_path"])):
         hasher.update(str(entry["relative_path"]).encode("utf-8"))
         hasher.update(b"\0")
@@ -260,7 +266,12 @@ def _deterministic_source_pack_id(entries: list[dict[str, Any]]) -> str:
     return hasher.hexdigest()
 
 
-def _build_manifest(raw_root: Path, *, source_pack_id: str) -> list[dict[str, Any]]:
+def _build_manifest(
+    raw_root: Path,
+    *,
+    source_pack_id: str,
+    source_contract: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     ingested_at = datetime.now(UTC).isoformat()
     manifest: list[dict[str, Any]] = []
     for path in _iter_source_files(raw_root):
@@ -285,6 +296,7 @@ def _build_manifest(raw_root: Path, *, source_pack_id: str) -> list[dict[str, An
                 "extraction_status": _extraction_status(path),
                 "issues": [] if supported else ["Unsupported file type."],
                 "ingested_at": ingested_at,
+                "source_contract": dict(source_contract or {}),
             }
         )
     return manifest
@@ -1497,10 +1509,20 @@ def _payload_for(
     *,
     source_kind: str,
     source_ref: str | None = None,
+    source_contract: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     load_configured_plugins()
     refresh_source_pack_role_constants()
-    manifest = _build_manifest(raw_root, source_pack_id=source_pack_id)
+    source_contract = normalize_source_contract(
+        source_pack_id=source_pack_id,
+        source_kind=source_kind,
+        contract=source_contract,
+    )
+    manifest = _build_manifest(
+        raw_root,
+        source_pack_id=source_pack_id,
+        source_contract=source_contract,
+    )
     _classify_manifest(manifest, raw_root, source_pack_id=source_pack_id)
     normalization = _normalize_manifest(manifest, raw_root, source_pack_id=source_pack_id)
     file_accounting = disposition_summary(manifest)
@@ -1522,6 +1544,7 @@ def _payload_for(
         "status": "ok",
         "source_pack_id": source_pack_id,
         "source_kind": source_kind,
+        "source_contract": source_contract,
         "source_pack_root": str(_source_pack_dir(source_pack_id)),
         "raw_root": str(raw_root),
         "normalized_dataset_root": normalization["normalized_dataset_root"],
@@ -1551,7 +1574,9 @@ def _copy_tree_to_raw(source_root: Path, raw_root: Path) -> None:
         shutil.copy2(path, destination)
 
 
-def _source_pack_id_for_tree(source_root: Path) -> str:
+def _source_pack_id_for_tree(
+    source_root: Path, *, source_key: str | None = None
+) -> str:
     manifest_seed: list[dict[str, Any]] = []
     for path in _iter_source_files(source_root):
         manifest_seed.append(
@@ -1561,10 +1586,12 @@ def _source_pack_id_for_tree(source_root: Path) -> str:
                 "size_bytes": path.stat().st_size,
             }
         )
-    return _deterministic_source_pack_id(manifest_seed)
+    return _deterministic_source_pack_id(manifest_seed, source_key=source_key)
 
 
-def stage_source_pack_from_path(folder_path: str) -> dict[str, Any]:
+def stage_source_pack_from_path(
+    folder_path: str, *, source_contract: dict[str, Any] | None = None
+) -> dict[str, Any]:
     resolved = Path(folder_path).expanduser().resolve()
     if not _path_is_within(resolved, CONFIG.workspace_root):
         raise HTTPException(
@@ -1577,7 +1604,10 @@ def stage_source_pack_from_path(folder_path: str) -> dict[str, Any]:
             detail="Source-pack folder path must point to an existing directory.",
         )
 
-    source_pack_id = _source_pack_id_for_tree(resolved)
+    source_pack_id = _source_pack_id_for_tree(
+        resolved,
+        source_key=str((source_contract or {}).get("source_key") or "").strip() or None,
+    )
     raw_root = _raw_dir(source_pack_id)
     raw_root.mkdir(parents=True, exist_ok=True)
     _copy_tree_to_raw(resolved, raw_root)
@@ -1586,10 +1616,13 @@ def stage_source_pack_from_path(folder_path: str) -> dict[str, Any]:
         raw_root,
         source_kind="workspace_path",
         source_ref=str(resolved),
+        source_contract=source_contract,
     )
 
 
-def _source_pack_id_for_uploads(files: list[UploadFile]) -> str:
+def _source_pack_id_for_uploads(
+    files: list[UploadFile], *, source_key: str | None = None
+) -> str:
     manifest_seed: list[dict[str, Any]] = []
     seen: set[str] = set()
     for upload in files:
@@ -1640,7 +1673,7 @@ def _source_pack_id_for_uploads(files: list[UploadFile]) -> str:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="The uploaded archive did not contain readable files.",
         )
-    return _deterministic_source_pack_id(manifest_seed)
+    return _deterministic_source_pack_id(manifest_seed, source_key=source_key)
 
 
 def _append_upload_manifest_seed(
@@ -1674,14 +1707,19 @@ def _append_upload_manifest_seed(
     )
 
 
-def stage_source_pack_uploads(files: list[UploadFile]) -> dict[str, Any]:
+def stage_source_pack_uploads(
+    files: list[UploadFile], *, source_contract: dict[str, Any] | None = None
+) -> dict[str, Any]:
     if not files:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Select at least one file from a source-pack folder before uploading.",
         )
 
-    source_pack_id = _source_pack_id_for_uploads(files)
+    source_pack_id = _source_pack_id_for_uploads(
+        files,
+        source_key=str((source_contract or {}).get("source_key") or "").strip() or None,
+    )
     raw_root = _raw_dir(source_pack_id)
     raw_root.mkdir(parents=True, exist_ok=True)
     try:
@@ -1719,6 +1757,7 @@ def stage_source_pack_uploads(files: list[UploadFile]) -> dict[str, Any]:
         raw_root,
         source_kind="browser_upload",
         source_ref="browser-upload",
+        source_contract=source_contract,
     )
 
 
@@ -1738,11 +1777,200 @@ def validate_source_pack(source_pack_id: str) -> dict[str, Any]:
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Source pack '{source_pack_id}' was not found.",
         )
+    existing_contract: dict[str, Any] | None = None
+    if _summary_path(source_pack_id).is_file():
+        try:
+            existing_contract = dict(
+                json.loads(_summary_path(source_pack_id).read_text(encoding="utf-8")).get(
+                    "source_contract"
+                )
+                or {}
+            )
+        except (OSError, ValueError, TypeError):
+            existing_contract = None
     return _payload_for(
         source_pack_id,
         raw_root,
         source_kind="validated",
         source_ref=str(raw_root),
+        source_contract=existing_contract,
+    )
+
+
+def normalize_source_contract(
+    *,
+    source_pack_id: str,
+    source_kind: str,
+    contract: dict[str, Any] | None,
+) -> dict[str, Any]:
+    supplied = dict(contract or {})
+    origin_value = str(supplied.get("origin_category") or OriginCategory.UNKNOWN)
+    try:
+        origin = OriginCategory(origin_value)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Unsupported source origin '{origin_value}'.",
+        ) from exc
+    derived_capture_method = {
+        "workspace_path": "folder_import",
+        "browser_upload": "file_upload",
+    }.get(source_kind, "unknown")
+    capture_method = str(
+        supplied.get("capture_method") or derived_capture_method
+    )
+    if capture_method not in {
+        "unknown",
+        "file_upload",
+        "folder_import",
+        "api",
+        "email",
+        "chat",
+        "manual_entry",
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Unsupported capture method '{capture_method}'.",
+        )
+    source_key = str(supplied.get("source_key") or f"unclassified:{source_pack_id}").strip()
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{2,159}", source_key):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="source_key must be a stable 3–160 character identifier.",
+        )
+    confirmed_by = str(supplied.get("confirmed_by") or "").strip() or None
+    governed_owner = str(supplied.get("governed_owner") or "").strip() or None
+    authorization_basis = str(supplied.get("authorization_basis") or "").strip() or None
+    provider_name = str(supplied.get("provider_name") or "").strip() or None
+    license_policy_ref = str(supplied.get("license_policy_ref") or "").strip() or None
+    access_policy_payload = supplied.get("access_policy")
+    access_policy: dict[str, Any] | None = None
+    if isinstance(access_policy_payload, dict):
+        try:
+            policy = SourceAccessPolicy(
+                source_key=source_key,
+                allowed_roles=frozenset(
+                    str(item) for item in (access_policy_payload.get("allowed_roles") or [])
+                ),
+                allowed_purposes=frozenset(
+                    str(item)
+                    for item in (access_policy_payload.get("allowed_purposes") or [])
+                ),
+                allowed_business_units=frozenset(
+                    str(item)
+                    for item in (
+                        access_policy_payload.get("allowed_business_units") or []
+                    )
+                ),
+                export_allowed=bool(access_policy_payload.get("export_allowed", False)),
+                external_model_allowed=bool(
+                    access_policy_payload.get("external_model_allowed", False)
+                ),
+                quote_allowed=bool(access_policy_payload.get("quote_allowed", False)),
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=str(exc),
+            ) from exc
+        access_policy = {
+            "allowed_roles": sorted(policy.allowed_roles),
+            "allowed_purposes": sorted(str(item) for item in policy.allowed_purposes),
+            "allowed_business_units": sorted(policy.allowed_business_units),
+            "export_allowed": policy.export_allowed,
+            "external_model_allowed": policy.external_model_allowed,
+            "quote_allowed": policy.quote_allowed,
+            "policy_fingerprint": policy.fingerprint,
+        }
+    if confirmed_by and origin == OriginCategory.LICENSED_EXTERNAL and (
+        not provider_name or not license_policy_ref
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Licensed sources require a provider and license-policy reference before confirmation.",
+        )
+    complete = bool(
+        confirmed_by
+        and origin != OriginCategory.UNKNOWN
+        and governed_owner
+        and authorization_basis
+        and access_policy
+        and str(supplied.get("display_name") or "").strip()
+    )
+    status_value = "confirmed" if complete else "unclassified"
+    return {
+        "source_key": source_key,
+        "display_name": str(supplied.get("display_name") or "Unclassified source pack").strip(),
+        "origin_category": str(origin),
+        "capture_method": capture_method,
+        "governed_owner": governed_owner,
+        "provider_name": provider_name,
+        "authorization_basis": authorization_basis,
+        "license_policy_ref": license_policy_ref,
+        "classification_status": status_value,
+        "confirmed_by": confirmed_by,
+        "confirmed_at": supplied.get("confirmed_at") if confirmed_by else None,
+        "access_policy": access_policy,
+    }
+
+
+def confirm_source_pack_source_contract(
+    source_pack_id: str,
+    *,
+    source_key: str,
+    display_name: str,
+    origin_category: str,
+    governed_owner: str,
+    authorization_basis: str,
+    confirmed_by: str,
+    provider_name: str | None = None,
+    license_policy_ref: str | None = None,
+    allowed_roles: list[str] | None = None,
+    allowed_purposes: list[str] | None = None,
+    allowed_business_units: list[str] | None = None,
+    export_allowed: bool = False,
+    external_model_allowed: bool = False,
+    quote_allowed: bool = False,
+) -> dict[str, Any]:
+    raw_root = _raw_dir(source_pack_id)
+    if not raw_root.is_dir():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Source pack was not found.")
+    previous: dict[str, Any] = {}
+    if _summary_path(source_pack_id).is_file():
+        previous = json.loads(_summary_path(source_pack_id).read_text(encoding="utf-8"))
+    source_kind = str(previous.get("source_kind") or "validated")
+    contract = {
+        "source_key": source_key,
+        "display_name": display_name,
+        "origin_category": origin_category,
+        "governed_owner": governed_owner,
+        "provider_name": provider_name,
+        "authorization_basis": authorization_basis,
+        "license_policy_ref": license_policy_ref,
+        "confirmed_by": confirmed_by,
+        "confirmed_at": datetime.now(UTC).isoformat(),
+        "access_policy": {
+            "allowed_roles": allowed_roles or [],
+            "allowed_purposes": allowed_purposes or [],
+            "allowed_business_units": allowed_business_units or [],
+            "export_allowed": export_allowed,
+            "external_model_allowed": external_model_allowed,
+            "quote_allowed": quote_allowed,
+        },
+    }
+    confirmed_pack_id = _source_pack_id_for_tree(raw_root, source_key=source_key)
+    if confirmed_pack_id != source_pack_id:
+        confirmed_raw_root = _raw_dir(confirmed_pack_id)
+        confirmed_raw_root.mkdir(parents=True, exist_ok=True)
+        _copy_tree_to_raw(raw_root, confirmed_raw_root)
+        source_pack_id = confirmed_pack_id
+        raw_root = confirmed_raw_root
+    return _payload_for(
+        source_pack_id,
+        raw_root,
+        source_kind=source_kind,
+        source_ref=str(previous.get("raw_root") or raw_root),
+        source_contract=contract,
     )
 
 

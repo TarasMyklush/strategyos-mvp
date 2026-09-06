@@ -120,6 +120,7 @@ from . import state_store
 from .state_store import data_management_status, database_connection
 from .storage import ObjectStoreUnavailable, S3CompatibleStore, object_store_status
 from .source_pack import (
+    confirm_source_pack_source_contract,
     confirm_source_pack_mapping,
     resolve_source_pack_for_run,
     stage_source_pack_from_path,
@@ -189,6 +190,19 @@ class ExecutiveDecisionRecordRequest(BaseModel):
 
 class SourcePackPathRequest(BaseModel):
     folder_path: str
+    source_key: str | None = None
+    source_display_name: str | None = None
+    origin_category: str | None = None
+    governed_owner: str | None = None
+    provider_name: str | None = None
+    authorization_basis: str | None = None
+    license_policy_ref: str | None = None
+    allowed_roles: list[str] | None = None
+    allowed_purposes: list[str] | None = None
+    allowed_business_units: list[str] | None = None
+    export_allowed: bool = False
+    external_model_allowed: bool = False
+    quote_allowed: bool = False
 
 
 class SourcePackValidateRequest(BaseModel):
@@ -200,6 +214,23 @@ class SourcePackMappingConfirmRequest(BaseModel):
     relative_path: str
     role: str | None = None
     column_mapping: dict[str, str] | None = None
+
+
+class SourcePackSourceContractRequest(BaseModel):
+    source_pack_id: str
+    source_key: str
+    display_name: str
+    origin_category: str
+    governed_owner: str
+    provider_name: str | None = None
+    authorization_basis: str
+    license_policy_ref: str | None = None
+    allowed_roles: list[str]
+    allowed_purposes: list[str]
+    allowed_business_units: list[str] = Field(default_factory=list)
+    export_allowed: bool = False
+    external_model_allowed: bool = False
+    quote_allowed: bool = False
 
 
 class IngestionConnectorsResponse(BaseModel):
@@ -9840,17 +9871,60 @@ def resume_run(
 @app.post("/source-packs")
 def create_source_pack(
     files: list[UploadFile] = File(...),
-    _: dict[str, Any] = require_role("operator"),
+    source_contract_json: str | None = Form(default=None),
+    principal: dict[str, Any] = require_role("operator"),
 ) -> dict[str, Any]:
-    return stage_source_pack_uploads(files)
+    source_contract = None
+    if source_contract_json:
+        try:
+            source_contract = json.loads(source_contract_json)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="source_contract_json must be valid JSON.",
+            ) from exc
+        if not isinstance(source_contract, dict):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="source_contract_json must contain a JSON object.",
+            )
+        source_contract = {
+            **source_contract,
+            "confirmed_by": str(principal.get("subject") or "operator"),
+            "confirmed_at": datetime.now(UTC).isoformat(),
+            "access_policy": {
+                "allowed_roles": request.allowed_roles or [],
+                "allowed_purposes": request.allowed_purposes or [],
+                "allowed_business_units": request.allowed_business_units or [],
+                "export_allowed": request.export_allowed,
+                "external_model_allowed": request.external_model_allowed,
+                "quote_allowed": request.quote_allowed,
+            },
+        }
+    return stage_source_pack_uploads(files, source_contract=source_contract)
 
 
 @app.post("/source-packs/from-path")
 def create_source_pack_from_path(
     request: SourcePackPathRequest,
-    _: dict[str, Any] = require_role("operator"),
+    principal: dict[str, Any] = require_role("operator"),
 ) -> dict[str, Any]:
-    return stage_source_pack_from_path(request.folder_path)
+    source_contract = None
+    if request.source_key or request.origin_category:
+        source_contract = {
+            "source_key": request.source_key,
+            "display_name": request.source_display_name,
+            "origin_category": request.origin_category,
+            "governed_owner": request.governed_owner,
+            "provider_name": request.provider_name,
+            "authorization_basis": request.authorization_basis,
+            "license_policy_ref": request.license_policy_ref,
+            "confirmed_by": str(principal.get("subject") or "operator"),
+            "confirmed_at": datetime.now(UTC).isoformat(),
+        }
+    return stage_source_pack_from_path(
+        request.folder_path, source_contract=source_contract
+    )
 
 
 @app.post("/source-packs/validate")
@@ -9871,6 +9945,30 @@ def confirm_source_pack_mapping_endpoint(
         request.relative_path,
         role=request.role,
         column_mapping=request.column_mapping,
+    )
+
+
+@app.post("/source-packs/confirm-source")
+def confirm_source_pack_source_endpoint(
+    request: SourcePackSourceContractRequest,
+    principal: dict[str, Any] = require_role("operator", "tenant_admin"),
+) -> dict[str, Any]:
+    return confirm_source_pack_source_contract(
+        request.source_pack_id,
+        source_key=request.source_key,
+        display_name=request.display_name,
+        origin_category=request.origin_category,
+        governed_owner=request.governed_owner,
+        provider_name=request.provider_name,
+        authorization_basis=request.authorization_basis,
+        license_policy_ref=request.license_policy_ref,
+        allowed_roles=request.allowed_roles,
+        allowed_purposes=request.allowed_purposes,
+        allowed_business_units=request.allowed_business_units,
+        export_allowed=request.export_allowed,
+        external_model_allowed=request.external_model_allowed,
+        quote_allowed=request.quote_allowed,
+        confirmed_by=str(principal.get("subject") or "operator"),
     )
 
 
@@ -16818,3 +16916,5 @@ from .operations_api import router as operations_router
 app.include_router(operations_router)
 from .conversation_state import router as conversation_state_router
 app.include_router(conversation_state_router)
+from .claim_api import router as claim_router
+app.include_router(claim_router)
