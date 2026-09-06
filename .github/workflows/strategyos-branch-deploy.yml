@@ -134,7 +134,7 @@ jobs:
       # Branch preview is the Hatchet acceptance environment. Keep these pinned
       # so an inherited or concurrently edited variable cannot silently fall
       # back to synchronous execution.
-      STRATEGYOS_COMPOSE_PROFILES: 'hatchet'
+      STRATEGYOS_COMPOSE_PROFILES: 'hatchet governed-claims'
       HETZNER_HOST: ${{ vars.HETZNER_HOST }}
       HETZNER_USER: ${{ vars.HETZNER_USER }}
       STRATEGYOS_HTTP_PORT: '8080'

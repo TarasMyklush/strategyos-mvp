@@ -133,7 +133,7 @@ def test_branch_deploy_normalizes_hatchet_profile_for_execution_mode() -> None:
         REPO_ROOT / ".github/workflows/strategyos-branch-deploy.yml"
     ).read_text(encoding="utf-8")
     assert "- name: Normalize compose profiles for execution mode" in workflow
-    assert "STRATEGYOS_COMPOSE_PROFILES: 'hatchet'" in workflow
+    assert "STRATEGYOS_COMPOSE_PROFILES: 'hatchet governed-claims'" in workflow
     assert "STRATEGYOS_RUN_EXECUTION_MODE: 'hatchet'" in workflow
     assert (
         'if [ "${profile}" = "hatchet" ] && '
