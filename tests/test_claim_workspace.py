@@ -38,3 +38,17 @@ def test_unresolved_priority_explains_missing_coverage_and_review_separately():
     assert 'unresolved_source_coverage:' in script
     assert 'required_review_missing:' in script
     assert 'snapshot_selection_not_current_at_analysis:' in script
+
+
+def test_technical_provenance_is_collapsed_but_material_qualifications_remain_visible():
+    script = (ROOT / 'claims.js').read_text()
+    assert "var provenance=node('details'" in script
+    assert "Source, interpretation and revision details" in script
+    assert "provenance.append(fields({'Priority policy version'" in script
+    assert "provenance.append(fields({'Revision'" in script
+    assert "article.append(fields({'Valid until'" in script
+    assert 'provenance.open' not in script
+    assert 'article.append(badges,provenance)' in script
+    assert "article.append(node('p','This is not an actual" in script
+    assert "article.append(node('p','Historical result" in script
+    assert "article.append(fields({'Scoped review'" in script

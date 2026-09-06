@@ -12,9 +12,11 @@
     var article = node('article','','card claim-record');
     article.append(node('h2', record.metric_key));
     article.append(node('p', record.label || record.claim_kind, 'claim-kind--' + record.claim_kind));
+    var provenance=node('details','','claim-provenance');
+    provenance.append(node('summary','Source, interpretation and revision details'));
     if(record.comparison && record.comparison.priority_policy_id){
       article.append(node('p',record.comparison.selected_by_priority?'Preferred by the configured source policy. This is not independent verification.':'Not selected by the configured source policy; retained for evidence review.'));
-      article.append(fields({'Priority policy version':record.comparison.priority_policy_version,'Selection basis':record.comparison.selection_basis}));
+      provenance.append(fields({'Priority policy version':record.comparison.priority_policy_version,'Selection basis':record.comparison.selection_basis}));
     }
     if(record.comparison && record.comparison.requires_resolution){
       var reasons={
@@ -32,9 +34,13 @@
     if(record.recalculation_allowed){var recalculate=node('a','Preview recalculation →');recalculate.href='/claims/recalculate?revision='+encodeURIComponent(record.claim_revision_id);article.append(recalculate);}
     if(record.claim_kind === 'forecast' || record.claim_kind === 'assumption') article.append(node('p','This is not an actual. It may change and must not be used as a realized result.'));
     if(record.forecast_review) article.append(fields({'Scoped review':record.forecast_review.status.replaceAll('_',' '),'Review scope':record.forecast_review.scope_key,'Review due':record.forecast_review.review_due_at}));
-    article.append(fields({'Value (source scale)':record.value,'Unit':record.unit,'Scale':record.scale,'Currency':record.currency,'Period':(record.period || {}).start && (record.period || {}).end ? record.period.start + ' to ' + record.period.end : null,'Business unit':record.business_unit || 'Group / unspecified','Author':record.author,'Valid until':record.valid_until || (record.period || {}).valid_until,'Revision':record.claim_revision_id}));
+    article.append(fields({'Value (source scale)':record.value,'Unit':record.unit,'Scale':record.scale,'Currency':record.currency,'Period':(record.period || {}).start && (record.period || {}).end ? record.period.start + ' to ' + record.period.end : null,'Business unit':record.business_unit || 'Group / unspecified','Author':record.author}));
+    if(record.valid_until || (record.period || {}).valid_until) article.append(fields({'Valid until':record.valid_until || record.period.valid_until}));
+    provenance.append(fields({'Revision':record.claim_revision_id}));
     var origins = {internal_system:'Internal source',public_web:'Public web · untrusted',licensed_external:'Licensed external source',correspondence:'Correspondence · reported by author',unknown:'Unclassified source'};
-    (record.sources || []).forEach(function(source){var section=node('section','','claim-source');section.append(node('span',origins[source.origin_category] || origins.unknown,'claim-origin claim-origin--' + source.origin_category));section.append(fields({'Source':source.display_name || source.source_key,'Capture channel':source.capture_method,'Provider':source.provider_name,'License reference':source.license_policy_ref,'Original reference':source.original_uri,'Native version':source.source_native_version,'Locator':source.locator}));article.append(section);});
+    var badges=node('div','','claim-origins');
+    (record.sources || []).forEach(function(source){badges.append(node('span',origins[source.origin_category] || origins.unknown,'claim-origin claim-origin--' + source.origin_category));var section=node('section','','claim-source');section.append(fields({'Source':source.display_name || source.source_key,'Capture channel':source.capture_method,'Provider':source.provider_name,'License reference':source.license_policy_ref,'Original reference':source.original_uri,'Native version':source.source_native_version,'Locator':source.locator}));provenance.append(section);});
+    article.append(badges,provenance);
     if(record.forecast_review_allowed && window.StrategyOSClaimReview) article.append(window.StrategyOSClaimReview(record));
     var details=node('details','');details.append(node('summary','Lineage and assessments'));details.append(node('pre',JSON.stringify({formula:record.formula,interpretation:record.interpretation,assumptions:record.assumptions,assessments:record.assessments,traceability:record.traceability},null,2)));article.append(details);
     return article;
