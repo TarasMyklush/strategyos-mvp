@@ -8,6 +8,11 @@ COMPOSE_FILES="${COMPOSE_FILES:-deploy/docker-compose.yml}"
 COMPOSE_PROFILES="${COMPOSE_PROFILES:-}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-}"
 
+if [[ "$TARGET_DIR" == /opt/strategyos-branch || "$COMPOSE_PROJECT_NAME" == strategyos-branch ]]; then
+  echo "Preview claim history requires a verified roll-forward release; automatic legacy rollback is disabled." >&2
+  exit 1
+fi
+
 COMPOSE_FILE_ARGS=""
 for compose_file in ${COMPOSE_FILES}; do
   COMPOSE_FILE_ARGS="${COMPOSE_FILE_ARGS} -f ${compose_file}"
