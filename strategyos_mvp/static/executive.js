@@ -3874,6 +3874,7 @@
             try {
               var logoutResponse = await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' });
               if (!logoutResponse.ok) throw new Error('Sign-out failed. Retry before leaving this device.');
+              try { localStorage.setItem('strategyos.ui.session-change', JSON.stringify({signedOut:true, nonce:crypto.randomUUID()})); } catch (_error) {}
               window.sessionStorage.removeItem('strategyos.hermes.answer-cache.v2');
               window.localStorage.removeItem('strategyos.hermes.answer-cache.v1');
               window.STRATEGYOS_X = {threads: {}, assistants: {}};
@@ -4781,12 +4782,13 @@
         openAssistantDrawer(morningBriefing);
       };
     }
+    var semanticTone = heroSemanticTone(hero);
     var reviewGate = !hasScore && String(firstDefined(hero.status, preferredHero.status, "")) === "review_gate";
     var statusSignal = reviewGate
       ? "Your decision"
-      : hasScore
-        ? planPresentation.verdict
-        : "Current";
+      : semanticTone === "down" ? "Intervention needed"
+      : semanticTone === "watch" ? "Needs review"
+      : hasScore ? "Board aggregate: " + planPresentation.verdict : "Current";
     var heroStatusText = reviewGate
       ? "Review required"
       : hasScore
@@ -4795,9 +4797,8 @@
     var heroStatusCaption = reviewGate
       ? "An item is waiting for executive sign-off."
       : hasScore
-        ? planPresentation.caption
+        ? "Board commitments: " + planPresentation.caption
         : "Built from the latest available operating data.";
-    var semanticTone = heroSemanticTone(hero);
     var heroEl = $("hero");
     var heroStatusEl = heroEl && heroEl.querySelector(".hero-status");
     ["up", "down", "watch", "flat"].forEach(function (tone) {
@@ -4813,8 +4814,8 @@
     var statusSignalEl = $("hero-status-signal");
     if (statusSignalEl) {
       statusSignalEl.textContent = statusSignal;
-      statusSignalEl.classList.toggle("is-attention", reviewGate || (hasScore && clampedScore < 85));
-      statusSignalEl.classList.toggle("is-watch", hasScore && clampedScore >= 85 && clampedScore < 95);
+      statusSignalEl.classList.toggle("is-attention", reviewGate || semanticTone === "down" || (hasScore && clampedScore < 85));
+      statusSignalEl.classList.toggle("is-watch", !reviewGate && semanticTone !== "down" && (semanticTone === "watch" || (hasScore && clampedScore >= 85 && clampedScore < 95)));
     }
     var byline = $("hero-byline");
     if (byline) {

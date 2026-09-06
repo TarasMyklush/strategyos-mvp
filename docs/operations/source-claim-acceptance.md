@@ -515,3 +515,29 @@ counts alone do not close these boundaries.
   cross-tab account change/logout and rechecks back-forward-cache restores.
   It does not delete saved history or submit drafts. The frontend/evidence
   subset passed 162 tests; live account-switch acceptance remains pending.
+# Preview acceptance, 7 September 2026 (in progress)
+
+Release `1623ac41b7d9655aaf6d16fab3c275f1d7f18230` deployed to
+`new.strategyos.live` through workflow `34063612328`. Its service gate passed
+2,153 tests with zero skips. Production was not changed.
+
+Read-only online checks passed for executive and operator claim access, typed
+actual/plan/forecast selection, external-model and quotation denial, source-backed
+review-file filtering, private conversation access, scoped twin state, and BU
+denial of CEO private work. Experimental unscoped APIs were unavailable as intended.
+
+Human-browser inspection verified the four synthetic origin labels and opening/
+closing provenance disclosures. It also **failed** the cross-tab cookie-only
+identity-change check: the token storage listener alone did not clear previously
+rendered administrator evidence. This is not a passed browser acceptance. The
+follow-up adds a non-authorizing cookie epoch, immediate sign-in/out notification,
+and focus/visibility/timer checks, with executable regression tests. Online retest
+is required after its deployment. No audit history was deleted.
+
+The same visual pass found an aggregate “On plan” label beside an intervention
+headline. The follow-up makes current exception severity take precedence and
+explicitly labels the separate board-commitment aggregate.
+
+Historical finance semantics, granular legacy consumer adoption, database role
+separation/RLS, and recovery downgrade controls remain open; this entry is not a
+whole-scope completion certificate.

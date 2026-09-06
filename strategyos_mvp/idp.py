@@ -33,6 +33,7 @@ ROLE_LABELS = {
 }
 ROLE_REDIRECTS = {"executive": "/executive", "operator": "/sources/intake"}
 SESSION_COOKIE_NAME = "strategyos_session"
+SESSION_EPOCH_COOKIE_NAME = "strategyos_session_epoch"
 
 
 def _now() -> datetime:
@@ -319,7 +320,11 @@ def login_page(manual: bool = False) -> HTMLResponse:
         }});
         const payload = await response.json().catch(() => ({{}}));
         if (!response.ok) throw new Error(payload.detail || 'Invalid credentials for this role.');
-        localStorage.removeItem('strategyos.ui.token');
+        try {{
+          localStorage.removeItem('strategyos.ui.token');
+          // Non-secret notification: cookie-only sign-ins also invalidate other tabs.
+          localStorage.setItem('strategyos.ui.session-change', JSON.stringify({{signedOut:false, nonce:crypto.randomUUID()}}));
+        }} catch (storageError) {{ /* The non-secret cookie marker remains observable. */ }}
         window.location.assign(payload.redirect || '/app');
       }} catch (err) {{
         error.textContent = err.message || 'Invalid credentials for this role.';
@@ -381,6 +386,13 @@ async def login(request: Request) -> JSONResponse:
         samesite="lax",
         path="/",
     )
+    # This random marker grants no authority and contains no identity or token.
+    # It lets already-open workspaces detect cookie-only account switches.
+    response.set_cookie(
+        key=SESSION_EPOCH_COOKIE_NAME, value=secrets.token_urlsafe(24),
+        max_age=CONFIG.idp_token_ttl_seconds, httponly=False,
+        secure=True, samesite="lax", path="/",
+    )
     return response
 
 
@@ -400,6 +412,7 @@ async def logout(request: Request) -> JSONResponse:
         httponly=True,
         samesite="lax",
     )
+    response.delete_cookie(SESSION_EPOCH_COOKIE_NAME, path="/", secure=True, samesite="lax")
     return response
 
 

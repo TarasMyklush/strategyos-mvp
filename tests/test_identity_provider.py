@@ -218,6 +218,11 @@ def test_auth_logout_revokes_session_and_clears_cookie():
         signed_in = client.post("/auth/login", json={"username": "executive.tester", "password": "exec-pass"})
         token = signed_in.json()["access_token"]
         assert token in idp_module.app.state.tokens
+        epoch = client.cookies.get('strategyos_session_epoch')
+        assert epoch and epoch != token
+        epoch_header = next(value for value in signed_in.headers.get_list('set-cookie') if value.startswith('strategyos_session_epoch='))
+        assert 'httponly' not in epoch_header.lower()
+        assert 'secure' in epoch_header.lower()
 
         response = client.post("/auth/logout")
 
@@ -226,6 +231,7 @@ def test_auth_logout_revokes_session_and_clears_cookie():
         assert token not in idp_module.app.state.tokens
         assert "strategyos_session=" in response.headers["set-cookie"].lower()
         assert "max-age=0" in response.headers["set-cookie"].lower()
+        assert client.cookies.get('strategyos_session_epoch') is None
     finally:
         _restore_env(original)
 
