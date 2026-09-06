@@ -856,7 +856,12 @@
 
   function postJson(path, body, options) {
     var requestOptions = options || {};
-    var timeoutMs = Number(firstDefined(requestOptions.timeoutMs, 45000));
+    // Keep the browser deadline beyond the governed provider boundary. The
+    // Codex-compatible service has a 120s execution budget and the API may
+    // need to hydrate an immutable run on the first question after deploy.
+    // A shorter client deadline aborts an otherwise healthy answer and leaves
+    // the CEO with a false transport error while the server is still working.
+    var timeoutMs = Number(firstDefined(requestOptions.timeoutMs, 150000));
     var headers = authHeaders({ skipAuth: requestOptions.skipAuth === true });
     var usedBearerAuth = Boolean(headers.Authorization);
     headers["Content-Type"] = "application/json";
