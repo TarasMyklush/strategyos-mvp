@@ -286,7 +286,10 @@ def build_review_file_registry(
         if source_pack_id
         else []
     )
-    items = (_uploaded_registry(tenant_id) + source_items)[:REVIEW_FILE_CAP]
+    # Legacy tenant-vault uploads have no governed source/occurrence policy.
+    # Preserve their files for migration, but never expose filenames or bytes
+    # merely because the requesting identity belongs to the same tenant.
+    items = source_items[:REVIEW_FILE_CAP]
     groups: list[dict[str, Any]] = []
     by_group: dict[str, list[dict[str, Any]]] = {}
     for item in items:

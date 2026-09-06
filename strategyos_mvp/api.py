@@ -10523,11 +10523,17 @@ def executive_review_files(
     principal: dict[str, Any] = require_role(*PRODUCT_READ_ROLES),
 ) -> dict[str, Any]:
     summary = _latest_summary()
-    return build_review_file_registry(
+    _require_run_source_use(
+        str((summary or {}).get('_backing_run_id') or (summary or {}).get('run_id') or ''),
+        principal, UsePurpose.EXECUTIVE_BRIEFING)
+    registry = build_review_file_registry(
         source_pack_id=_latest_source_pack_id(summary),
         tenant_id=_principal_tenant_id(principal),
         summary=summary,
     )
+    registry['intake_url'] = '/sources/intake' if str(principal.get('role') or '') in {'operator','tenant_admin','system'} else None
+    registry['intake_note'] = 'New files require an operator to register their source and permissions through governed intake. Existing unregistered uploads are preserved for migration, not exposed as governed evidence.'
+    return registry
 
 
 @app.post("/executive/files")
@@ -10538,20 +10544,7 @@ def upload_executive_review_file(
     linked_refs: str | None = Form(None),
     principal: dict[str, Any] = require_role(*PRODUCT_READ_ROLES),
 ) -> dict[str, Any]:
-    item = save_review_file_upload(
-        file,
-        tenant_id=_principal_tenant_id(principal),
-        uploaded_by=str(
-            principal.get("display_name")
-            or principal.get("email")
-            or principal.get("role")
-            or "Executive"
-        ),
-        group=group,
-        scope=scope,
-        linked_refs=linked_refs,
-    )
-    return {"status": "uploaded", "file": item}
+    raise HTTPException(410, 'This unclassified upload path is retired. An authorized operator must register files and source permissions through /sources/intake.')
 
 
 @app.get("/executive/files/{file_id}")
@@ -10566,21 +10559,7 @@ def download_executive_review_file(
     )
     summary = _latest_summary()
     if origin == "upload":
-        registry = build_review_file_registry(
-            source_pack_id=None,
-            tenant_id=_principal_tenant_id(principal),
-            summary=summary,
-        )
-        matching = [
-            item
-            for group in registry.get("groups") or []
-            for item in group.get("items") or []
-            if str(item.get("id") or "") == f"upload:{file_id}"
-        ]
-        if len(matching) != 1:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found.")
-        path = resolve_uploaded_review_file(_principal_tenant_id(principal), file_id)
-        filename = str(matching[0].get("filename") or path.name)
+        raise HTTPException(403, 'This attachment has no governed source policy. Register its provenance and permissions before viewing or exporting it.')
     else:
         _require_run_source_use(
             str((summary or {}).get("_backing_run_id") or (summary or {}).get("run_id") or ""),

@@ -6876,39 +6876,10 @@
     var capNote = registry.cap
       ? 'Showing up to ' + escapeHtml(String(registry.cap)) + ' relevance-selected files. '
       : '';
-    panel.innerHTML = '<div class="review-file-groups">' + groupsMarkup + '</div><p class="review-file-version-note">' + capNote + escapeHtml(firstDefined(registry.versioning, 'Latest file with the same name is shown. Version history is not yet available.')) + '</p><details class="review-file-upload"><summary>Upload an Office file</summary><form data-review-file-upload><label>File<input type="file" name="file" required accept=".xlsx,.docx,.pptx" /></label><label>Headline group<input type="text" name="group" maxlength="120" placeholder="e.g. Decision pack" /></label><label>Business scope<input type="text" name="scope" maxlength="120" placeholder="Optional" /></label><button type="submit">Upload for review</button><span data-review-file-status role="status" aria-live="polite"></span></form></details>';
-    var form = panel.querySelector('[data-review-file-upload]');
-    if (form && state.activePersona === 'board' && state.activeBoard === 'closed') {
-      safeArray(form.querySelectorAll('input, button')).forEach(function (control) { control.disabled = true; });
-      form.querySelector('[data-review-file-status]').textContent = 'This meeting is closed. Upload current documents from the executive view.';
-      return;
-    }
-    if (form) {
-      form.onsubmit = async function (event) {
-        event.preventDefault();
-        var statusEl = form.querySelector('[data-review-file-status]');
-        var submit = form.querySelector('button[type="submit"]');
-        var data = new FormData(form);
-        if (submit) submit.disabled = true;
-        if (statusEl) statusEl.textContent = 'Uploading…';
-        try {
-          var response = await fetch('/executive/files', {
-            method: 'POST',
-            headers: authHeaders(),
-            body: data
-          });
-          var payload = await parseJsonResponse(response);
-          if (!response.ok) throw new Error(firstDefined(payload && payload.detail, 'Upload failed.'));
-          state.reviewFiles = await fetchJson('/executive/files') || state.reviewFiles;
-          renderReviewFiles(true);
-          showToast('Office file added to the CEO review list.');
-        } catch (error) {
-          if (statusEl) statusEl.textContent = firstDefined(error && error.message, 'Upload failed.');
-        } finally {
-          if (submit) submit.disabled = false;
-        }
-      };
-    }
+    var intakeNote = escapeHtml(firstDefined(registry.intake_note, 'An authorized operator must register new files and their source permissions before review.'));
+    var intakeLink = registry.intake_url === '/sources/intake' && !(state.activePersona === 'board' && state.activeBoard === 'closed')
+      ? '<a href="/sources/intake">Open governed source intake →</a>' : '';
+    panel.innerHTML = '<div class="review-file-groups">' + groupsMarkup + '</div><p class="review-file-version-note">' + capNote + escapeHtml(firstDefined(registry.versioning, 'Latest file with the same name is shown. Version history is not yet available.')) + '</p><details class="review-file-upload"><summary>Add files for review</summary><p>' + intakeNote + '</p>' + intakeLink + '</details>';
   }
 
   function renderHomeTargetExtensions() {

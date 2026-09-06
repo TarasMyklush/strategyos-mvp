@@ -6318,6 +6318,7 @@ def test_ceo_review_files_are_home_only_grouped_and_operable():
     assert "Available files for review" in html
     assert "review-file-group" in js
     assert "item.view_url" in js and "item.download_url" in js
-    assert "accept=\".xlsx,.docx,.pptx\"" in js
+    assert 'Open governed source intake' in js
+    assert 'data-review-file-upload' not in js
     assert "Latest file with the same name is shown" in js
     assert ".ceo-action-column" in css

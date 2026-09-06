@@ -384,3 +384,19 @@ counts alone do not close these boundaries.
   the same source boundary. A revised-history exception does not admit withdrawal,
   role or purpose denial. Thirty-five targeted API/semantic tests passed.
 - These latest expiry and metadata changes are not yet full-gated or deployed.
+
+### Legacy attachment intake retirement candidate
+
+- The legacy CEO Office-file POST route stored files in a tenant vault without
+  an evidence occurrence or source policy. It is now explicitly retired (410),
+  and its upload-origin download route denies access until governed registration.
+  Existing vault files are preserved on disk; no files were deleted.
+- Review registries no longer expose legacy-upload filenames, and registered
+  source-file lists require run source authorization before registry construction.
+  Source-backed view/export links retain their separate permissions.
+- The CEO panel uses compact explanatory disclosure instead of the unclassified
+  upload form. Authorized operators receive the governed intake link; other
+  roles are told that an operator must register source rights first. Intake does
+  not automatically add an attachment to an approved briefing.
+- 167 focused frontend, attachment and governed-adoption tests passed. This
+  candidate still needs the full gate and preview visual acceptance.

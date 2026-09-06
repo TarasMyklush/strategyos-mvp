@@ -130,8 +130,9 @@ def test_uploaded_office_file_is_tenant_scoped_and_latest_only(
         tenant_id="tenant-a",
         summary={},
     )
-    assert registry["count"] == 1
-    assert registry["groups"][0]["label"] == "Decision brief"
+    assert registry["count"] == 0
+    assert registry["groups"] == []
+    assert review_files.resolve_uploaded_review_file("tenant-a", item["id"]).is_file()
 
 
 def test_upload_rejects_non_office_extension(

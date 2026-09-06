@@ -220,6 +220,31 @@ def test_raw_file_export_enforces_source_export_permission(monkeypatch):
     assert error.value.status_code == 403
 
 
+def test_legacy_attachment_paths_cannot_bypass_source_registration(monkeypatch):
+    monkeypatch.setattr(api, '_latest_summary', lambda: {'run_id':'run-1'})
+    monkeypatch.setattr(api, 'save_review_file_upload', lambda *a, **kw: pytest.fail('No legacy file may be written'))
+    monkeypatch.setattr(api, 'resolve_uploaded_review_file', lambda *a, **kw: pytest.fail('No legacy bytes may be read'))
+    principal={'tenant_id':'tenant-1','role':'executive'}
+    with pytest.raises(HTTPException) as error:
+        api.upload_executive_review_file(file=None, principal=principal)
+    assert error.value.status_code == 410
+    with pytest.raises(HTTPException) as error:
+        api.download_executive_review_file('attachment', origin='upload', principal=principal)
+    assert error.value.status_code == 403
+
+
+def test_review_registry_checks_source_scope_before_filenames(monkeypatch):
+    monkeypatch.setattr(api, '_latest_summary', lambda: {'run_id':'run-1'})
+    class Repository:
+        def run_source_access(self, *args, **kwargs):
+            return {'allowed':False}
+    monkeypatch.setattr(api, 'ClaimRepository', Repository)
+    monkeypatch.setattr(api, 'build_review_file_registry', lambda *a, **kw: pytest.fail('No restricted filenames may be listed'))
+    with pytest.raises(HTTPException) as error:
+        api.executive_review_files(principal={'tenant_id':'tenant-1','role':'executive'})
+    assert error.value.status_code == 403
+
+
 def test_artifact_preview_source_denial_is_audited(monkeypatch, tmp_path):
     from dataclasses import replace
     artifact = tmp_path / "summary.json"
