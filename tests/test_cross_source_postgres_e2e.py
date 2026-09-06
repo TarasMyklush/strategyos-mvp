@@ -81,6 +81,7 @@ def test_source_to_ledger_to_authorized_envelope(ledger, monkeypatch, origin, ch
     occurrence = EvidenceOccurrence(
         tenant_id=tenant, source_key=source.source_key, artifact_hash=digest,
         source_native_id="fixture:1", received_at=datetime.now(UTC), author_identity="CFO fixture",
+        original_uri="https://fixture.invalid/evidence/1", source_native_version="revision-2",
     )
     recorded = repo.record_occurrence(occurrence, evidence_document_id=document, ingestion_batch_id=batch)
     with pytest.raises(ValueError, match="match the occurrence hash"):
@@ -108,6 +109,8 @@ def test_source_to_ledger_to_authorized_envelope(ledger, monkeypatch, origin, ch
     assert record["period"]["start"] == "2026-06-01"
     assert record["sources"][0]["origin_category"] == origin
     assert record["sources"][0]["capture_method"] == channel
+    assert record["sources"][0]["original_uri"] == "https://fixture.invalid/evidence/1"
+    assert record["sources"][0]["source_native_version"] == "revision-2"
     assert record["claim_kind"] == kind
     # Provenance/traceability is not an invented verification assessment.
     assert record["assessments"] == []

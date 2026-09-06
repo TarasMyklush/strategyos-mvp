@@ -4937,6 +4937,8 @@
         return String(name) + ' · ' + origin
           + (source.provider_name ? ' · Provider: ' + String(source.provider_name) : '')
           + (source.license_policy_ref ? ' · License: ' + String(source.license_policy_ref) : '')
+          + (source.source_native_version ? ' · Source version: ' + String(source.source_native_version) : '')
+          + (source.original_uri ? ' · ' + String(source.original_uri) : '')
           + (locator ? ' · ' + String(locator) : '');
       }).filter(Boolean);
       var periodLabel = period.start || period.end

@@ -1187,6 +1187,7 @@ class ClaimRepository:
                    ss.origin_category, ss.capture_method, ss.provider_name,
                    ss.license_policy_ref, ed.sensitivity_class, ed.retention_class,
                    eo.author_identity, eo.published_at, eo.received_at,
+                   eo.original_uri, eo.source_native_id, eo.source_native_version,
                    coalesce(cel.source_locator, eo.source_locator) as source_locator
             from lineage l
             join strategyos_claim_evidence_links cel on cel.claim_revision_id = l.id
@@ -1210,6 +1211,9 @@ class ClaimRepository:
                 "sensitivity_class": item.get("sensitivity_class"),
                 "retention_class": item.get("retention_class"),
                 "author_identity": item.get("author_identity"),
+                "original_uri": item.get("original_uri"),
+                "source_native_id": item.get("source_native_id"),
+                "source_native_version": item.get("source_native_version"),
                 "published_at": item["published_at"].isoformat()
                 if item.get("published_at")
                 else None,
