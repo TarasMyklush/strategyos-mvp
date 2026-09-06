@@ -444,6 +444,11 @@ class ClaimRepository:
             (family_id,),
         )
         previous = cur.fetchone()
+        if previous is not None and context is not None:
+            # Authority over replacement evidence does not confer authority over
+            # the assertion being replaced. The family is already locked, and
+            # both checks participate in the same atomic write transaction.
+            self._authorize_intake(cur, draft, str(previous[0]), context)
         revision_number = int(previous[1]) + 1 if previous else 1
         supersedes_id = previous[0] if previous else None
         cur.execute(

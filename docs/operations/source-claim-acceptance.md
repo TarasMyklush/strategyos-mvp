@@ -418,3 +418,15 @@ counts alone do not close these boundaries.
   against a fresh database. An earlier rerun on a reused test database failed on
   an existing fixture tenant; it was not counted as passing evidence.
 - The optimized combined candidate still requires a full gate and live QA.
+
+### Optimized gate and replacement-write authority
+
+- Optimized commit `53fc3a5` passed 2,086 tests with zero skips in the frozen
+  checkout (`/tmp/strategyos-subject-full.xml`, 308.16 seconds). Preview workflow
+  `34060246580` performs its separate full gate before deployment.
+- The next write-boundary change checks permissions on the preceding assertion
+  as well as replacement evidence, while the claim family is locked. A permitted
+  new source cannot overwrite an assertion whose existing source is restricted.
+  Failed checks roll back without a new revision or outbox work.
+- Fourteen focused PostgreSQL intake/recalculation/conflict tests passed for this
+  additional guard. Its full gate and deployment remain pending.

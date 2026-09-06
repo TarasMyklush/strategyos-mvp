@@ -10,6 +10,30 @@ from tests.test_tabular_claims_postgres_e2e import setup_intake
 pytestmark = pytest.mark.integration
 
 
+def test_allowed_replacement_source_cannot_overwrite_a_restricted_assertion(ledger):
+    import psycopg
+    repo,context,occurrence,source,policy=setup_intake(ledger)
+    draft=ClaimDraft(tenant_id=context.tenant_id,assertion_namespace='protected-assertion',
+        subject_type='enterprise',subject_key='group',metric_key='qa.protected',
+        claim_kind='actual',production_method='imported',value_numeric=10,
+        unit='SAR',currency='SAR',source_occurrence_keys=(occurrence,))
+    first=repo.record_claim(draft,traceability='present',context=context)
+    other=replace(source,source_key='replacement-source')
+    repo.register_source(other,policy=replace(policy,source_key=other.source_key),recorded_by='steward',rationale='Synthetic replacement source')
+    new_occurrence=repo.record_occurrence(EvidenceOccurrence(tenant_id=context.tenant_id,
+        source_key=other.source_key,artifact_hash='c'*64,source_native_id='replacement'),
+        context=context,artifact={'source_path':'replacement.txt','file_name':'replacement.txt','size_bytes':1})['occurrence_key']
+    repo.register_source(source,policy=replace(policy,allowed_roles=frozenset({'executive'})),
+        recorded_by='steward',rationale='Restrict the existing assertion')
+    with pytest.raises(ValueError,match='Source policy'):
+        repo.record_claim(replace(draft,value_numeric=12,source_occurrence_keys=(new_occurrence,)),
+            traceability='present',context=context)
+    with psycopg.connect(ledger[1]) as conn:
+        assert conn.execute('''select count(*) from strategyos_claim_revisions
+            where claim_family_id=(select claim_family_id from strategyos_claim_revisions where id=%s)''',
+            (first['claim_revision_id'],)).fetchone()[0]==1
+
+
 def test_shortlist_cannot_hide_an_authorized_conflict_but_revocation_does(ledger,monkeypatch):
     repo,context,occurrence,source,policy = setup_intake(ledger)
     source2 = replace(source,source_key='second-source')
