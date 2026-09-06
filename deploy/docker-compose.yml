@@ -199,8 +199,10 @@ services:
         "-m",
         "strategyos_mvp.claim_projection",
         "--continuous",
+        "--limit",
+        "100",
         "--poll-seconds",
-        "5",
+        "1",
       ]
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-strategyos}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in deploy/.env.secrets}@postgres:5432/${POSTGRES_DB:-strategyos}

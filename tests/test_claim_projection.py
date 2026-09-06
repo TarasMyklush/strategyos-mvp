@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from strategyos_mvp.claim_projection import ClaimProjectionWorker, ProjectionRunResult
+from strategyos_mvp.claim_projection import (
+    ClaimProjectionWorker,
+    ProjectionRunResult,
+    _continuous_wait_seconds,
+)
 
 
 class FakeRepository:
@@ -90,6 +94,27 @@ def test_default_projectors_fail_closed_without_pinned_embedding(monkeypatch):
         assert "STRATEGYOS_EMBEDDING_MODEL_PATH" in str(exc)
     else:  # pragma: no cover - explicit failure without a pytest runtime dependency
         raise AssertionError("The projector accepted an unconfigured embedding model.")
+
+
+def test_continuous_worker_drains_full_healthy_batches_without_idle_wait():
+    assert (
+        _continuous_wait_seconds(
+            ProjectionRunResult(100, 100, 0, 0), limit=100, poll_seconds=5
+        )
+        == 0
+    )
+    assert (
+        _continuous_wait_seconds(
+            ProjectionRunResult(25, 25, 0, 0), limit=100, poll_seconds=5
+        )
+        == 5
+    )
+    assert (
+        _continuous_wait_seconds(
+            ProjectionRunResult(100, 99, 1, 0), limit=100, poll_seconds=5
+        )
+        == 5
+    )
 
 
 def test_delete_projection_does_not_rehydrate_deleted_claim():

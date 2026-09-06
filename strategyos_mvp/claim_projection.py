@@ -130,6 +130,15 @@ class ClaimProjectionWorker:
         }
 
 
+def _continuous_wait_seconds(
+    result: ProjectionRunResult, *, limit: int, poll_seconds: float
+) -> float:
+    """Drain a healthy backlog continuously; back off only when caught up or failing."""
+    if result.leased >= max(1, int(limit)) and result.failed == 0:
+        return 0.0
+    return max(0.25, min(float(poll_seconds), 60.0))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Deliver governed claim projections.")
     parser.add_argument("--limit", type=int, default=50)
@@ -162,7 +171,13 @@ def main(argv: list[str] | None = None) -> int:
             )
         if not args.continuous:
             return 0 if result.failed == 0 else 1
-        time.sleep(max(0.25, min(args.poll_seconds, 60.0)))
+        wait_seconds = _continuous_wait_seconds(
+            result,
+            limit=args.limit,
+            poll_seconds=args.poll_seconds,
+        )
+        if wait_seconds:
+            time.sleep(wait_seconds)
 
 
 if __name__ == "__main__":
