@@ -32,4 +32,5 @@ does not authorize deleting evidence or choosing an erasure/retention policy.
 Tests exercise the actual remote shell body with a Docker double, including
 multiple projector replicas and rejection of a foreign ownership label. They do
 not stop the live preview to manufacture a recovery demonstration. A real
-availability-impacting failure drill remains separately scheduled.
+availability-impacting failure drill has not been performed and needs a separately
+approved maintenance window.

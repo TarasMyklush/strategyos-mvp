@@ -517,6 +517,22 @@ counts alone do not close these boundaries.
   subset passed 162 tests; live account-switch acceptance remains pending.
 # Preview acceptance, 7 September 2026 (in progress)
 
+Follow-up `004ff3cf1d9021d2a31ad8c2d3e0ce4b2e3f6e19` deployed successfully
+through workflow `34064589046`: **2,168 service tests, zero skips**. The running
+container's image revision was checked against that SHA. Its live browser retest
+passed: four administrator-only origin fixtures cleared automatically when the
+other tab signed in as executive; repeating the restricted query returned zero
+records. Signing out cleared another tab containing an authorized revenue claim
+and returned it to login. The intervention badge and separately labeled board
+aggregate were visually inspected at 1280px. No production rollout occurred.
+
+The executive/operator/private-work read-only API checks were repeated on this
+release. Four existing frozen board packets had also been read successfully on
+the preceding guarded release, without closing or distributing a meeting.
+
+The failed cross-tab observation below is retained as regression history, not a
+current pass claim for the earlier release.
+
 Release `1623ac41b7d9655aaf6d16fab3c275f1d7f18230` deployed to
 `new.strategyos.live` through workflow `34063612328`. Its service gate passed
 2,153 tests with zero skips. Production was not changed.
