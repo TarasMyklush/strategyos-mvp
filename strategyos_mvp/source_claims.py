@@ -563,6 +563,9 @@ def claim_is_eligible(
     for assessment in assessments:
         if assessment.claim_revision_id != claim.revision_id:
             continue
+        if (assessment.assessment_type == 'validation' and assessment.result in {'failed', 'invalid'}
+                and assessment.assessed_at <= datetime.now(UTC)):
+            reasons.append('validation_failed')
         if assessment.assessment_type == "lifecycle" and assessment.result in {
             ReviewAction.RETRACTED,
             ReviewAction.SUPERSEDED,

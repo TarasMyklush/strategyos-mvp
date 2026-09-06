@@ -441,13 +441,13 @@ def test_authenticated_twin_kpis_report_missing_source_status_without_demo_marke
     try:
         monkeypatch.setattr(api_module, "_latest_summary", lambda: None)
 
-        payload = TestClient(api_module.app).get("/twin/api/kpis/ceo", headers={"X-API-Key": "executive"}).json()
+        response = TestClient(api_module.app).get("/twin/api/kpis/ceo", headers={"X-API-Key": "executive"})
+        payload = response.json()
         all_strings = "\n".join(_collect_strings(payload))
 
-        assert payload["data_source"] == "twin_repository_fallback"
-        assert payload["source_status"] == "missing"
-        assert payload["bounded_fallback"] is True
-        assert payload["run_context"]["available"] is False
+        assert response.status_code == 404
+        assert set(payload) == {'detail'}
+        assert 'twin_repository_fallback' not in all_strings
         assert all(marker not in all_strings for marker in _FIXTURE_MARKERS)
     finally:
         _restore_env(original)

@@ -10,7 +10,7 @@ def fixture_audit(monkeypatch, tmp_path, *, digest=None, paths=None):
     artifact.write_bytes(b"synthetic fixture bytes")
     connection = MagicMock()
     cursor = connection.__enter__.return_value.cursor.return_value.__enter__.return_value
-    cursor.fetchone.return_value = (str(tmp_path),)
+    cursor.fetchone.return_value = (str(tmp_path),'tenant-fixture')
     monkeypatch.setattr(audit, "database_connection", lambda: (connection, None))
     monkeypatch.setattr(audit, "derive_source_finance_kpis", lambda _: {
         "source_files": ["finance.xlsx"], "source_semantics_version": "2",
@@ -50,3 +50,11 @@ def test_multiple_identical_occurrences_cannot_be_silently_merged(monkeypatch, t
     fixture_audit(monkeypatch, tmp_path, paths=["first/finance.xlsx", "second/finance.xlsx"])
     with pytest.raises(ValueError, match="Source bytes do not match"):
         audit.audit_run("run")
+
+
+def test_negative_validation_requires_matching_reviewed_audit(monkeypatch, tmp_path):
+    fixture_audit(monkeypatch,tmp_path)
+    from strategyos_mvp import claim_store
+    monkeypatch.setattr(claim_store,'ClaimRepository',lambda:pytest.fail('Wrote without matching digest'))
+    with pytest.raises(ValueError,match='Audit changed'):
+        audit.record_invalidity('run',expected_audit_digest='wrong')

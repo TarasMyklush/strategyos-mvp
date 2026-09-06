@@ -755,6 +755,12 @@ class ClaimRepository:
                            ) as withdrawn_evidence,
                            exists (
                                select 1 from run_lineage l
+                               join strategyos_claim_assessments a on a.claim_revision_id = l.id
+                               where a.assessment_type = 'validation'
+                                 and a.result in ('failed', 'invalid') and a.assessed_at <= now()
+                           ) as invalid_evidence,
+                           exists (
+                               select 1 from run_lineage l
                                join strategyos_claim_revisions old on old.id=l.id
                                join strategyos_claim_revisions newer
                                  on newer.claim_family_id=old.claim_family_id
@@ -782,6 +788,8 @@ class ClaimRepository:
                 reasons.add("source_storage_denied")
             if source.get("withdrawn_evidence"):
                 reasons.add("bulk_withdrawn_evidence")
+            if source.get("invalid_evidence"):
+                reasons.add("bulk_invalid_evidence")
             if source.get("revised_inputs"):
                 reasons.add("bulk_revised_inputs_require_recompute")
             if not context.roles.intersection(source.get("allowed_roles") or ()):
@@ -1526,6 +1534,9 @@ class ClaimRepository:
                   or exists (select 1 from strategyos_claim_assessments a
                       where a.claim_revision_id = r.id and a.assessment_type = 'lifecycle'
                         and a.result in ('retracted','rejected','superseded') and a.assessed_at <= now())
+                  or exists (select 1 from strategyos_claim_assessments a
+                      where a.claim_revision_id = r.id and a.assessment_type = 'validation'
+                        and a.result in ('failed','invalid') and a.assessed_at <= now())
                   or (not exists (select 1 from strategyos_claim_evidence_links e where e.claim_revision_id = r.id)
                       and not exists (select 1 from strategyos_claim_dependencies d where d.derived_claim_revision_id = r.id))
             )
@@ -1571,7 +1582,8 @@ class ClaimRepository:
             from strategyos_claim_assessments
             where claim_revision_id = %s
               and (%s::timestamptz is null or assessed_at <= %s
-                   or (assessment_type = 'lifecycle' and assessed_at <= now()))
+                   or (assessment_type = 'lifecycle' and assessed_at <= now())
+                   or (assessment_type = 'validation' and result in ('failed','invalid') and assessed_at <= now()))
             order by assessed_at
             """,
             (revision_id, as_of_at, as_of_at),

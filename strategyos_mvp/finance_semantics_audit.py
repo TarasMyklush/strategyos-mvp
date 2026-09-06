@@ -1,13 +1,14 @@
-"""Read-only re-evaluation of historical finance interpretations.
+"""Re-evaluate historical finance interpretations; read-only by default.
 
-Never rewrite an approved snapshot. An operator must review this evidence before
-withdrawing an old assertion or publishing a separately versioned analysis.
+An explicit digest-bound operation may record failed machine validation. It
+never reclassifies a value, approves a forecast or rewrites a frozen snapshot.
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -20,11 +21,12 @@ def audit_run(run_id: str) -> dict[str, Any]:
     if connection is None:
         raise RuntimeError("Database unavailable; no audit was performed.")
     with connection as conn, conn.cursor() as cur:
-        cur.execute("select dataset_root from strategyos_runs where id=%s", (run_id,))
+        cur.execute("select dataset_root,tenant_key from strategyos_runs where id=%s", (run_id,))
         found = cur.fetchone()
         if found is None:
             raise KeyError("Run not found.")
         root = Path(found[0]).resolve(strict=True)
+        tenant_key = found[1]
         cur.execute("""select distinct d.source_path,d.source_hash from strategyos_evidence_documents d
             join strategyos_ingestion_batch_documents bd on bd.evidence_document_id=d.id
             join strategyos_ingestion_batches b on b.id=bd.batch_id where b.run_id=%s""", (run_id,))
@@ -61,8 +63,9 @@ def audit_run(run_id: str) -> dict[str, Any]:
                        r.value_numeric,r.metadata
             from strategyos_claim_revisions r join strategyos_claim_families f on f.id=r.claim_family_id
             where r.metadata->>'run_id'=%s
+              and r.tenant_id in (select id from strategyos_tenants where id::text=%s or slug=%s)
               and r.metadata->>'legacy_projection'='run_summary.finance_kpi.components'
-            order by f.metric_key,r.revision_number""", (str(run_id),))
+            order by f.metric_key,r.revision_number""", (str(run_id), tenant_key, tenant_key))
         candidates = []
         for record in fetchall_dicts(cur):
             key = (record.get("dimensions") or {}).get("component_key")
@@ -70,17 +73,56 @@ def audit_run(run_id: str) -> dict[str, Any]:
                 candidates.append({"claim_revision_id": str(record["id"]),
                     "metric_key": record["metric_key"], "component_key": key,
                     "reason": ambiguous[key]["reason"], "recommended_action": "review_and_withdraw_actual_classification"})
-    return {"mode": "read_only", "run_id": run_id,
+    report = {"mode": "read_only", "run_id": run_id,
         "source_semantics_version": fresh.get("source_semantics_version"),
         "checked_sources": checked, "review_required": candidates,
         "approved_snapshot_modified": False}
+    report['audit_digest'] = hashlib.sha256(json.dumps(report,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+    return report
+
+
+def record_invalidity(run_id: str, *, expected_audit_digest: str) -> dict[str, Any]:
+    """Append negative rule findings only after rechecking the exact source bytes.
+
+    No claim becomes an actual/forecast or gains approval through this operation.
+    Corrections need new revisions. Retries preserve the original assessment time.
+    """
+    from .claim_store import ClaimRepository
+    from .source_claims import ClaimAssessment
+    report = audit_run(run_id)
+    if not expected_audit_digest or report['audit_digest'] != expected_audit_digest:
+        raise ValueError('Audit changed or was not reviewed; run the read-only audit again.')
+    repo = ClaimRepository()
+    receipts = []
+    for item in report['review_required']:
+        effect_key = 'finance-semantic-invalidity:' + hashlib.sha256(
+            (report['audit_digest'] + ':' + item['claim_revision_id']).encode()).hexdigest()
+        connection, _ = database_connection()
+        if connection is None:
+            raise RuntimeError('Database unavailable; validation recording can be retried.')
+        with connection as conn, conn.cursor() as cur:
+            cur.execute('SELECT assessed_at FROM strategyos_claim_assessments WHERE claim_revision_id=%s AND effect_key=%s',
+                (item['claim_revision_id'],effect_key))
+            previous = cur.fetchone()
+        assessment = ClaimAssessment(claim_revision_id=item['claim_revision_id'],
+            assessment_type='validation',result='failed',
+            rule_version='finance-source-semantics:' + str(report['source_semantics_version']),
+            assessed_by='system:finance-semantics-audit',
+            assessed_at=previous[0] if previous else datetime.now(UTC),
+            reasons=(item['reason'], 'Verified source audit: ' + report['audit_digest']))
+        receipts.append(repo.assess_claim(assessment,effect_key=effect_key))
+    return {**report,'mode':'record_invalidity','assessments':receipts,
+        'source_values_reclassified':False,'analysis_published':False}
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-id", required=True)
+    parser.add_argument('--record-invalidity',action='store_true')
+    parser.add_argument('--expected-audit-digest')
     args = parser.parse_args()
-    print(json.dumps(audit_run(args.run_id), indent=2))
+    result = record_invalidity(args.run_id,expected_audit_digest=args.expected_audit_digest) if args.record_invalidity else audit_run(args.run_id)
+    print(json.dumps(result, indent=2))
     return 0
 
 

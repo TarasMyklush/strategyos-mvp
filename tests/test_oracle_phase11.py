@@ -606,7 +606,9 @@ def test_plan_data_keeps_oracle_roadmap_complete_while_hosted_corrective_tranche
     assert "Foundation through Oracle pilot delivery shipped" not in text
 
 
-def test_phase0_to_phase10_regression_paths_still_hold(tmp_path):
+def test_phase0_to_phase10_regression_paths_still_hold(tmp_path, monkeypatch):
+    from tests.twin_source_fixtures import grant_controller_source
+    grant_controller_source(monkeypatch)
     original = _apply_env(_phase10_env(tmp_path))
     try:
         status = client.get("/twin/api/status/ceo", headers=_auth("executive"))

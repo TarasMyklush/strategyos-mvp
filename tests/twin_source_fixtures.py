@@ -6,6 +6,10 @@ from strategyos_mvp.config import load_config
 
 @pytest.fixture(autouse=True)
 def authorized_source_fixture(monkeypatch):
+    grant_controller_source(monkeypatch)
+
+
+def grant_controller_source(monkeypatch):
     # Real ACL/revocation behavior is covered by PostgreSQL source-scope tests.
     class Repository:
         def resolve_context(self, context): return context

@@ -498,3 +498,12 @@ counts alone do not close these boundaries.
   numeric metrics, while the old test expected a service count. The fixture
   expectation now requires explicit unavailable status and unknown counts;
   the production source guard was not weakened to satisfy it.
+- Full `32fbcdf`: 2,131 passes and two legacy twin-fixture failures (324.52s).
+  Preview workflow `34062893573` was cancelled during tests, before build/deploy.
+  The controller test now supplies an explicit synthetic source grant; the
+  missing-source test requires denial rather than the retired repository fallback.
+- Failed/invalid machine validation now blocks direct claims, recursive inputs,
+  frozen claim reads and whole-run consumers. Eleven focused service-backed
+  invalidity/conversation checks passed. Negative finance audit recording requires
+  a matching freshly recomputed source digest and is idempotent; it cannot approve
+  or reclassify values. No historical business audit events were applied online.

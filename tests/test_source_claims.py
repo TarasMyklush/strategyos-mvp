@@ -34,6 +34,16 @@ from strategyos_mvp.source_pack import (
 NOW = datetime(2026, 6, 7, 12, tzinfo=UTC)
 
 
+@pytest.mark.parametrize('result',['failed','invalid'])
+def test_failed_validation_cannot_be_laundered_by_traceable_source(result):
+    claim = revision()
+    failed = ClaimAssessment(claim_revision_id=claim.revision_id,assessment_type='validation',
+        result=result,rule_version='semantic-v2',assessed_by='system:validator',assessed_at=NOW)
+    eligible = claim_is_eligible(claim,query=query(),context=context(),source_policies=[policy()],assessments=[failed])
+    assert not eligible.eligible
+    assert 'validation_failed' in eligible.reasons
+
+
 def test_exact_query_period_cannot_mix_months_or_unknown_periods():
     from dataclasses import replace
     selected = query(period_start=date(2026,6,1),period_end=date(2026,6,30))
