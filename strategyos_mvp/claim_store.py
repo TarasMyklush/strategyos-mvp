@@ -875,6 +875,11 @@ class ClaimRepository:
                         record["superseded_since_analysis"] = not self._revision_is_current(
                             cur, claim.revision_id, datetime.now(UTC)
                         )
+                        record["recalculation_allowed"] = (
+                            claim.draft.production_method == 'calculated'
+                            and bool(context.roles.intersection({'operator','tenant_admin','system'}))
+                            and policy_allows(context=replace(context,purpose=UsePurpose.OPERATIONS),
+                                claim=claim,source_policies=policies).eligible)
                         results.append(record)
             conn.commit()
         return results

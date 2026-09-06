@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Recalculate evidence — StrategyOS</title><link rel="icon" href="/static/favicon.svg">
+<link rel="stylesheet" href="/static/executive.css"><link rel="stylesheet" href="/static/claims.css">
+<script src="/static/claim-recalculation.js" defer></script></head>
+<body><main class="claim-workspace">
+<a href="/claims">← Governed evidence</a> · <a href="/sources/intake">Add a source</a>
+<h1>Recalculate from revised inputs</h1>
+<p>Operator workspace. Preview the registered formula using current, authorized input revisions. Recording creates unreviewed calculations; it does not approve, publish, replace a briefing, or send anything.</p>
+<form id="recalculation-form" class="card claim-query">
+<label class="claim-query-wide">Calculated claim revision<input name="revision_id" required maxlength="36" autocomplete="off"></label>
+<label class="claim-query-wide">Reason for recalculation<textarea name="rationale" required maxlength="2000" rows="3"></textarea></label>
+<button type="submit">Preview recalculation</button>
+<button id="recalculation-apply" type="button" disabled>Record previewed calculations</button>
+</form>
+<p id="recalculation-status" role="status" aria-live="polite">No calculations have been recorded.</p>
+<section id="recalculation-results" aria-label="Recalculation preview"></section>
+</main></body></html>

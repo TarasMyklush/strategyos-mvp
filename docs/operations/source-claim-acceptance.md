@@ -242,3 +242,20 @@ counts alone do not close these boundaries.
 - A fresh preview-browser tab also timed out without being created. No browser
   security settings were changed or warnings bypassed. Online visual acceptance
   remains open despite passing authenticated HTTP checks.
+
+### Explicit recalculation candidate
+
+- Frozen freshness/intake commit `dfcd62f`: 2,041 tests passed, zero skips,
+  `/tmp/strategyos-scope-full.xml` (752.19 seconds). Preview workflow
+  `34057159552` was dispatched; deployment completion is not asserted here.
+- Recalculation candidate: 51 focused tests passed. These cover preview without
+  writes, exact-preview recording, retry receipts, policy/input changes, cycles,
+  transactional rollback, authority denial, cross-tenant receipt constraints,
+  server recording clocks and PostgreSQL migration parsing/rollback.
+- Local browser QA recorded one synthetic calculated revision from 10 to 12 SAR.
+  The result explicitly stated unreviewed and unchanged briefing/approvals. Its
+  evidence link preserved operational-review purpose and retrieved current 12.
+  This is isolated local evidence, not an online production or preview claim.
+- The recalculation candidate still needs its frozen full-suite and preview
+  gates. It does not complete automatic replacement analyses, conflict/source
+  precedence or all legacy consumer migration.

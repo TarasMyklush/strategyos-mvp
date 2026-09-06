@@ -4,3 +4,4 @@
 .claim-query textarea{width:100%;min-width:0;box-sizing:border-box;padding:12px;border:1px solid var(--line,#e5e1d8);border-radius:12px;font:14px/1.5 monospace;resize:vertical;background:white;color:#222}
 .claim-record>.claim-query{padding:20px 0 0}
 .claim-stale{padding:12px 16px;border-left:3px solid #ad792e;background:#faf4e8;color:#725323;border-radius:6px}
+#recalculation-form textarea{font-family:inherit}

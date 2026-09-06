@@ -208,3 +208,18 @@ The legacy source policy preserves current authenticated read/export roles but
 explicitly denies external-model use until a data owner authorizes that purpose.
 This avoids silently treating existing application-level model enablement as
 source-level consent.
+
+## Explicit recalculation
+
+The operator workspace `/claims/recalculate` previews registered formulas over
+current authorized input revisions. The server binds the preview to the actor,
+scope, rationale, input fingerprints and policy versions. Recording locks input
+families in a stable order and repeats the preview; a changed dependency or
+policy requires a new preview. Formula selection and arithmetic are not delegated
+to a model. Cyclic or oversized current lineage is rejected.
+
+Recording atomically creates unreviewed claim revisions, projection events and
+an actor-bound retry receipt. It does not inherit assessments, alter frozen
+snapshots, publish a briefing or send messages. An operator queue and replacement
+analysis approval remain separate work. PostgreSQL parses migration scripts as
+whole scripts, preserving semicolons in comments, literals and function bodies.

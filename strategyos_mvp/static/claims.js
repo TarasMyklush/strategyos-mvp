@@ -4,6 +4,8 @@
   var status = document.getElementById('claim-status');
   var results = document.getElementById('claim-results');
   var requestVersion = 0;
+  var initialQuery=new URLSearchParams(location.search);
+  ['metric_key','claim_kind','business_unit','scenario_key','purpose'].forEach(function(key){if(initialQuery.has(key))form.elements.namedItem(key).value=initialQuery.get(key);});
   function node(tag, text, className) { var item = document.createElement(tag); item.textContent = text; if(className) item.className = className; return item; }
   function fields(values) { var dl = document.createElement('dl'); Object.entries(values).forEach(function(pair){dl.append(node('dt',pair[0]),node('dd',pair[1] == null || pair[1] === '' ? 'Not supplied' : String(pair[1])));}); return dl; }
   function renderClaim(record) {
@@ -11,6 +13,7 @@
     article.append(node('h2', record.metric_key));
     article.append(node('p', record.label || record.claim_kind, 'claim-kind--' + record.claim_kind));
     if(record.superseded_since_analysis) article.append(node('p','Historical result — this claim or its inputs have since been revised. Recalculate before using it for a current decision.','claim-stale'));
+    if(record.recalculation_allowed){var recalculate=node('a','Preview recalculation →');recalculate.href='/claims/recalculate?revision='+encodeURIComponent(record.claim_revision_id);article.append(recalculate);}
     if(record.claim_kind === 'forecast' || record.claim_kind === 'assumption') article.append(node('p','This is not an actual. It may change and must not be used as a realized result.'));
     if(record.forecast_review) article.append(fields({'Scoped review':record.forecast_review.status.replaceAll('_',' '),'Review scope':record.forecast_review.scope_key,'Review due':record.forecast_review.review_due_at}));
     article.append(fields({'Value (source scale)':record.value,'Unit':record.unit,'Scale':record.scale,'Currency':record.currency,'Period':(record.period || {}).start && (record.period || {}).end ? record.period.start + ' to ' + record.period.end : null,'Business unit':record.business_unit || 'Group / unspecified','Author':record.author,'Valid until':record.valid_until || (record.period || {}).valid_until,'Revision':record.claim_revision_id}));

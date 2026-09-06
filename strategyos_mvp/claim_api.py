@@ -30,6 +30,33 @@ class StagedEvidenceRequest(BaseModel):
     relative_path: str = Field(min_length=1, max_length=1000)
 
 
+class RecalculationRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    rationale: str = Field(min_length=1,max_length=2000)
+    expected_preview: str | None = Field(default=None,min_length=1,max_length=240)
+
+
+@router.post('/{revision_id}/recalculate')
+def recalculate_claim(revision_id: str,request: RecalculationRequest,
+        principal: dict[str,Any] = require_role('operator','tenant_admin','system')) -> dict[str,Any]:
+    from .claim_recalculation import recalculate, RecalculationConflict
+    from psycopg.errors import DeadlockDetected, SerializationFailure
+    try:
+        return recalculate(ClaimRepository(),revision_id,
+            context=_policy_context(principal,UsePurpose.OPERATIONS),
+            rationale=request.rationale,expected_preview=request.expected_preview)
+    except PermissionError as exc:
+        raise HTTPException(403,str(exc)) from None
+    except RecalculationConflict as exc:
+        raise HTTPException(409,str(exc)) from None
+    except (DeadlockDetected,SerializationFailure):
+        raise HTTPException(409,'The input revisions changed concurrently. Preview again before recording.') from None
+    except ValueError as exc:
+        raise HTTPException(422,str(exc)) from None
+    except RuntimeError:
+        raise HTTPException(503,'Recalculation is temporarily unavailable. Retry the same preview to check its receipt.') from None
+
+
 @router.post('/intake/staged-evidence')
 def register_evidence_from_stage(request: StagedEvidenceRequest,
         principal: dict[str, Any] = require_role('operator', 'tenant_admin', 'system')) -> dict[str, Any]:

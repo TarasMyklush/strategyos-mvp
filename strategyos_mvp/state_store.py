@@ -1381,10 +1381,11 @@ def _schema_database_key(conn: Any) -> tuple[str, str, str, str] | None:
 
 
 def _execute_sql_statements(cur: Any, sql: str) -> None:
-    for statement in sql.split(";"):
-        statement = statement.strip()
-        if statement:
-            cur.execute(statement)
+    # Let PostgreSQL parse the script. Splitting on ';' corrupts comments,
+    # string literals and dollar-quoted function bodies. No parameters or
+    # prepared statement are used for this trusted, checksummed DDL script.
+    if sql.strip():
+        cur.execute(sql, prepare=False)
 
 
 def migration_path() -> Path:

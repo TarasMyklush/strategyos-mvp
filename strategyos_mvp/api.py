@@ -8986,6 +8986,11 @@ def governed_intake_page(principal: dict[str, Any] = require_role("operator", "t
                         headers={"Cache-Control": "no-store"})
 
 
+@app.get('/claims/recalculate',response_class=HTMLResponse)
+def governed_recalculation_page(principal: dict[str,Any] = require_role('operator','tenant_admin','system')) -> HTMLResponse:
+    return HTMLResponse((STATIC_DIR/'claim-recalculation.html').read_text(encoding='utf-8'),headers={'Cache-Control':'no-store'})
+
+
 @app.get("/sources/intake", response_class=HTMLResponse)
 def governed_source_intake_page(principal: dict[str, Any] = require_role("operator")) -> Any:
     return HTMLResponse((STATIC_DIR / "source-intake.html").read_text(encoding="utf-8"),

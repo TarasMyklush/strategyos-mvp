@@ -87,7 +87,7 @@ class MigrationCursor:
         self._row = None
         self.executed = []
 
-    def execute(self, statement, params=None):
+    def execute(self, statement, params=None, **kwargs):
         normalized = " ".join(statement.split())
         self.executed.append((normalized, params))
         if normalized.startswith("select checksum_sha256"):
@@ -138,7 +138,7 @@ def test_schema_initialization_is_cached_per_real_database(tmp_path, monkeypatch
         def __exit__(self, *_args):
             return False
 
-        def execute(self, statement, _params=None):
+        def execute(self, statement, _params=None, **kwargs):
             self.statements.append(" ".join(statement.split()))
 
     class Connection:
@@ -165,7 +165,7 @@ def test_schema_initialization_is_cached_per_real_database(tmp_path, monkeypatch
     finally:
         state_store._SCHEMA_READY_DATABASES.discard(key)
 
-    assert first.statements == ["create table example (id integer)"]
+    assert first.statements == ["create table example (id integer);"]
     assert first.commits == 1
     assert len(migration_calls) == 1
     assert second.statements == []

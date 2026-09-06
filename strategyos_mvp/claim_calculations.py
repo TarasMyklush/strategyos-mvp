@@ -43,6 +43,22 @@ def validate_persisted_calculation(cur: Any, draft: ClaimDraft) -> None:
 def validate_calculation(draft: ClaimDraft, inputs: list[dict[str, Any]]) -> None:
     if draft.production_method != ProductionMethod.CALCULATED:
         return
+    expected = calculated_value(draft, inputs)
+    actual = draft.value_numeric * draft.scale if draft.value_numeric is not None else None
+    if actual is not None and draft.formula_key == "ebitda-divided-by-revenue":
+        actual = actual.quantize(PERCENT_QUANTUM, rounding=ROUND_HALF_EVEN)
+    if actual != expected:
+        raise ValueError("Calculated value does not match its exact inputs and versioned formula.")
+
+
+def calculated_value(draft: ClaimDraft, inputs: list[dict[str, Any]]) -> Decimal:
+    """Execute the same dimension-checked contract used to validate persisted math.
+
+    Returns the normalized value (before the output's display scale). Callers
+    cannot use this to choose a formula, change authority or approve a result.
+    """
+    if draft.production_method != ProductionMethod.CALCULATED:
+        raise ValueError("Only registered calculations can be recomputed.")
     ids = tuple(draft.input_revision_ids)
     if len(set(ids)) != len(ids) or set(map(str, ids)) != {str(row["id"]) for row in inputs}:
         raise ValueError("Every unique exact input revision is required.")
@@ -104,8 +120,4 @@ def validate_calculation(draft: ClaimDraft, inputs: list[dict[str, Any]]) -> Non
             if len({row["metric_key"] for row in inputs}) != len(inputs):
                 raise ValueError("Repeated metric candidates cannot be summed as independent contributions.")
             expected = sum((number(row) for row in inputs), Decimal(0))
-    actual = draft.value_numeric * draft.scale if draft.value_numeric is not None else None
-    if actual is not None and draft.formula_key == "ebitda-divided-by-revenue":
-        actual = actual.quantize(PERCENT_QUANTUM, rounding=ROUND_HALF_EVEN)
-    if actual != expected:
-        raise ValueError("Calculated value does not match its exact inputs and versioned formula.")
+    return expected

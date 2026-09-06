@@ -13,6 +13,7 @@
 <label>Claim type<select name="claim_kind"><option value="actual">Actual</option><option value="plan">Plan</option><option value="forecast">Forecast</option><option value="assumption">Assumption</option><option value="reported_claim">Reported claim</option></select></label>
 <label>Business unit<input name="business_unit" placeholder="Exact unit key; blank means group" maxlength="160"></label>
 <label>Scenario<input name="scenario_key" placeholder="Optional scenario key" maxlength="160"></label>
+<label>Use purpose<select name="purpose"><option value="executive_briefing">Executive briefing</option><option value="operations">Operational review</option><option value="analysis">Analysis</option></select></label>
 <label class="claim-query-wide">Historical as-of time (optional)<input name="as_of" placeholder="ISO timestamp with timezone; blank means now" maxlength="80" aria-describedby="claim-history-help"></label>
 <p id="claim-history-help" class="claim-query-wide">Historical reads preserve what was known then. Current permissions still apply, and revised inputs are flagged.</p>
 <label>Forecast review scope<input name="forecast_scope_key" placeholder="e.g. scenario:base or board:June" maxlength="160"></label>
