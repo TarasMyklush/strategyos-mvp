@@ -826,7 +826,11 @@ class ClaimRepository:
                     join strategyos_claim_families f on f.id = r.claim_family_id
                     where r.tenant_id = %s and f.metric_key = %s
                       and r.recorded_at <= %s
-                      and (%s::text[] is null or r.id::text = any(%s::text[]))
+                      and f.business_unit is not distinct from %s
+                      and f.scenario_key is not distinct from %s
+                      and r.claim_kind = any(%s::text[])
+                      and (%s::date is null or (f.period_start=%s::date and f.period_end=%s::date))
+                      and (%s::text is null or r.fiscal_calendar=%s)
                       and r.revision_number = (
                           select max(r2.revision_number)
                           from strategyos_claim_revisions r2
@@ -834,7 +838,9 @@ class ClaimRepository:
                       )
                     order by f.period_end desc nulls last, r.recorded_at desc
                     """,
-                    (tenant_id, query.metric_key, query.as_of_at, candidates, candidates, query.as_of_at),
+                    (tenant_id, query.metric_key, query.as_of_at,query.business_unit,query.scenario_key,
+                     sorted(str(kind) for kind in query.allowed_claim_kinds),query.period_start,
+                     query.period_start,query.period_end,query.fiscal_calendar,query.fiscal_calendar,query.as_of_at),
                 )
                 rows = [_record(cur, row) for row in cur.fetchall()]
                 results: list[dict[str, Any]] = []
@@ -882,7 +888,11 @@ class ClaimRepository:
                                 claim=claim,source_policies=policies).eligible)
                         results.append(record)
             conn.commit()
-        return results
+        # Compare the full authorized metric scope before candidate filtering.
+        # A vector shortlist must not hide a competing source from disclosure.
+        from .claim_conflicts import annotate_conflicts
+        results = annotate_conflicts(results)
+        return results if candidates is None else [row for row in results if row['claim_revision_id'] in candidates]
 
     def recalculation_queue(self, *, context: PolicyContext, after: str | None = None,
                             limit: int = 25) -> dict[str, Any]:

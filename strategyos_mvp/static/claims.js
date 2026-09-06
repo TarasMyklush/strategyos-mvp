@@ -12,6 +12,13 @@
     var article = node('article','','card claim-record');
     article.append(node('h2', record.metric_key));
     article.append(node('p', record.label || record.claim_kind, 'claim-kind--' + record.claim_kind));
+    if(record.comparison && record.comparison.requires_resolution){
+      article.append(node('p','Conflicting authorized claims exist for this same scope. No definitive value has been selected; review the competing evidence.','claim-stale'));
+      if(form.elements.namedItem('text').value.trim()){
+        var allClaims=node('button','Inspect all matching claims');allClaims.type='button';
+        allClaims.addEventListener('click',function(){form.elements.namedItem('text').value='';form.requestSubmit();});article.append(allClaims);
+      }
+    }
     if(record.superseded_since_analysis) article.append(node('p','Historical result — this claim or its inputs have since been revised. Recalculate before using it for a current decision.','claim-stale'));
     if(record.recalculation_allowed){var recalculate=node('a','Preview recalculation →');recalculate.href='/claims/recalculate?revision='+encodeURIComponent(record.claim_revision_id);article.append(recalculate);}
     if(record.claim_kind === 'forecast' || record.claim_kind === 'assumption') article.append(node('p','This is not an actual. It may change and must not be used as a realized result.'));

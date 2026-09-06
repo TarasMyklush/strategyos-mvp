@@ -219,6 +219,7 @@ def search_governed_claims(
     except RuntimeError:
         raise HTTPException(503, "Governed semantic search is temporarily unavailable.") from None
     return {"status": "ok", "records": records, "analysis_as_of": query.as_of_at.isoformat(),
+            "requires_resolution":any(row.get('comparison',{}).get('requires_resolution') for row in records),
             "authority": "postgresql", "ranking": "local_semantic_candidates"}
 
 
@@ -303,6 +304,7 @@ def query_claims(
         "metric_key": metric_key,
         "claim_kinds": sorted(str(item) for item in query.allowed_claim_kinds),
         "records": records,
+        "requires_resolution":any(row.get('comparison',{}).get('requires_resolution') for row in records),
     }
 
 

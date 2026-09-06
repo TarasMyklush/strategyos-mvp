@@ -641,6 +641,7 @@ def provenance_view(
         "claim_kind": draft.claim_kind,
         "production_method": draft.production_method,
         "value": str(draft.value_numeric) if draft.value_numeric is not None else draft.value_text,
+        "value_type": "numeric" if draft.value_numeric is not None else "text",
         "unit": draft.unit,
         "scale": str(draft.scale),
         "currency": draft.currency,

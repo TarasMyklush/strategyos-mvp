@@ -310,3 +310,19 @@ counts alone do not close these boundaries.
 - Separate frozen recalculation commit `efc8de0` passed 2,055 tests, zero skips,
   `/tmp/strategyos-recalculation-full.xml` (721.79 seconds). The newer combined
   queue/period commit `c95d01a` is undergoing its own gate.
+
+### Conflict disclosure candidate
+
+- Shared ledger queries compare all authorized claims in the exact comparison
+  scope before semantic candidate filtering. Search rank and ingestion order
+  never resolve disagreement. SQL prefilters metric, kind, BU, scenario and
+  requested period before policy evaluation.
+- Thirty-four focused tests passed, including real PostgreSQL competing-source
+  disclosure and removal after source revocation. Equivalent numeric scales are
+  compared exactly; no FX or unit conversion is inferred. Independent-origin
+  corroboration remains explicitly not assessed, not inferred from copies.
+- Local browser QA displayed separate synthetic 10 and 11 SAR assertions with
+  visible amber conflict warnings and no selected definitive value.
+- This candidate does not yet implement versioned source-priority decisions or
+  complete conflict handling across every snapshot/projection consumer. Existing
+  finance headline composition independently refuses competing components.
