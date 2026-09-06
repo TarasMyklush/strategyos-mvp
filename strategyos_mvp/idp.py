@@ -31,7 +31,7 @@ ROLE_LABELS = {
     "tenant_admin": "Tenant Admin — manage tenant setup",
     "system": "System — full system verification",
 }
-ROLE_REDIRECTS = {"executive": "/executive"}
+ROLE_REDIRECTS = {"executive": "/executive", "operator": "/sources/intake"}
 SESSION_COOKIE_NAME = "strategyos_session"
 
 
@@ -209,9 +209,9 @@ def _role_options_html() -> str:
     return "\n".join(rows)
 
 
-def _login_username_control_html() -> str:
+def _login_username_control_html(*, manual: bool = False) -> str:
     """Render a preview picker without exposing account inventory in production."""
-    options = _role_options_html() if CONFIG.idp_test_users else ""
+    options = _role_options_html() if CONFIG.idp_test_users and not manual else ""
     if options:
         return (
             "<label>Preview user"
@@ -254,8 +254,10 @@ def health_live() -> dict[str, str]:
 
 
 @app.get("/login", response_class=HTMLResponse)
-def login_page() -> HTMLResponse:
-    username_control = _login_username_control_html()
+def login_page(manual: bool = False) -> HTMLResponse:
+    username_control = _login_username_control_html(manual=manual)
+    alternate_login = ('<div class="links"><a href="/login?manual=true">Sign in with another authorized account</a></div>'
+                       if CONFIG.idp_test_users and not manual else '')
     html_body = f"""<!doctype html>
 <html lang="en">
 <head>
@@ -297,6 +299,7 @@ def login_page() -> HTMLResponse:
       <div id="error" class="error" role="alert" aria-live="polite"></div>
       <div class="hint">Use Sign out from your profile menu when you need to switch accounts.</div>
     </form>
+    {alternate_login}
   </main>
   <script>
     const form = document.getElementById('login-form');

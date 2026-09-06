@@ -145,6 +145,23 @@ def test_login_page_keeps_production_username_inventory_private():
         _restore_env(original)
 
 
+def test_preview_allows_manual_authorized_login_without_account_inventory():
+    original = _apply_env({"STRATEGYOS_IDP_TEST_USERS": ALL_TEST_USERS})
+    try:
+        client = TestClient(idp_module.app)
+        assert '/login?manual=true' in client.get('/login').text
+        response = client.get('/login?manual=true')
+        assert response.status_code == 200
+        assert 'id="username" type="text"' in response.text
+        assert 'select id="username"' not in response.text
+        for account in ('operator.tester', 'reviewer.tester', 'executive.tester', 'system.tester'):
+            assert account not in response.text
+        assert response.headers['cache-control'] == 'no-store'
+        assert "fetch('/auth/login'" in response.text
+    finally:
+        _restore_env(original)
+
+
 def test_auth_login_issues_tokens_for_every_test_role():
     original = _apply_env(
         {
@@ -157,7 +174,7 @@ def test_auth_login_issues_tokens_for_every_test_role():
     try:
         client = TestClient(idp_module.app)
         cases = {
-            "operator.tester": ("op-pass", "operator", "/app"),
+            "operator.tester": ("op-pass", "operator", "/sources/intake"),
             "reviewer.tester": ("rev-pass", "reviewer", "/app"),
             "bu.tester": ("bu-pass", "bu", "/app"),
             "analyst.tester": ("analyst-pass", "analyst", "/app"),

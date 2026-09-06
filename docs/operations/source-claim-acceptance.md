@@ -154,5 +154,28 @@ counts alone do not close these boundaries.
 - Existing legacy vector reads and graph previews recheck indexing permission,
   and source-text indexing checks permission before reading source files.
 - This does not yet make staged files independently registered claim evidence:
-  that path still requires closure without manual database operations. Mobile
-  visual acceptance and online deployment of this candidate remain pending.
+  that path still requires closure without manual database operations.
+- Additional narrow-browser inspection at 462 px verified collapsed and expanded
+  source contracts with no horizontally overflowing controls (document width
+  also 462 px). Online deployment of this intake candidate remains pending.
+- Content-rights release `ffdcc31c6e5f52505138497551a9fa012ef06200`, workflow
+  `34053780628`, succeeded. Authenticated snapshot, typed queries, local semantic
+  search, denied external-model/quotation access, denied executive intake and
+  unauthenticated denial all passed after readiness returned. During backup,
+  projector checks briefly timed out and then recovered; a login probe during
+  container replacement returned 502 and was repeated successfully afterwards.
+  This is not a zero-downtime deployment acceptance claim.
+
+### Source revision and operator sign-in candidate
+
+- Registration-writer consolidation baseline: 2,022 service tests passed,
+  receipt `/tmp/strategyos-registration-proof.xml`, 432.48 seconds.
+- Subsequent targeted checks cover historical source classification, current
+  permission denial on historical reads, consecutive policy/registration changes
+  with adjacent effective periods, and manual authorized login without account
+  enumeration. These additions require the final frozen-candidate service gate.
+- Manual login was visually inspected at 462 px. Operator login routes to source
+  intake; CEO login retains its existing executive destination.
+- Historical provenance uses registration versions as of the analysis timestamp.
+  Current policy remains authoritative. Missing historical registration is
+  explicitly unknown, not reconstructed from a later classification.

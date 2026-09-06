@@ -107,64 +107,10 @@ class ClaimRepository:
                     recorded_by=recorded_by,
                     rationale=rationale,
                 )
-                cur.execute(
-                    """
-                    select id, policy_version
-                    from strategyos_source_access_policies
-                    where source_system_id = %s and policy_fingerprint = %s and effective_to is null
-                    """,
-                    (source_id, policy.fingerprint),
-                )
-                existing_policy = cur.fetchone()
-                if existing_policy is not None:
-                    conn.commit()
-                    return {
-                        "source_system_id": str(source_id),
-                        "policy_id": str(existing_policy[0]),
-                        "policy_version": int(existing_policy[1]),
-                        "registration_version": registration_version,
-                        "registration_created": registration_created,
-                        "policy_created": False,
-                    }
-                cur.execute(
-                    "select coalesce(max(policy_version), 0) from strategyos_source_access_policies where source_system_id = %s",
-                    (source_id,),
-                )
-                version = int(cur.fetchone()[0]) + 1
-                cur.execute(
-                    "update strategyos_source_access_policies set effective_to = now() where source_system_id = %s and effective_to is null",
-                    (source_id,),
-                )
-                cur.execute(
-                    """
-                    insert into strategyos_source_access_policies
-                        (tenant_id, source_system_id, policy_version, policy_fingerprint,
-                         allowed_roles, allowed_purposes,
-                         allowed_business_units, export_allowed, external_model_allowed, quote_allowed,
-                         storage_allowed, index_allowed, recorded_by, rationale)
-                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    returning id
-                    """,
-                    (
-                        tenant_id,
-                        source_id,
-                        version,
-                        policy.fingerprint,
-                        sorted(policy.allowed_roles),
-                        sorted(str(item) for item in policy.allowed_purposes),
-                        sorted(policy.allowed_business_units),
-                        policy.export_allowed,
-                        policy.external_model_allowed,
-                        policy.quote_allowed,
-                        policy.storage_allowed,
-                        policy.index_allowed,
-                        recorded_by,
-                        rationale,
-                    ),
-                )
-                policy_id = cur.fetchone()[0]
-                from .state_store import queue_source_policy_refresh
-                queue_source_policy_refresh(cur, tenant_id=tenant_id, source_id=source_id, policy_id=policy_id)
+                from .state_store import record_source_policy_revision
+                policy_id, version, policy_created = record_source_policy_revision(cur,
+                    tenant_id=tenant_id, source_system_id=source_id, policy=policy,
+                    recorded_by=recorded_by, rationale=rationale)
             conn.commit()
         return {
             "source_system_id": str(source_id),
@@ -172,7 +118,7 @@ class ClaimRepository:
             "policy_version": version,
             "registration_version": registration_version,
             "registration_created": registration_created,
-            "policy_created": True,
+            "policy_created": policy_created,
         }
 
     def record_occurrence(
@@ -677,55 +623,10 @@ class ClaimRepository:
         recorded_by: str,
         rationale: str,
     ) -> tuple[int, bool]:
-        cur.execute(
-            """
-            select registration_version
-            from strategyos_source_registration_versions
-            where source_system_id = %s and registration_fingerprint = %s
-            """,
-            (source_system_id, source.fingerprint),
-        )
-        existing = cur.fetchone()
-        if existing is not None:
-            return int(existing[0]), False
-        cur.execute(
-            "select coalesce(max(registration_version), 0) from strategyos_source_registration_versions where source_system_id = %s",
-            (source_system_id,),
-        )
-        version = int(cur.fetchone()[0]) + 1
-        cur.execute(
-            "update strategyos_source_registration_versions set effective_to = now() where source_system_id = %s and effective_to is null",
-            (source_system_id,),
-        )
-        cur.execute(
-            """
-            insert into strategyos_source_registration_versions
-                (tenant_id, source_system_id, registration_version, registration_fingerprint,
-                 display_name, origin_category, capture_method, governed_owner, provider_name,
-                 authorization_basis, license_policy_ref, retention_class, sensitivity_class,
-                 metadata, recorded_by, rationale)
-            values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s)
-            """,
-            (
-                tenant_id,
-                source_system_id,
-                version,
-                source.fingerprint,
-                source.display_name,
-                source.origin_category,
-                source.capture_method,
-                source.governed_owner,
-                source.provider_name,
-                source.authorization_basis,
-                source.license_policy_ref,
-                source.retention_class,
-                source.sensitivity_class,
-                _json(dict(source.metadata)),
-                recorded_by,
-                rationale,
-            ),
-        )
-        return version, True
+        from .state_store import record_source_registration_revision
+        return record_source_registration_revision(cur, tenant_id=tenant_id,
+            source_system_id=source_system_id, source=source,
+            recorded_by=recorded_by, rationale=rationale)
 
     def run_source_access(self, run_id: str, *, context: PolicyContext,
                           require_index: bool = False) -> dict[str, Any]:
@@ -874,7 +775,7 @@ class ClaimRepository:
                     assessments = self._assessments(
                         cur, claim.revision_id, as_of_at=query.as_of_at
                     )
-                    source_details = self._source_details(cur, claim.revision_id)
+                    source_details = self._source_details(cur, claim.revision_id, as_of_at=query.as_of_at)
                     policies, missing_policy_sources = self._policies_for_revision(
                         cur, tenant_id, claim.revision_id
                     )
@@ -984,7 +885,7 @@ class ClaimRepository:
                     assessments = self._assessments(
                         cur, claim.revision_id, as_of_at=snapshot["as_of_at"]
                     )
-                    source_details = self._source_details(cur, claim.revision_id)
+                    source_details = self._source_details(cur, claim.revision_id, as_of_at=snapshot["as_of_at"])
                     policies, missing_policy_sources = self._policies_for_revision(
                         cur, tenant_id, claim.revision_id
                     )
@@ -1498,7 +1399,8 @@ class ClaimRepository:
         return [str(row[0]) for row in cur.fetchall()]
 
     @staticmethod
-    def _source_details(cur: Any, revision_id: str) -> dict[str, dict[str, Any]]:
+    def _source_details(cur: Any, revision_id: str, *, as_of_at: datetime | None = None) -> dict[str, dict[str, Any]]:
+        analysis_time = as_of_at or datetime.now(UTC)
         cur.execute(
             """
             with recursive lineage(id) as (
@@ -1508,9 +1410,11 @@ class ClaimRepository:
                 from strategyos_claim_dependencies d
                 join lineage l on d.derived_claim_revision_id = l.id
             )
-            select eo.occurrence_key, ss.source_key, ss.name as display_name,
-                   ss.origin_category, ss.capture_method, ss.provider_name,
-                   ss.license_policy_ref, ed.sensitivity_class, ed.retention_class,
+            select eo.occurrence_key, ss.source_key,
+                   coalesce(sr.display_name, 'Source registration unavailable at this analysis time') as display_name,
+                   coalesce(sr.origin_category, 'unknown') as origin_category,
+                   coalesce(sr.capture_method, 'unknown') as capture_method, sr.provider_name,
+                   sr.license_policy_ref, sr.sensitivity_class, sr.retention_class, sr.registration_version,
                    eo.author_identity, eo.published_at, eo.received_at,
                    eo.original_uri, eo.source_native_id, eo.source_native_version,
                    coalesce(cel.source_locator, eo.source_locator) as source_locator
@@ -1518,16 +1422,23 @@ class ClaimRepository:
             join strategyos_claim_evidence_links cel on cel.claim_revision_id = l.id
             join strategyos_evidence_occurrences eo on eo.id = cel.evidence_occurrence_id
             join strategyos_source_systems ss on ss.id = eo.source_system_id
+            left join lateral (
+                select v.* from strategyos_source_registration_versions v
+                where v.source_system_id=ss.id and v.effective_from <= %s
+                  and (v.effective_to is null or v.effective_to > %s)
+                order by v.registration_version desc limit 1
+            ) sr on true
             join strategyos_evidence_documents ed on ed.id = eo.evidence_document_id
             order by ss.source_key, eo.occurrence_key
             """,
-            (revision_id,),
+            (revision_id, analysis_time, analysis_time),
         )
         result: dict[str, dict[str, Any]] = {}
         for row in cur.fetchall():
             item = _record(cur, row)
             result[str(item["occurrence_key"])] = {
                 "source_key": item["source_key"],
+                "registration_version": item.get("registration_version"),
                 "display_name": item["display_name"],
                 "origin_category": item["origin_category"],
                 "capture_method": item["capture_method"],

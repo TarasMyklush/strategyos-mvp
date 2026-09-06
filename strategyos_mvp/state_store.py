@@ -1640,36 +1640,46 @@ def persist_source_access_policy(
         storage_allowed=policy_payload.get("storage_allowed", False),
         index_allowed=policy_payload.get("index_allowed", False),
     )
+    _, version, _ = record_source_policy_revision(cur, tenant_id=tenant_id,
+        source_system_id=source_system_id, policy=policy,
+        recorded_by=recorded_by, rationale=rationale)
+    return version
+
+
+def record_source_policy_revision(cur: Any, *, tenant_id: Any, source_system_id: Any,
+        policy: SourceAccessPolicy, recorded_by: str, rationale: str) -> tuple[str, int, bool]:
     cur.execute("select id from strategyos_source_systems where id=%s and tenant_id=%s for update",
                 (source_system_id, tenant_id))
     if cur.fetchone() is None:
         raise ValueError("Source does not belong to the ingestion tenant.")
     cur.execute(
         """
-        select policy_version from strategyos_source_access_policies
+        select id, policy_version from strategyos_source_access_policies
         where source_system_id = %s and policy_fingerprint = %s and effective_to is null
         """,
         (source_system_id, policy.fingerprint),
     )
     existing = cur.fetchone()
     if existing is not None:
-        return int(existing[0])
+        return str(existing[0]), int(existing[1]), False
     cur.execute(
         "select coalesce(max(policy_version), 0) from strategyos_source_access_policies where source_system_id = %s",
         (source_system_id,),
     )
     version = int(cur.fetchone()[0]) + 1
+    cur.execute("select clock_timestamp()")
+    change_time = cur.fetchone()[0]
     cur.execute(
-        "update strategyos_source_access_policies set effective_to = clock_timestamp() where source_system_id = %s and effective_to is null",
-        (source_system_id,),
+        "update strategyos_source_access_policies set effective_to = %s where source_system_id = %s and effective_to is null",
+        (change_time, source_system_id),
     )
     cur.execute(
         """
         insert into strategyos_source_access_policies
             (tenant_id, source_system_id, policy_version, policy_fingerprint,
              allowed_roles, allowed_purposes, allowed_business_units, export_allowed,
-             external_model_allowed, quote_allowed, storage_allowed, index_allowed, recorded_by, rationale)
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+             external_model_allowed, quote_allowed, storage_allowed, index_allowed, recorded_by, rationale, effective_from)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         returning id
         """,
         (
@@ -1687,15 +1697,23 @@ def persist_source_access_policy(
             policy.index_allowed,
             recorded_by,
             rationale,
+            change_time,
         ),
     )
     policy_id = cur.fetchone()[0]
     queue_source_policy_refresh(cur, tenant_id=tenant_id, source_id=source_system_id, policy_id=policy_id)
-    return version
+    return str(policy_id), version, True
 
 
 def queue_source_policy_refresh(cur: Any, *, tenant_id: Any, source_id: Any, policy_id: Any) -> None:
     """Invalidate every direct and derived projection in the policy transaction."""
+    queue_source_projection_refresh(cur, tenant_id=tenant_id, source_id=source_id,
+                                    change_key=f"policy:{policy_id}", metadata={"policy_id": str(policy_id)})
+
+
+def queue_source_projection_refresh(cur: Any, *, tenant_id: Any, source_id: Any,
+                                    change_key: str, metadata: dict[str, Any]) -> None:
+    """Refresh all dependent projections after an audited source change."""
     cur.execute("""with recursive affected(id) as (
         select cel.claim_revision_id from strategyos_claim_evidence_links cel
         join strategyos_evidence_occurrences eo on eo.id=cel.evidence_occurrence_id
@@ -1705,11 +1723,11 @@ def queue_source_policy_refresh(cur: Any, *, tenant_id: Any, source_id: Any, pol
         join affected a on a.id=d.input_claim_revision_id)
         insert into strategyos_claim_projection_outbox
           (tenant_id,claim_revision_id,projection_type,operation,payload,idempotency_key)
-        select %s,a.id,p.kind,'upsert',jsonb_build_object('policy_id',%s::text),
-               'policy:' || %s::text || ':' || a.id::text || ':' || p.kind
+        select %s,a.id,p.kind,'upsert',%s::jsonb,
+               %s::text || ':' || a.id::text || ':' || p.kind
         from affected a cross join (values ('graph'),('vector'),('cache')) p(kind)
         on conflict(tenant_id,projection_type,idempotency_key) do nothing""",
-        (source_id, tenant_id, str(policy_id), str(policy_id)))
+        (source_id, tenant_id, json_blob(metadata), change_key))
 
 
 def persist_source_registration_version(
@@ -1721,25 +1739,41 @@ def persist_source_registration_version(
     recorded_by: str,
     rationale: str,
 ) -> int:
+    version, _ = record_source_registration_revision(cur, tenant_id=tenant_id,
+        source_system_id=source_system_id, source=source,
+        recorded_by=recorded_by, rationale=rationale)
+    return version
+
+
+def record_source_registration_revision(cur: Any, *, tenant_id: Any,
+        source_system_id: Any, source: SourceRegistration, recorded_by: str,
+        rationale: str) -> tuple[int, bool]:
+    # Serialize both repository and legacy ingestion writers on the source row.
+    cur.execute("select id from strategyos_source_systems where id=%s and tenant_id=%s for update",
+                (source_system_id, tenant_id))
+    if cur.fetchone() is None:
+        raise ValueError("Source registration must belong to the authenticated tenant.")
     cur.execute(
         """
         select registration_version
         from strategyos_source_registration_versions
-        where source_system_id = %s and registration_fingerprint = %s
+        where source_system_id = %s and registration_fingerprint = %s and effective_to is null
         """,
         (source_system_id, source.fingerprint),
     )
     existing = cur.fetchone()
     if existing is not None:
-        return int(existing[0])
+        return int(existing[0]), False
     cur.execute(
         "select coalesce(max(registration_version), 0) from strategyos_source_registration_versions where source_system_id = %s",
         (source_system_id,),
     )
     version = int(cur.fetchone()[0]) + 1
+    cur.execute("select clock_timestamp()")
+    change_time = cur.fetchone()[0]
     cur.execute(
-        "update strategyos_source_registration_versions set effective_to = now() where source_system_id = %s and effective_to is null",
-        (source_system_id,),
+        "update strategyos_source_registration_versions set effective_to = %s where source_system_id = %s and effective_to is null",
+        (change_time, source_system_id),
     )
     cur.execute(
         """
@@ -1747,8 +1781,8 @@ def persist_source_registration_version(
             (tenant_id, source_system_id, registration_version, registration_fingerprint,
              display_name, origin_category, capture_method, governed_owner, provider_name,
              authorization_basis, license_policy_ref, retention_class, sensitivity_class,
-             metadata, recorded_by, rationale)
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s)
+             metadata, recorded_by, rationale, effective_from)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s)
         """,
         (
             tenant_id,
@@ -1767,9 +1801,13 @@ def persist_source_registration_version(
             json_blob(dict(source.metadata)),
             recorded_by,
             rationale,
+            change_time,
         ),
     )
-    return version
+    queue_source_projection_refresh(cur, tenant_id=tenant_id, source_id=source_system_id,
+        change_key=f"registration:{source_system_id}:{version}",
+        metadata={"source_system_id": str(source_system_id), "registration_version": version})
+    return version, True
 
 
 def upsert_run_summary(
