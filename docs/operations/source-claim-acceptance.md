@@ -488,3 +488,13 @@ counts alone do not close these boundaries.
   history is preserved and is being audited separately.
 - The frontend/CEO regression subset passed 321 tests. Combined full-service and
   preview browser acceptance for these subsequent changes are still pending.
+- Follow-up conversation checks now enforce current source rights on GET and
+  PUT independently of request-method ownership guards, and respect persona
+  authority refusals. Nine targeted tests passed including a real PostgreSQL
+  write/read/revoke/read-denial/write-denial sequence; stored history stayed
+  intact at the same version. Browser refresh rechecks unchanged run scopes.
+- The first combined twin full gate stopped at an obsolete fixture assertion
+  after 743 passes: a source-unauthorized activity surface correctly had no
+  numeric metrics, while the old test expected a service count. The fixture
+  expectation now requires explicit unavailable status and unknown counts;
+  the production source guard was not weakened to satisfy it.

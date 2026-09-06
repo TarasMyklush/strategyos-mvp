@@ -24,11 +24,34 @@ class ThreadState(BaseModel):
 
 def access(principal,run_id,persona):
     from . import api
-    api._assistant_authority_refusal(api.AssistantChatRequest(question='View finance',persona=persona),principal)
+    refusal = api._assistant_authority_refusal(api.AssistantChatRequest(question='View finance',persona=persona),principal)
+    if refusal and refusal.get('response_mode') == 'authority_refusal':
+        raise HTTPException(403, 'Conversation access is not permitted for this persona.')
     access_scope.guard_run(run_id,require_store=True)
+    authorize_sources(principal, run_id)
     handle,failure=state_store.database_connection()
     if failure or handle is None:raise HTTPException(503,'Conversation persistence is unavailable.')
     return handle,(principal['tenant_id'],principal['subject'],run_id,persona)
+
+
+def authorize_sources(principal, run_id):
+    """GET and PUT require current rights; ownership alone cannot release history."""
+    if principal.get('auth_disabled'):
+        return
+    from .claim_store import ClaimRepository
+    from .source_claims import PolicyContext, UsePurpose
+    if not all(principal.get(key) for key in ('tenant_id', 'subject', 'role')) or not run_id:
+        raise PermissionError('Conversation source authority is unavailable.')
+    try:
+        result = ClaimRepository().run_source_access(run_id, context=PolicyContext(
+            tenant_id=principal['tenant_id'], principal_id=principal['subject'],
+            roles=frozenset({principal['role']}),
+            business_units=frozenset(principal.get('business_units') or ()),
+            purpose=UsePurpose.EXECUTIVE_BRIEFING))
+    except (RuntimeError, ValueError, KeyError):
+        raise PermissionError('Conversation source authority is unavailable.') from None
+    if result.get('allowed') is not True:
+        raise PermissionError('Conversation source authority is unavailable.')
 
 
 @router.get('/api/conversation-state')

@@ -2534,9 +2534,20 @@
     if (!state.session || !state.session.authenticated) return;
     var runId = activeRunId(), persona = state.activePersona || 'ceo';
     if (!runId || runId === 'latest-public') return;
-    if (state.durableThreadScope && state.durableThreadScope.runId === runId && state.durableThreadScope.persona === persona) return;
-    var payload = await fetchJson('/api/conversation-state' + buildQuery({run_id: runId, persona: persona}));
-    if (!payload) return;
+    var sameScope = state.durableThreadScope && state.durableThreadScope.runId === runId && state.durableThreadScope.persona === persona;
+    var payload;
+    try {
+      // Even an unchanged run must recheck source rights; cached conversation
+      // content does not carry a perpetual authorization grant.
+      payload = await fetchJson('/api/conversation-state' + buildQuery({run_id: runId, persona: persona}), true);
+    } catch (error) {
+      Object.keys(threadStore()).forEach(function (key) { if (key.indexOf(persona + ':') === 0 && !threadStore()[key].readOnly) delete threadStore()[key]; });
+      state.durableThreadScope = null;
+      state.threadConflict = true;
+      showToast('Saved conversation is unavailable under current source permissions. Saved history has not been deleted.');
+      return;
+    }
+    if (!payload || sameScope) return;
     Object.keys(threadStore()).forEach(function (key) { if (key.indexOf(persona + ':') === 0 && !threadStore()[key].readOnly) delete threadStore()[key]; });
     Object.assign(threadStore(), payload.threads || {});
     state.threadVersion = payload.version; state.threadConflict = false;
