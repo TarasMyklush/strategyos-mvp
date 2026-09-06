@@ -94,7 +94,9 @@ docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --e
 test -s /opt/strategyos-branch/runtime-database/runtime.env
 MIGRATE
     RUNTIME_ENV_ARGS=" --env-file /opt/strategyos-branch/runtime-database/runtime.env"
-    ssh ${SSH_OPTS} "${TARGET_HOST}" "set -o pipefail; cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets${PROVIDER_ENV_ARGS}${RUNTIME_ENV_ARGS} config --format json | python3 deploy/scripts/validate_preview_runtime_config.py"
+    # Inspect the inactive one-shot service too. This profile is for `config`
+    # only: never add it to the ordinary application `up` command below.
+    ssh ${SSH_OPTS} "${TARGET_HOST}" "set -o pipefail; cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS} --profile schema-migration${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets${PROVIDER_ENV_ARGS}${RUNTIME_ENV_ARGS} config --format json | python3 deploy/scripts/validate_preview_runtime_config.py"
   fi
   ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets${PROVIDER_ENV_ARGS}${RUNTIME_ENV_ARGS} pull --ignore-buildable && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets${PROVIDER_ENV_ARGS}${RUNTIME_ENV_ARGS} up -d --no-build --wait --wait-timeout '${COMPOSE_WAIT_TIMEOUT_SECONDS}'"
 else
