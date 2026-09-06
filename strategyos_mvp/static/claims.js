@@ -17,7 +17,12 @@
       article.append(fields({'Priority policy version':record.comparison.priority_policy_version,'Selection basis':record.comparison.selection_basis}));
     }
     if(record.comparison && record.comparison.requires_resolution){
-      article.append(node('p','Conflicting authorized claims exist for this same scope. No definitive value has been selected; review the competing evidence.','claim-stale'));
+      var reasons={
+        unresolved_source_coverage:'The configured priority policy does not cover this authorized view completely. No definitive value has been selected.',
+        required_review_missing:'The priority policy requires a current review that is not available. No definitive value has been selected.',
+        snapshot_selection_not_current_at_analysis:'This frozen selection needs evidence reconciliation. Its recorded value has not been changed.'
+      };
+      article.append(node('p',reasons[record.comparison.status] || 'Conflicting authorized claims exist for this same scope. No definitive value has been selected; review the competing evidence.','claim-stale'));
       if(form.elements.namedItem('text').value.trim()){
         var allClaims=node('button','Inspect all matching claims');allClaims.type='button';
         allClaims.addEventListener('click',function(){form.elements.namedItem('text').value='';form.requestSubmit();});article.append(allClaims);

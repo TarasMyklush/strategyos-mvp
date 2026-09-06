@@ -347,3 +347,22 @@ counts alone do not close these boundaries.
 - Genuine 390 px local browser checks subsequently passed for conflict warnings
   and recalculation controls, with document width also 390 px. The viewport was
   reset afterwards. This supersedes only the earlier failed viewport attempt.
+
+### Preview release `c95d01a` and snapshot conflict follow-through
+
+- Workflow `34058731984` completed successfully: tests, image build, preview
+  deployment and readiness checks. Production was not changed.
+- Live operator browser queries verified the synthetic June actual (SAR 120),
+  authored forecast (SAR 130), missing-plan empty state and exact-period mismatch
+  empty state. Authenticated operator/executive probes passed source-purpose and
+  role isolation, snapshot retrieval and local semantic retrieval.
+- The fixture receipt lists revision IDs without semantic ordering. Verified
+  reads identify actual as `ca693b19-bda0-463e-9aca-ace9bf755d41` and forecast as
+  `0a5827c2-e183-48fb-b6f1-12e0f90c2743`; do not infer their types from receipt order.
+- Snapshot reads now reuse analysis-time authorized conflict/priority comparison
+  before exposing a selected claim as definitive. A paginated frozen selection
+  cannot hide a competing assertion outside its selected page. Its recorded
+  values remain unchanged, and newer revisions do not rewrite the historical
+  disagreement. Current source revocation still removes inaccessible evidence.
+- Twenty focused service-backed tests passed with no skips, plus 28 focused
+  unit/API/UI tests. This snapshot addition still requires its frozen full gate.

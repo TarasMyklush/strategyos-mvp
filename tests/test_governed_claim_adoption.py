@@ -22,6 +22,22 @@ def test_stale_snapshot_cannot_be_presented_as_current_briefing(monkeypatch):
     assert 'recalculation' in error.value.detail
 
 
+def test_conflicted_snapshot_cannot_be_presented_as_definitive_briefing(monkeypatch):
+    class Repository:
+        def run_source_access(self, *args, **kwargs):
+            return {'allowed': True}
+        def snapshot(self, *args, **kwargs):
+            return {'records': [{'value': 'contested'}], 'requires_resolution': True}
+        def reconciliation(self, *args, **kwargs):
+            return {'status': 'passed'}
+    monkeypatch.setattr(api, 'ClaimRepository', Repository)
+    with pytest.raises(HTTPException) as error:
+        api._summary_with_governed_claim_snapshot(
+            {'run_id': 'conflict-run'}, principal={'tenant_id': 'tenant-one', 'role': 'executive'})
+    assert error.value.status_code == 409
+    assert 'source conflict' in error.value.detail
+
+
 def test_authenticated_summary_uses_policy_filtered_snapshot_without_legacy_leak(monkeypatch):
     class FakeRepository:
         def run_source_access(self, *args, **kwargs):

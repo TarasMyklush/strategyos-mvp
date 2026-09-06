@@ -1064,6 +1064,28 @@ class ClaimRepository:
                     )
                     records.append(record)
             conn.commit()
+        # Pagination and frozen selection must not hide competing evidence that
+        # existed at analysis time. Reuse the same authorized comparison path as
+        # typed/semantic reads; never replace the immutable selected revisions.
+        comparison_cache = {}
+        for record in records:
+            key = (record['metric_key'], record['claim_kind'],
+                   record.get('business_unit'), record.get('scenario'))
+            if key not in comparison_cache:
+                query = ClaimQuery(tenant_id=str(tenant_id), metric_key=key[0],
+                    allowed_claim_kinds=frozenset({key[1]}), business_unit=key[2],
+                    scenario_key=key[3], purpose=context.purpose,
+                    as_of_at=snapshot['as_of_at'])
+                comparison_cache[key] = {item['claim_revision_id']: item['comparison']
+                    for item in self.query(query, context=context)}
+            comparison = comparison_cache[key].get(record['claim_revision_id'])
+            record['comparison'] = comparison or {
+                'status': 'snapshot_selection_not_current_at_analysis',
+                'requires_resolution': True,
+                'authorized_competing_revisions': [],
+                'selection_basis': 'The frozen selection cannot be reconciled with eligible evidence at analysis time.',
+                'independent_corroboration': 'not_assessed',
+            }
         return {
             "snapshot_id": str(snapshot["id"]),
             "snapshot_key": snapshot["snapshot_key"],
@@ -1073,6 +1095,8 @@ class ClaimRepository:
             "records": records,
             "denied_count": denied_count,
             "requires_recompute": any(record["superseded_since_analysis"] for record in records),
+            "requires_resolution": any(record['comparison']['requires_resolution']
+                or record['comparison'].get('selected_by_priority') is False for record in records),
             "page": {
                 "limit": limit,
                 "offset": offset,

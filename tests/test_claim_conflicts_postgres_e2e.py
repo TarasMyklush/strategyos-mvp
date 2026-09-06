@@ -29,8 +29,29 @@ def test_shortlist_cannot_hide_an_authorized_conflict_but_revocation_does(ledger
     result=repo.query(query,context=context,revision_ids=[first])
     assert len(result)==1 and result[0]['comparison']['requires_resolution']
     assert result[0]['comparison']['authorized_competing_revisions']==[second]
+    import psycopg
+    with psycopg.connect(ledger[1]) as conn:
+        snapshot_id=conn.execute('''insert into strategyos_analysis_snapshots
+            (tenant_id,snapshot_key,as_of_at,policy_version,created_by)
+            values (%s,'conflict-snapshot',%s,'test','test') returning id''',
+            (context.tenant_id,query.as_of_at)).fetchone()[0]
+        conn.execute('''insert into strategyos_analysis_snapshot_claims
+            (snapshot_id,claim_family_id,claim_revision_id,selection_reason)
+            select %s,claim_family_id,id,'Frozen single selection' from strategyos_claim_revisions where id=%s''',
+            (snapshot_id,first))
+    frozen=repo.snapshot('conflict-snapshot',context=context,limit=1)
+    assert frozen['requires_resolution']
+    assert frozen['records'][0]['claim_revision_id']==first
+    assert frozen['records'][0]['comparison']['authorized_competing_revisions']==[second]
+    # New revisions cannot retroactively erase an analysis-time disagreement.
+    repo.record_claim(replace(draft,assertion_namespace='source-two',value_numeric=10,
+        source_occurrence_keys=(second_occurrence,)),traceability='present')
+    assert repo.snapshot('conflict-snapshot',context=context)['requires_resolution']
     repo.register_source(source2,policy=replace(policy2,allowed_roles=frozenset({'auditor'})),
         recorded_by='steward',rationale='Revoke competing-source visibility')
     result=repo.query(query,context=context,revision_ids=[first])
     assert result[0]['comparison']['status']=='single_claim'
     assert result[0]['comparison']['authorized_competing_revisions']==[]
+    frozen=repo.snapshot('conflict-snapshot',context=context)
+    assert not frozen['requires_resolution']
+    assert frozen['records'][0]['comparison']['authorized_competing_revisions']==[]

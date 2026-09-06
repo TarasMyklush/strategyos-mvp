@@ -4892,6 +4892,9 @@ def _summary_with_governed_claim_snapshot(
             status_code=409,
             detail="This briefing has revised inputs and needs recalculation. Its historical snapshot remains available; no stale current values were returned.",
         )
+    if snapshot.get('requires_resolution'):
+        raise HTTPException(status_code=409,
+            detail='This briefing has unresolved or non-preferred evidence selections. Review the source conflict before publishing a replacement briefing; the historical snapshot is unchanged.')
     if not snapshot.get("records"):
         raise HTTPException(
             status_code=503,

@@ -31,3 +31,10 @@ def test_executive_source_traceability_does_not_imply_independent_verification()
     assert 'current verified figures' not in script
     for page in ('executive.html', 'guide.html'):
         assert 'verified company data' not in (ROOT / page).read_text()
+
+
+def test_unresolved_priority_explains_missing_coverage_and_review_separately():
+    script = (ROOT / 'claims.js').read_text()
+    assert 'unresolved_source_coverage:' in script
+    assert 'required_review_missing:' in script
+    assert 'snapshot_selection_not_current_at_analysis:' in script
