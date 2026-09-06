@@ -250,6 +250,16 @@ source-level consent.
 
 ## Explicit recalculation
 
+Closed board packets retain their immutable content, but not an immutable access
+grant. Every packet read, frozen question, executive closed-board view, list and
+download checks current source rights. Downloads additionally require export
+permission. A newer input revision does not rewrite historical board content;
+withdrawal or revoked role/purpose/storage/export rights still deny it. New
+closures consume the governed headline snapshot and require export authority
+before copying report bytes. Missing policy fails closed. Internal recovery
+reads remain possible without impersonating a user and do not constitute an
+HTTP access grant.
+
 The operator workspace `/claims/recalculate` previews registered formulas over
 current authorized input revisions. The server binds the preview to the actor,
 scope, rationale, input fingerprints and policy versions. Recording locks input

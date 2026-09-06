@@ -1,4 +1,4 @@
-"""Append-only board packets. Reads never consult current company data."""
+"""Append-only board packets. Frozen content, current source permissions."""
 from __future__ import annotations
 
 import base64
@@ -77,7 +77,31 @@ def close_meeting(tenant: str, meeting_id: str, *, run_id: str, actor: str,
     return {"meeting_id": meeting_id, "run_id": run_id, "digest": digest, "status": "closed"}
 
 
-def read_meeting(tenant: str, meeting_id: str) -> dict[str, Any] | None:
+def authorize_run(tenant: str, run_id: str, *, principal: Mapping[str, Any] | None = None,
+                  purpose: str = 'executive_briefing') -> None:
+    from .access_scope import principal_scope
+    from .claim_store import ClaimRepository
+    from .source_claims import PolicyContext
+    actor = principal if principal is not None else principal_scope.get()
+    if actor is None:
+        return  # Internal storage/recovery calls; HTTP callers supply identity.
+    if str(actor.get('tenant_id') or '') != tenant or not run_id:
+        raise PermissionError('Board material is unavailable under current source permissions.')
+    try:
+        decision = ClaimRepository().run_source_access(run_id, context=PolicyContext(
+            tenant_id=tenant, principal_id=str(actor.get('subject') or 'unknown'),
+            roles=frozenset({str(actor.get('role') or '')}),
+            business_units=frozenset(actor.get('business_units') or ()), purpose=purpose))
+    except (RuntimeError, ValueError, KeyError):
+        raise PermissionError('Board material is unavailable under current source permissions.') from None
+    # Historical content stays frozen when newer inputs arrive. This exception
+    # never overrides withdrawal, role, purpose, storage or export restrictions.
+    if not decision.get('allowed') and set(decision.get('reasons') or ()) != {'bulk_revised_inputs_require_recompute'}:
+        raise PermissionError('Board material is unavailable under current source permissions.')
+
+
+def read_meeting(tenant: str, meeting_id: str, *, principal: Mapping[str, Any] | None = None,
+                 purpose: str = 'executive_briefing') -> dict[str, Any] | None:
     handle, failure = state_store.database_connection()
     if failure or handle is None:
         raise RuntimeError("Board memory requires the durable database.")
@@ -86,6 +110,11 @@ def read_meeting(tenant: str, meeting_id: str) -> dict[str, Any] | None:
             cur.execute("SELECT to_regclass('strategyos_board_snapshots')")
             if cur.fetchone()[0] is None:
                 return None
+            cur.execute('SELECT run_id FROM strategyos_board_snapshots WHERE tenant_key=%s AND meeting_id=%s', (tenant, meeting_id))
+            reference = cur.fetchone()
+            if reference is None:
+                return None
+            authorize_run(tenant, str(reference[0]), principal=principal, purpose=purpose)
             cur.execute("""SELECT packet_json, digest, closed_at, closed_by FROM strategyos_board_snapshots
                 WHERE tenant_key=%s AND meeting_id=%s""", (tenant, meeting_id))
             row = state_store.fetchone_dict(cur)

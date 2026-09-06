@@ -10448,7 +10448,7 @@ def latest_run(
         if not meeting:
             raise HTTPException(409, "Close or select a board meeting before opening collective memory.")
         from . import board_memory
-        snapshot = board_memory.read_meeting(_principal_tenant_id(principal), meeting)
+        snapshot = board_memory.read_meeting(_principal_tenant_id(principal), meeting, principal=principal)
         if snapshot is None:
             raise HTTPException(404, "Closed meeting not found.")
         packet = snapshot["packet"]["context"].get("executive_packet")
@@ -17081,7 +17081,7 @@ def _assistant_authority_refusal(
             return {"status": "ok", "matched": False, "response_mode": "frozen_board_snapshot",
                     "answer": "Select a closed board meeting to ask about its approved snapshot.", "citations": []}
         try:
-            snapshot = board_memory.read_meeting(tenant_id, meeting_id)
+            snapshot = board_memory.read_meeting(tenant_id, meeting_id, principal=principal)
         except RuntimeError as exc:
             raise HTTPException(503, str(exc)) from exc
         if snapshot is None:

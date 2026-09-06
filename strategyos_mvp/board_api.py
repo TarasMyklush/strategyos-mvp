@@ -28,9 +28,9 @@ class CloseRequest(BaseModel):
     run_id: str = Field(min_length=1, max_length=160)
 
 
-def _read(tenant: str, meeting: str):
+def _read(tenant: str, meeting: str, *, principal: dict[str, Any], purpose: str = 'executive_briefing'):
     try:
-        snapshot = board_memory.read_meeting(tenant, meeting)
+        snapshot = board_memory.read_meeting(tenant, meeting, principal=principal, purpose=purpose)
     except RuntimeError as exc:
         raise HTTPException(503, str(exc)) from exc
     if snapshot is None:
@@ -42,7 +42,7 @@ def _read(tenant: str, meeting: str):
 def close(meeting_id: str, request: CloseRequest, principal: dict[str, Any] = require_role("executive")):
     from . import api
     tenant = api._principal_tenant_id(principal)
-    existing = board_memory.read_meeting(tenant, meeting_id)
+    existing = board_memory.read_meeting(tenant, meeting_id, principal=principal)
     if existing is not None:
         if existing["packet"]["run_id"] != request.run_id:
             raise HTTPException(409, "This meeting is already closed against another run.")
@@ -53,6 +53,8 @@ def close(meeting_id: str, request: CloseRequest, principal: dict[str, Any] = re
         raise HTTPException(404, "Approved run not found in this tenant.")
     if summary.get("approval_status") != "approved":
         raise HTTPException(409, "The run must be approved before a board meeting can close.")
+    board_memory.authorize_run(tenant, request.run_id, principal=principal, purpose='export')
+    summary = api._summary_with_governed_claim_snapshot(summary, principal=principal)
     publication = api._summary_publication_payload(summary, principal_role="executive")
     if publication.get("status") not in {"published", "approved_for_release"}:
         raise HTTPException(409, "The board publication reconciliation gate has not passed.")
@@ -132,7 +134,7 @@ def close(meeting_id: str, request: CloseRequest, principal: dict[str, Any] = re
 @router.get("/api/board/meetings/{meeting_id}")
 def read(meeting_id: str, principal: dict[str, Any] = require_role("executive")):
     from .api import _principal_tenant_id
-    snapshot = _read(_principal_tenant_id(principal), meeting_id)
+    snapshot = _read(_principal_tenant_id(principal), meeting_id, principal=principal)
     packet = snapshot["packet"]
     return {**snapshot, "packet": {**packet, "files": {name: {"sha256": info["sha256"]}
             for name, info in packet["files"].items()}}}
@@ -141,7 +143,7 @@ def read(meeting_id: str, principal: dict[str, Any] = require_role("executive"))
 @router.get("/api/board/meetings/{meeting_id}/files/{name}")
 def download(meeting_id: str, name: str, principal: dict[str, Any] = require_role("executive")):
     from .api import _principal_tenant_id
-    snapshot = _read(_principal_tenant_id(principal), meeting_id)
+    snapshot = _read(_principal_tenant_id(principal), meeting_id, principal=principal, purpose='export')
     item = snapshot["packet"]["files"].get(name)
     if item is None:
         raise HTTPException(404, "Document not found in this snapshot.")
@@ -161,9 +163,22 @@ def meetings(principal: dict[str, Any] = require_role("executive")):
             cur.execute("SELECT to_regclass('strategyos_board_snapshots')")
             if cur.fetchone()[0] is None:
                 return {"meetings": []}
-            cur.execute("SELECT meeting_id,closed_at,digest FROM strategyos_board_snapshots WHERE tenant_key=%s ORDER BY closed_at DESC LIMIT 100", (principal["tenant_id"],))
+            cur.execute("SELECT meeting_id,closed_at,digest,run_id FROM strategyos_board_snapshots WHERE tenant_key=%s ORDER BY closed_at DESC LIMIT 100", (principal["tenant_id"],))
             rows = state_store.fetchall_dicts(cur)
-    return {"meetings": rows}
+    visible = []
+    access = {}
+    for row in rows:
+        run_id = str(row['run_id'])
+        if run_id not in access:
+            try:
+                board_memory.authorize_run(principal['tenant_id'], run_id, principal=principal)
+                access[run_id] = True
+            except PermissionError:
+                access[run_id] = False
+        if not access[run_id]:
+            continue
+        visible.append({key:value for key,value in row.items() if key != 'run_id'})
+    return {"meetings": visible}
 
 
 class BoardQuestion(BaseModel):
@@ -172,4 +187,4 @@ class BoardQuestion(BaseModel):
 
 @router.post("/api/board/meetings/{meeting_id}/questions")
 def question(meeting_id: str, request: BoardQuestion, principal: dict[str, Any] = require_role("executive")):
-    return board_memory.answer_from_snapshot(_read(principal["tenant_id"], meeting_id), request.question)
+    return board_memory.answer_from_snapshot(_read(principal["tenant_id"], meeting_id, principal=principal), request.question)

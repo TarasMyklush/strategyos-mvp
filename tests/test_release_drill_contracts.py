@@ -48,7 +48,7 @@ def test_closed_board_view_never_reads_current_run(monkeypatch):
     from strategyos_mvp import api, board_memory
     monkeypatch.setattr(api,'_latest_summary',lambda: (_ for _ in ()).throw(AssertionError('live source accessed')))
     snapshot={'digest':'frozen-digest','packet':{'context':{'executive_packet':{'run_id':'original-run','board_meeting_id':'meeting-a','run_source':'immutable_board_snapshot'}}}}
-    monkeypatch.setattr(board_memory,'read_meeting',lambda tenant,meeting:snapshot if tenant=='tenant-a' and meeting=='meeting-a' else None)
+    monkeypatch.setattr(board_memory,'read_meeting',lambda tenant,meeting,**kwargs:snapshot if tenant=='tenant-a' and meeting=='meeting-a' else None)
     principal={'tenant_id':'tenant-a','role':'executive','authenticated':True}
     result=api.latest_run(persona='board',board='closed',meeting='meeting-a',principal=principal)
     assert result['run_id']=='original-run' and result['board_snapshot_digest']=='frozen-digest'
