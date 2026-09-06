@@ -18,6 +18,18 @@ COMPONENT_KEYS = frozenset(
     }
 )
 
+FINANCE_HEADLINE_METRIC_KEYS = frozenset(
+    {
+        "ceo.revenue",
+        "ceo.cogs",
+        "ceo.ebitda",
+        "ceo.ebitda_margin",
+        "ceo.operating_cost",
+        "ceo.cash_balance",
+        "ceo.cash_floor",
+    }
+)
+
 EVIDENCE_COMPONENTS: dict[str, tuple[str, ...]] = {
     "revenue": ("revenue_actual", "revenue_plan"),
     "ebitda_margin": ("ebitda_actual", "ebitda_plan", "cogs_actual"),

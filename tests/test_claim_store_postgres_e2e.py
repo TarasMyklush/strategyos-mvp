@@ -393,6 +393,21 @@ def test_run_backfill_materializes_kpis_lineage_snapshot_and_reconciliation():
         ),
     )
     assert len(snapshot["records"]) == 5
+    headline_snapshot = repo.snapshot(
+        f"run:{run_id}",
+        context=PolicyContext(
+            tenant_id=tenant_id,
+            principal_id="ceo",
+            roles=frozenset({"executive"}),
+            purpose=UsePurpose.EXECUTIVE_BRIEFING,
+        ),
+        metric_keys={"ceo.revenue", "ceo.ebitda_margin"},
+    )
+    assert {item["metric_key"] for item in headline_snapshot["records"]} == {
+        "ceo.revenue",
+        "ceo.ebitda_margin",
+    }
+    assert len(headline_snapshot["records"]) == 3
     transaction_claim = next(
         item for item in snapshot["records"] if item["metric_key"] == "finance.transaction.amount"
     )

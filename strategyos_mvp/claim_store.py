@@ -561,8 +561,17 @@ class ClaimRepository:
             conn.commit()
         return results
 
-    def snapshot(self, snapshot_key: str, *, context: PolicyContext) -> dict[str, Any]:
+    def snapshot(
+        self,
+        snapshot_key: str,
+        *,
+        context: PolicyContext,
+        metric_keys: Iterable[str] | None = None,
+    ) -> dict[str, Any]:
         """Return one immutable analysis snapshot after current policy checks."""
+        selected_metric_keys = sorted(
+            {str(value).strip() for value in (metric_keys or ()) if str(value).strip()}
+        )
         connection = self._require_connection()
         with connection as conn:
             self._ensure_schema(conn)
@@ -591,9 +600,13 @@ class ClaimRepository:
                     join strategyos_claim_revisions r on r.id = sc.claim_revision_id
                     join strategyos_claim_families f on f.id = sc.claim_family_id
                     where sc.snapshot_id = %s
+                      and (
+                          cardinality(%s::text[]) = 0
+                          or f.metric_key = any(%s::text[])
+                      )
                     order by f.metric_key, f.claim_kind_lane, f.subject_key
                     """,
-                    (snapshot["id"],),
+                    (snapshot["id"], selected_metric_keys, selected_metric_keys),
                 )
                 rows = [_record(cur, row) for row in cur.fetchall()]
                 records: list[dict[str, Any]] = []

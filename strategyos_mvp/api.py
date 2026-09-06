@@ -52,7 +52,10 @@ from .agent_execution_log import build_execution_log
 from .executive_presentation import build_executive_presentation
 from .executive_read_model import build_executive_read_model
 from .claim_store import ClaimRepository
-from .governed_finance import finance_payload_from_claim_snapshot
+from .governed_finance import (
+    FINANCE_HEADLINE_METRIC_KEYS,
+    finance_payload_from_claim_snapshot,
+)
 from .source_claims import PolicyContext, UsePurpose
 from .executive_display import (
     executive_display_text,
@@ -4834,7 +4837,11 @@ def _summary_with_governed_claim_snapshot(
     )
     repository = ClaimRepository()
     try:
-        snapshot = repository.snapshot(f"run:{run_id}", context=context)
+        snapshot = repository.snapshot(
+            f"run:{run_id}",
+            context=context,
+            metric_keys=FINANCE_HEADLINE_METRIC_KEYS,
+        )
         reconciliation = repository.reconciliation(run_id, tenant_id=tenant_id)
     except KeyError:
         result["canonical_claim_status"] = "not_materialized"

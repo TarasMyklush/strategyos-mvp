@@ -5,9 +5,11 @@ from strategyos_mvp import api
 
 def test_authenticated_summary_uses_policy_filtered_snapshot_without_legacy_leak(monkeypatch):
     class FakeRepository:
-        def snapshot(self, snapshot_key, *, context):
+        def snapshot(self, snapshot_key, *, context, metric_keys=None):
             assert snapshot_key == "run:run-1"
             assert context.roles == frozenset({"executive"})
+            assert "ceo.revenue" in metric_keys
+            assert "finance.transaction.amount" not in metric_keys
             return {
                 "snapshot_id": "snapshot-1",
                 "snapshot_key": snapshot_key,
@@ -62,7 +64,7 @@ def test_authenticated_summary_uses_policy_filtered_snapshot_without_legacy_leak
 
 def test_missing_snapshot_keeps_pre_cutover_payload_and_reports_status(monkeypatch):
     class MissingRepository:
-        def snapshot(self, snapshot_key, *, context):
+        def snapshot(self, snapshot_key, *, context, metric_keys=None):
             raise KeyError(snapshot_key)
 
     monkeypatch.setattr(api, "ClaimRepository", MissingRepository)
