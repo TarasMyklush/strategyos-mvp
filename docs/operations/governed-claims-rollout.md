@@ -89,9 +89,15 @@ The command is local administrative tooling, not an LLM-exposed action.
 - Projection failure does not mutate the source claim. It remains retryable in the
   outbox and becomes a visible dead letter at the retry ceiling.
 
-## Rollback
+## Recovery
 
-The rollout is additive. Stop the projector and roll back the application image;
-do not delete claim tables or revisions. Existing finance tables and artifacts
-remain authoritative for the old application version. Restore the database only
-for a verified database-level incident, using the standard restore rehearsal.
+For the preview, follow [fail-closed recovery](preview-claim-recovery.md).
+Do not restore an older application image: it may lack current source-read and
+claim-lifecycle controls. A failed rollout quiesces only the preview API, worker
+and claim projectors while preserving database, indexes, storage and history.
+Recover through a tested roll-forward release, with schema verification and
+online authorization checks. Do not delete claim tables or revisions or restore
+a database merely to get past a migration failure. A database restore requires
+a separately verified incident and the restore rehearsal procedure.
+
+This preview procedure does not authorize a production deployment or recovery.

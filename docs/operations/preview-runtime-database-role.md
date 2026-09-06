@@ -38,3 +38,20 @@ operation, and no source rights, approval policy or outbound connector is enable
 Before release, run the non-owner PostgreSQL proofs, complete service suite,
 effective Compose checks and online regression suite. Isolated proofs alone do
 not establish that the live deployment has switched roles.
+
+## Request context at the pool boundary
+
+In verified runtime mode, every pooled connection checkout binds the middleware's
+verified tenant reference and canonical UUID. A UUID cannot be interpreted as
+another tenant's slug. The context survives application commits and rollbacks,
+but is explicitly cleared before the connection returns to the pool. Failed
+binding or cleanup discards the connection. Missing request context receives an
+empty scope, not the previously connected tenant or a default executive identity.
+
+`test_database_tenant_context_postgres_e2e.py` proves this with a real single-slot
+pool, a non-owner runtime account and a synthetic table protected by PostgreSQL
+row policies. Reads intentionally omit tenant WHERE clauses, alternate tenants,
+and exercise empty context, rollback and cleanup failure. This proves the pool
+mechanism, not application-table RLS coverage. Application row policies and
+explicit background-job tenant authority remain separate work before enabling
+RLS on existing tables; no business table policy is enabled by this change.

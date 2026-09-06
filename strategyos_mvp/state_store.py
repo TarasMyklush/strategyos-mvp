@@ -4123,11 +4123,12 @@ class _PooledConnectionHandle:
     conn:`` contract every call site already uses -- no call-site changes.
     """
 
-    __slots__ = ("_pool", "_conn")
+    __slots__ = ("_pool", "_conn", "_scope_bound")
 
-    def __init__(self, pool: Any, conn: Any) -> None:
+    def __init__(self, pool: Any, conn: Any, *, scope_bound: bool = False) -> None:
         self._pool = pool
         self._conn = conn
+        self._scope_bound = scope_bound
 
     def __enter__(self) -> Any:
         self._conn.__enter__()
@@ -4137,7 +4138,18 @@ class _PooledConnectionHandle:
         try:
             self._conn.__exit__(exc_type, exc_val, exc_tb)
         finally:
-            self._pool.putconn(self._conn)
+            try:
+                if self._scope_bound:
+                    from .database_tenant import clear_connection_context
+                    try:
+                        clear_connection_context(self._conn)
+                    except Exception:
+                        # A connection whose identity cannot be cleared is never
+                        # reusable by the next request.
+                        self._conn.close()
+                        raise
+            finally:
+                self._pool.putconn(self._conn)
         return False
 
 
@@ -4153,7 +4165,17 @@ def database_connection() -> tuple[Any | None, dict[str, Any] | None]:
         pool = _get_pool()
         assert pool is not None
         conn = pool.getconn()
-        return _PooledConnectionHandle(pool, conn), None
+        scope_bound = str(getattr(CONFIG, 'database_schema_mode', 'auto')).lower() == 'verify'
+        try:
+            if scope_bound:
+                from .access_scope import principal_scope
+                from .database_tenant import bind_connection_context
+                bind_connection_context(conn, principal_scope.get())
+            return _PooledConnectionHandle(pool, conn, scope_bound=scope_bound), None
+        except Exception:
+            conn.close()
+            pool.putconn(conn)
+            raise
     except Exception:
         return None, {
             "status": "failed",
