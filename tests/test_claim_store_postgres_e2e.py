@@ -408,6 +408,39 @@ def test_run_backfill_materializes_kpis_lineage_snapshot_and_reconciliation():
         "ceo.ebitda_margin",
     }
     assert len(headline_snapshot["records"]) == 3
+    first_page = repo.snapshot(
+        f"run:{run_id}",
+        context=PolicyContext(
+            tenant_id=tenant_id,
+            principal_id="ceo",
+            roles=frozenset({"executive"}),
+            purpose=UsePurpose.EXECUTIVE_BRIEFING,
+        ),
+        limit=2,
+    )
+    second_page = repo.snapshot(
+        f"run:{run_id}",
+        context=PolicyContext(
+            tenant_id=tenant_id,
+            principal_id="ceo",
+            roles=frozenset({"executive"}),
+            purpose=UsePurpose.EXECUTIVE_BRIEFING,
+        ),
+        limit=2,
+        offset=first_page["page"]["next_offset"],
+    )
+    assert first_page["page"] == {
+        "limit": 2,
+        "offset": 0,
+        "returned_count": 2,
+        "evaluated_count": 2,
+        "has_more": True,
+        "next_offset": 2,
+    }
+    assert len(second_page["records"]) == 2
+    assert {
+        item["claim_revision_id"] for item in first_page["records"]
+    }.isdisjoint(item["claim_revision_id"] for item in second_page["records"])
     transaction_claim = next(
         item for item in snapshot["records"] if item["metric_key"] == "finance.transaction.amount"
     )

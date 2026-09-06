@@ -53,15 +53,21 @@ def test_snapshot_endpoint_uses_same_authenticated_policy_context(monkeypatch):
     captured = {}
 
     class FakeRepository:
-        def snapshot(self, snapshot_key, *, context):
+        def snapshot(self, snapshot_key, *, context, metric_keys, limit, offset):
             captured["snapshot_key"] = snapshot_key
             captured["context"] = context
+            captured["metric_keys"] = metric_keys
+            captured["limit"] = limit
+            captured["offset"] = offset
             return {"snapshot_id": "snapshot-1", "records": []}
 
     monkeypatch.setattr(claim_api, "ClaimRepository", FakeRepository)
     result = claim_api.query_run_snapshot(
         "run-1",
         purpose=UsePurpose.EXECUTIVE_BRIEFING,
+        metric_key="ceo.revenue",
+        limit=50,
+        offset=100,
         principal={
             "tenant_id": "tenant-1",
             "subject": "ceo-1",
@@ -72,6 +78,9 @@ def test_snapshot_endpoint_uses_same_authenticated_policy_context(monkeypatch):
     assert result["snapshot_id"] == "snapshot-1"
     assert captured["snapshot_key"] == "run:run-1"
     assert captured["context"].purpose == UsePurpose.EXECUTIVE_BRIEFING
+    assert captured["metric_keys"] == ["ceo.revenue"]
+    assert captured["limit"] == 50
+    assert captured["offset"] == 100
 
 
 def test_reconciliation_endpoint_is_tenant_scoped(monkeypatch):

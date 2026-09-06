@@ -91,6 +91,9 @@ def query_claims(
 def query_run_snapshot(
     run_id: str,
     purpose: UsePurpose = Query(default=UsePurpose.EXECUTIVE_BRIEFING),
+    metric_key: str | None = Query(default=None, min_length=1, max_length=240),
+    limit: int = Query(default=100, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     principal: dict[str, Any] = require_role(
         "executive", "analyst", "auditor", "reviewer", "operator", "tenant_admin", "system"
     ),
@@ -99,8 +102,16 @@ def query_run_snapshot(
     try:
         return {
             "status": "ok",
-            **ClaimRepository().snapshot(f"run:{run_id}", context=context),
+            **ClaimRepository().snapshot(
+                f"run:{run_id}",
+                context=context,
+                metric_keys=[metric_key] if metric_key else None,
+                limit=limit,
+                offset=offset,
+            ),
         }
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     except KeyError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     except RuntimeError as exc:

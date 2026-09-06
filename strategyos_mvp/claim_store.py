@@ -567,11 +567,18 @@ class ClaimRepository:
         *,
         context: PolicyContext,
         metric_keys: Iterable[str] | None = None,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> dict[str, Any]:
         """Return one immutable analysis snapshot after current policy checks."""
+        if limit is not None and limit < 1:
+            raise ValueError("Snapshot limit must be greater than zero.")
+        if offset < 0:
+            raise ValueError("Snapshot offset cannot be negative.")
         selected_metric_keys = sorted(
             {str(value).strip() for value in (metric_keys or ()) if str(value).strip()}
         )
+        fetch_limit = limit + 1 if limit is not None else None
         connection = self._require_connection()
         with connection as conn:
             self._ensure_schema(conn)
@@ -605,10 +612,20 @@ class ClaimRepository:
                           or f.metric_key = any(%s::text[])
                       )
                     order by f.metric_key, f.claim_kind_lane, f.subject_key
+                    limit %s offset %s
                     """,
-                    (snapshot["id"], selected_metric_keys, selected_metric_keys),
+                    (
+                        snapshot["id"],
+                        selected_metric_keys,
+                        selected_metric_keys,
+                        fetch_limit,
+                        offset,
+                    ),
                 )
                 rows = [_record(cur, row) for row in cur.fetchall()]
+                has_more = limit is not None and len(rows) > limit
+                if has_more:
+                    rows = rows[:limit]
                 records: list[dict[str, Any]] = []
                 denied_count = 0
                 for row in rows:
@@ -657,6 +674,14 @@ class ClaimRepository:
             "metadata": snapshot.get("metadata") or {},
             "records": records,
             "denied_count": denied_count,
+            "page": {
+                "limit": limit,
+                "offset": offset,
+                "returned_count": len(records),
+                "evaluated_count": len(rows),
+                "has_more": has_more,
+                "next_offset": offset + len(rows) if has_more else None,
+            },
         }
 
     def reconciliation(self, run_id: str, *, tenant_id: str) -> dict[str, Any]:
