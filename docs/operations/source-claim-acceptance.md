@@ -283,3 +283,30 @@ counts alone do not close these boundaries.
   June query declining an undated synthetic claim rather than substituting it.
 - These additions still require a frozen full-service gate. They are not a
   substitute for unresolved source-priority/conflict policy work.
+
+### Preview release `dfcd62f` — live browser acceptance
+
+- GitHub workflow `34057159552` completed successfully. Authenticated snapshot,
+  typed query, local semantic retrieval and denial probes passed after deployment.
+- The in-app browser became available again. Executive sign-in, evidence details
+  and the non-substituting forecast empty state were checked visually. Operator
+  manual sign-in redirected to source intake correctly.
+- Browser staging, exact-file registration, mapping preview and recording passed
+  with source `qa-provenance-preview-20260907`, explicitly synthetic and restricted
+  to operator/operations. Indexing, export, quotation and model use are denied.
+  No analysis or publication was started. Pack:
+  `050e3a244db5ccfb5f704b8e82cd8a84e90819b8a04e55ab29ceadad67df5a29`.
+- Mapping preview returned zero writes; recording returned two claims under
+  metric `qa.preview.amount`: actual SAR 120 and forecast SAR 130, June 2026,
+  forecast author Synthetic CFO. Receipt:
+  `5d4a2cfa-a05f-4754-ba55-48635aa47d0f`. Browser replay returned that same receipt,
+  zero created claims and an explicit no-duplicates message.
+- Authenticated probes confirmed exact values, periods, no assessments, and
+  denial for executive briefing, export, quotation and external-model purposes.
+- This does not close legacy presentation/data issues: the home banner still
+  combines a cost warning with a separate on-plan score; historical mixed
+  Actual/Estimate source values remain in the old actual snapshot. Both were
+  observed rather than counted as successful acceptance.
+- Separate frozen recalculation commit `efc8de0` passed 2,055 tests, zero skips,
+  `/tmp/strategyos-recalculation-full.xml` (721.79 seconds). The newer combined
+  queue/period commit `c95d01a` is undergoing its own gate.
