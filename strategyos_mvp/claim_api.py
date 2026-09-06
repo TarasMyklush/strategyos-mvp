@@ -198,6 +198,9 @@ def search_governed_claims(
     limit: int = Query(default=10, ge=1, le=50),
     forecast_scope_key: str | None = None,
     require_forecast_acceptance: bool = False,
+    period_start: date | None = None,
+    period_end: date | None = None,
+    fiscal_calendar: str | None = None,
     principal: dict[str, Any] = require_role("executive", "bu", "analyst", "auditor", "reviewer", "operator", "tenant_admin", "system"),
 ) -> dict[str, Any]:
     from .claim_retrieval import search_claims
@@ -208,7 +211,8 @@ def search_governed_claims(
                            allowed_claim_kinds=frozenset(claim_kind),
                            business_unit=business_unit, scenario_key=scenario_key,
                            forecast_scope_key=forecast_scope_key,
-                           require_forecast_acceptance=require_forecast_acceptance)
+                           require_forecast_acceptance=require_forecast_acceptance,
+                           period_start=period_start,period_end=period_end,fiscal_calendar=fiscal_calendar)
         records = search_claims(text, query=query, context=context, limit=limit)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
@@ -265,6 +269,9 @@ def query_claims(
     as_of: str | None = Query(default=None, max_length=80),
     forecast_scope_key: str | None = None,
     require_forecast_acceptance: bool = False,
+    period_start: date | None = None,
+    period_end: date | None = None,
+    fiscal_calendar: str | None = None,
     principal: dict[str, Any] = require_role(
         "executive", "bu", "analyst", "auditor", "reviewer", "operator", "tenant_admin", "system"
     ),
@@ -283,6 +290,7 @@ def query_claims(
             scenario_key=scenario_key,
             forecast_scope_key=forecast_scope_key,
             require_forecast_acceptance=require_forecast_acceptance,
+            period_start=period_start,period_end=period_end,fiscal_calendar=fiscal_calendar,
         )
         records = ClaimRepository().query(query, context=context)
     except ValueError as exc:

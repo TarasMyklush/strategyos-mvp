@@ -440,6 +440,9 @@ class ClaimQuery:
     require_traceability: bool = True
     require_forecast_acceptance: bool = False
     forecast_scope_key: str | None = None
+    period_start: date | None = None
+    period_end: date | None = None
+    fiscal_calendar: str | None = None
 
     def __post_init__(self) -> None:
         if not _text(self.tenant_id):
@@ -459,6 +462,15 @@ class ClaimQuery:
             raise ValueError("Accepted forecast use requires an explicit analysis scope.")
         if self.forecast_scope_key is not None and len(self.forecast_scope_key) > 160:
             raise ValueError("Forecast review scope is limited to 160 characters.")
+        if (self.period_start is None) != (self.period_end is None):
+            raise ValueError('Exact period selection requires both start and end dates.')
+        if self.period_start is not None:
+            if type(self.period_start) is not date or type(self.period_end) is not date:
+                raise ValueError('Period boundaries must be dates, not timestamps.')
+            if self.period_end < self.period_start:
+                raise ValueError('Period end cannot precede period start.')
+        if self.fiscal_calendar is not None and (not self.fiscal_calendar.strip() or len(self.fiscal_calendar)>160):
+            raise ValueError('Fiscal calendar must be an explicit identifier of at most 160 characters.')
 
 
 @dataclass(frozen=True)
@@ -526,6 +538,10 @@ def claim_is_eligible(
         reasons.append("business_unit_mismatch")
     if query.scenario_key != claim.draft.scenario_key:
         reasons.append("scenario_mismatch")
+    if query.period_start is not None and (query.period_start != claim.draft.period_start or query.period_end != claim.draft.period_end):
+        reasons.append('period_mismatch')
+    if query.fiscal_calendar is not None and query.fiscal_calendar != claim.draft.fiscal_calendar:
+        reasons.append('fiscal_calendar_mismatch')
     if claim.recorded_at > query.as_of_at:
         reasons.append("not_known_at_query_time")
     if claim.draft.as_of_at and claim.draft.as_of_at > query.as_of_at:

@@ -166,6 +166,9 @@ def recalculate(repository, revision_id, *, context, rationale, expected_preview
                 'review_status':'unreviewed' if pending else 'unchanged','snapshot_changed':False,'outbound_delivery':False,
                 'query':{'metric_key':root['draft'].metric_key,'claim_kind':str(root['draft'].claim_kind),
                     'business_unit':root['draft'].business_unit,'scenario_key':root['draft'].scenario_key,
+                    'period_start':root['draft'].period_start.isoformat() if root['draft'].period_start else None,
+                    'period_end':root['draft'].period_end.isoformat() if root['draft'].period_end else None,
+                    'fiscal_calendar':root['draft'].fiscal_calendar,
                     'purpose':str(context.purpose)}}
             if expected_preview is not None:
                 cur.execute("""insert into strategyos_claim_recalculation_receipts

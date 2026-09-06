@@ -271,3 +271,15 @@ counts alone do not close these boundaries.
   previewed the next synthetic change, 12 to 14. No second recording was made.
 - The attempted viewport override remained 1280 px when measured, so that attempt
   is not mobile acceptance. The temporary override was reset.
+
+### Exact reporting-period query contract
+
+- Typed and semantic reads now accept exact start/end dates and an optional
+  fiscal-calendar identity. Both dates are required together. Overlapping and
+  unknown periods cannot satisfy an exact-period query; no implicit aggregation
+  or calendar inference occurs. Recalculation result links preserve this scope.
+- Thirty-six focused unit/API/retrieval/UI tests and one isolated PostgreSQL
+  SQL-plus-semantic-candidate proof passed. Local browser QA showed an explicit
+  June query declining an undated synthetic claim rather than substituting it.
+- These additions still require a frozen full-service gate. They are not a
+  substitute for unresolved source-priority/conflict policy work.

@@ -5,7 +5,7 @@
   var results = document.getElementById('claim-results');
   var requestVersion = 0;
   var initialQuery=new URLSearchParams(location.search);
-  ['metric_key','claim_kind','business_unit','scenario_key','purpose'].forEach(function(key){if(initialQuery.has(key))form.elements.namedItem(key).value=initialQuery.get(key);});
+  ['metric_key','claim_kind','business_unit','scenario_key','purpose','period_start','period_end','fiscal_calendar'].forEach(function(key){if(initialQuery.has(key))form.elements.namedItem(key).value=initialQuery.get(key);});
   function node(tag, text, className) { var item = document.createElement(tag); item.textContent = text; if(className) item.className = className; return item; }
   function fields(values) { var dl = document.createElement('dl'); Object.entries(values).forEach(function(pair){dl.append(node('dt',pair[0]),node('dd',pair[1] == null || pair[1] === '' ? 'Not supplied' : String(pair[1])));}); return dl; }
   function renderClaim(record) {

@@ -34,6 +34,23 @@ from strategyos_mvp.source_pack import (
 NOW = datetime(2026, 6, 7, 12, tzinfo=UTC)
 
 
+def test_exact_query_period_cannot_mix_months_or_unknown_periods():
+    from dataclasses import replace
+    selected = query(period_start=date(2026,6,1),period_end=date(2026,6,30))
+    def eligible(draft):
+        return claim_is_eligible(revision(draft),query=selected,context=context(),source_policies=[policy()])
+    assert eligible(actual_draft()).eligible
+    assert 'period_mismatch' in eligible(actual_draft(period_start=date(2026,1,1))).reasons
+    assert 'period_mismatch' in eligible(actual_draft(period_start=None,period_end=None)).reasons
+    for fields in [{'period_start':date(2026,6,1)},
+                   {'period_start':date(2026,6,30),'period_end':date(2026,6,1)},
+                   {'period_start':NOW,'period_end':NOW}]:
+        with pytest.raises(ValueError):
+            query(**fields)
+    strict = replace(selected,fiscal_calendar='group-fiscal-v1')
+    assert 'fiscal_calendar_mismatch' in claim_is_eligible(revision(),query=strict,context=context(),source_policies=[policy()]).reasons
+
+
 def actual_draft(**overrides):
     values = {
         "tenant_id": "tenant-1",
