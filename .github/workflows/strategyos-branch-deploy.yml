@@ -196,6 +196,10 @@ jobs:
       STRATEGYOS_TWINS_MUTATIONS_ENABLED: ${{ vars.STRATEGYOS_TWINS_MUTATIONS_ENABLED || 'true' }}
       # Legacy jobs do not yet persist caller/source authority in their envelope.
       STRATEGYOS_TWINS_SCHEDULER_ENABLED: 'false'
+      # Tenant-wide task/stream projections lack per-source release authority.
+      # Keep these already-default-off experimental APIs explicitly off here.
+      STRATEGYOS_AGENT_CONVERSATIONS_ENABLED: 'false'
+      STRATEGYOS_AGENT_LIVE_UI_ENABLED: 'false'
       STRATEGYOS_TWINS_EXPOSE_REASONING_DIAGNOSTICS: ${{ vars.STRATEGYOS_TWINS_EXPOSE_REASONING_DIAGNOSTICS || 'false' }}
       STRATEGYOS_SYNC_ARTIFACTS: ${{ vars.STRATEGYOS_SYNC_ARTIFACTS || 'true' }}
       OAUTH2_PROXY_PROVIDER: ${{ vars.OAUTH2_PROXY_PROVIDER || 'oidc' }}
@@ -313,6 +317,8 @@ jobs:
                "STRATEGYOS_TWINS_ENABLED": os.environ["STRATEGYOS_TWINS_ENABLED"],
                "STRATEGYOS_TWINS_MUTATIONS_ENABLED": os.environ["STRATEGYOS_TWINS_MUTATIONS_ENABLED"],
                "STRATEGYOS_TWINS_SCHEDULER_ENABLED": os.environ["STRATEGYOS_TWINS_SCHEDULER_ENABLED"],
+               "STRATEGYOS_AGENT_CONVERSATIONS_ENABLED": os.environ["STRATEGYOS_AGENT_CONVERSATIONS_ENABLED"],
+               "STRATEGYOS_AGENT_LIVE_UI_ENABLED": os.environ["STRATEGYOS_AGENT_LIVE_UI_ENABLED"],
                "STRATEGYOS_TWINS_EXPOSE_REASONING_DIAGNOSTICS": os.environ["STRATEGYOS_TWINS_EXPOSE_REASONING_DIAGNOSTICS"],
                "STRATEGYOS_SYNC_ARTIFACTS": os.environ["STRATEGYOS_SYNC_ARTIFACTS"],
                "OAUTH2_PROXY_PROVIDER": os.environ["OAUTH2_PROXY_PROVIDER"],

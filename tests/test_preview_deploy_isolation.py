@@ -18,3 +18,11 @@ def test_backup_is_preview_scoped_and_validates_the_archive():
     assert "strategyos-branch-postgres-1" in script
     assert "pg_dump" in script and "pg_restore --list" in script
     assert "sha256sum" in script
+
+
+def test_preview_does_not_enable_unscoped_experimental_agent_channels():
+    workflow = (Path(__file__).parents[1] / '.github/workflows/strategyos-branch-deploy.yml').read_text()
+    for flag in ('STRATEGYOS_TWINS_SCHEDULER_ENABLED', 'STRATEGYOS_AGENT_CONVERSATIONS_ENABLED',
+                 'STRATEGYOS_AGENT_LIVE_UI_ENABLED'):
+        assert flag + ": 'false'" in workflow
+        assert '"' + flag + '": os.environ["' + flag + '"]' in workflow
