@@ -16454,6 +16454,12 @@ def data_qa(
         extra_payload: dict[str, Any] | None = None,
         status_payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        if base_payload.get("policy_denied"):
+            return _assistant_response_payload(
+                response_mode="policy", question=question, context=context,
+                requested_mode=mode, persona=persona, orchestrated=None,
+                base_result=base_payload, llm_status=status_payload,
+            )
         trace = {
             **orchestrated_payload.trace,
             "trace_id": trace_id,
