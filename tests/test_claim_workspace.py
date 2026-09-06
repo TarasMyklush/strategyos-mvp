@@ -9,6 +9,7 @@ def test_claim_workspace_has_explicit_semantic_selectors_and_no_silent_defaults(
         assert f'name="{key}"' in html
     for kind in ('actual', 'plan', 'forecast', 'assumption', 'reported_claim'):
         assert f'value="{kind}"' in html
+    assert 'value="unknown"' not in html  # Quarantined, not eligible for evidence queries.
 
 
 def test_claim_workspace_never_renders_untrusted_source_markup_or_cached_evidence():

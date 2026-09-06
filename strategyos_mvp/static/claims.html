@@ -9,7 +9,7 @@
 <form id="claim-query" class="card claim-query">
 <label>Metric<input name="metric_key" value="ceo.revenue" list="claim-metrics" required maxlength="240"></label>
 <datalist id="claim-metrics"><option value="ceo.revenue"><option value="ceo.operating_cost"><option value="ceo.ebitda_margin"><option value="ceo.cash_balance"><option value="ceo.cash_floor"></datalist>
-<label>Claim type<select name="claim_kind"><option value="actual">Actual</option><option value="plan">Plan</option><option value="forecast">Forecast</option><option value="assumption">Assumption</option><option value="reported_claim">Reported claim</option><option value="unknown">Unknown / unclassified</option></select></label>
+<label>Claim type<select name="claim_kind"><option value="actual">Actual</option><option value="plan">Plan</option><option value="forecast">Forecast</option><option value="assumption">Assumption</option><option value="reported_claim">Reported claim</option></select></label>
 <label>Business unit<input name="business_unit" placeholder="Exact unit key; blank means group" maxlength="160"></label>
 <label>Scenario<input name="scenario_key" placeholder="Optional scenario key" maxlength="160"></label>
 <label class="claim-query-wide">Semantic search (optional)<input name="text" placeholder="Rank matching claims using the local model" maxlength="4000"></label>
