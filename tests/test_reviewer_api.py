@@ -1385,7 +1385,7 @@ def test_resume_run_returns_resumed_summary(monkeypatch):
         _restore_env(original)
 
 
-def test_approve_run_updates_run_summary_pointer_metadata(monkeypatch, tmp_path: Path):
+def test_approve_run_keeps_candidate_unpublished_until_writer_completes(monkeypatch, tmp_path: Path):
     original, client = _client_with_auth_env()
     try:
         run_dir = tmp_path / "outputs" / "StrategyOS MVP Run-20260608T120000Z"
@@ -1447,8 +1447,9 @@ def test_approve_run_updates_run_summary_pointer_metadata(monkeypatch, tmp_path:
         assert updated["resume_state"] == "ready"
         assert updated["resume_ready"] is True
         assert updated["pointer_metadata"]["latest"]["pointer_type"] == "latest"
+        assert updated["pointer_metadata"]["latest"]["promoted"] is False
         assert updated["pointer_metadata"]["current"]["pointer_type"] == "current"
-        assert (tmp_path / "outputs" / "latest_run_pointer.json").exists()
+        assert not (tmp_path / "outputs" / "latest_run_pointer.json").exists()
         assert (tmp_path / "outputs" / "current_run_pointer.json").exists()
     finally:
         _restore_env(original)

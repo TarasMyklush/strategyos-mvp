@@ -46,10 +46,35 @@ def update_current_run_pointer(summary: dict[str, Any], summary_path: Path) -> d
 
 
 def update_run_pointers(summary: dict[str, Any], summary_path: Path) -> dict[str, Any]:
+    current = update_current_run_pointer(summary, summary_path)
+    if not _eligible_for_executive_publication(summary):
+        existing = _read_pointer(latest_run_pointer_path())
+        return {
+            "latest": {
+                **(existing or {"pointer_type": "latest", "status": "missing"}),
+                "promoted": False,
+                "candidate_run_id": summary.get("run_id"),
+                "reason": "The candidate remains behind the governed review gate.",
+            },
+            "current": current,
+        }
     return {
         "latest": update_latest_run_pointer(summary, summary_path),
-        "current": update_current_run_pointer(summary, summary_path),
+        "current": current,
     }
+
+
+def _eligible_for_executive_publication(summary: dict[str, Any]) -> bool:
+    """Only completed, review-safe packets may replace the CEO's current truth."""
+    status = str(summary.get("run_outcome") or summary.get("status") or "").strip().lower()
+    deliverables = str(summary.get("deliverables_status") or "").strip().lower()
+    approval = str(summary.get("approval_status") or "not_required").strip().lower()
+    requires_review = bool(summary.get("requires_human_review"))
+    if status not in {"completed", "succeeded"}:
+        return False
+    if deliverables in {"paused_before_writer", "blocked", "pending"}:
+        return False
+    return not requires_review or approval == "approved"
 
 
 def _write_run_pointer(
@@ -93,13 +118,22 @@ def _write_run_pointer(
     return payload
 
 
-def load_latest_run_summary() -> dict[str, Any] | None:
-    pointer_path = latest_run_pointer_path()
+def _read_pointer(pointer_path: Path) -> dict[str, Any] | None:
     if not pointer_path.exists():
         return None
 
     try:
         pointer = json.loads(pointer_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, AttributeError):
+        return None
+    return pointer if isinstance(pointer, dict) else None
+
+
+def _load_pointer_summary(pointer_path: Path) -> dict[str, Any] | None:
+    try:
+        pointer = _read_pointer(pointer_path)
+        if pointer is None:
+            return None
         summary_path = Path(str(pointer.get("summary_path") or "")).expanduser().resolve()
         if not summary_path.is_relative_to(CONFIG.output_root.expanduser().resolve()) or not summary_path.is_file():
             return None
@@ -113,8 +147,63 @@ def load_latest_run_summary() -> dict[str, Any] | None:
         guard_summary(summary)
     except PermissionError:
         return None  # A deployment-wide pointer is not a scoped latest run.
-    summary["latest_pointer"] = pointer
+    pointer_type = str(pointer.get("pointer_type") or "run")
+    summary["run_pointer"] = pointer
+    summary[f"{pointer_type}_pointer"] = pointer
     return summary
+
+
+def _latest_eligible_summary() -> dict[str, Any] | None:
+    """Recover the newest publishable packet when an older pointer predates the gate."""
+    output_root = CONFIG.output_root.expanduser().resolve()
+    candidates: list[tuple[int, str, Path, dict[str, Any]]] = []
+    if not output_root.exists():
+        return None
+    for summary_path in output_root.glob("*/run_summary.json"):
+        try:
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            if not isinstance(summary, dict) or not _eligible_for_executive_publication(summary):
+                continue
+            from .access_scope import guard_summary
+
+            guard_summary(summary)
+            candidates.append(
+                (
+                    summary_path.stat().st_mtime_ns,
+                    str(summary.get("run_id") or ""),
+                    summary_path,
+                    summary,
+                )
+            )
+        except (OSError, ValueError, AttributeError, PermissionError):
+            continue
+    if not candidates:
+        return None
+    _, _, summary_path, summary = max(candidates, key=lambda item: (item[0], item[1]))
+    recovered = dict(summary)
+    recovered["run_pointer"] = {
+        "schema_version": 1,
+        "pointer_type": "latest",
+        "run_id": recovered.get("run_id"),
+        "run_dir": recovered.get("run_dir") or str(summary_path.parent),
+        "summary_path": str(summary_path),
+        "recovered_from_publication_gate": True,
+    }
+    recovered["latest_pointer"] = recovered["run_pointer"]
+    return recovered
+
+
+def load_latest_run_summary() -> dict[str, Any] | None:
+    """Load the latest completed packet admitted to the executive surface."""
+    pointed = _load_pointer_summary(latest_run_pointer_path())
+    if pointed is not None and _eligible_for_executive_publication(pointed):
+        return pointed
+    return _latest_eligible_summary()
+
+
+def load_current_run_summary() -> dict[str, Any] | None:
+    """Load the newest candidate, including a packet still awaiting review."""
+    return _load_pointer_summary(current_run_pointer_path())
 
 
 def _looks_timestamped(name: str) -> bool:

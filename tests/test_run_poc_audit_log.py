@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -123,12 +124,13 @@ def test_run_strategyos_workflow_materializes_ping_pong_audit_log(monkeypatch, t
     assert "hosted_ocr_vision" in payload
 
 
-def test_run_strategyos_workflow_uses_immutable_run_dir_and_latest_pointer(
+def test_pending_run_uses_immutable_run_dir_without_replacing_published_pointer(
     monkeypatch, tmp_path: Path
 ):
     output_root = tmp_path / "outputs"
     base_run_dir = output_root / "StrategyOS MVP Run"
     pointer_path = output_root / "latest_run_pointer.json"
+    current_pointer_path = output_root / "current_run_pointer.json"
     run_poc_module.CONFIG = SimpleNamespace(
         require_human_review=True,
         database_url=None,
@@ -203,10 +205,88 @@ def test_run_strategyos_workflow_uses_immutable_run_dir_and_latest_pointer(
     assert summary["run_outcome"] == "awaiting_review"
     assert summary["review_state"] == "awaiting_decision"
     assert summary["resume_state"] == "blocked_pending_review"
-    assert pointer_path.exists()
-    assert summary["latest_pointer"]["run_dir"] == summary["run_dir"]
+    assert not pointer_path.exists()
+    assert current_pointer_path.exists()
+    assert summary["latest_pointer"]["promoted"] is False
+    assert summary["latest_pointer"]["candidate_run_id"] == "run-immutable"
     assert summary["pointer_metadata"]["current"]["pointer_type"] == "current"
     assert summary["pointer_metadata"]["latest"]["pointer_type"] == "latest"
+
+
+def test_completed_approved_run_is_promoted_to_executive_pointer(monkeypatch, tmp_path: Path):
+    output_root = tmp_path / "outputs"
+    run_dir = output_root / "StrategyOS MVP Run-20260608T120000Z"
+    run_dir.mkdir(parents=True)
+    summary_path = run_dir / "run_summary.json"
+    summary = {
+        "run_id": "run-approved",
+        "run_dir": str(run_dir),
+        "status": "completed",
+        "requires_human_review": True,
+        "approval_status": "approved",
+        "run_outcome": "completed",
+        "deliverables_status": "published",
+    }
+    summary_path.write_text(json.dumps(summary), encoding="utf-8")
+    monkeypatch.setattr(
+        run_registry_module,
+        "CONFIG",
+        SimpleNamespace(output_root=output_root),
+    )
+
+    pointers = run_registry_module.update_run_pointers(summary, summary_path)
+
+    assert pointers["latest"]["run_id"] == "run-approved"
+    assert pointers["current"]["run_id"] == "run-approved"
+    assert run_registry_module.load_latest_run_summary()["run_id"] == "run-approved"
+    assert run_registry_module.load_current_run_summary()["run_id"] == "run-approved"
+
+
+def test_pending_legacy_latest_pointer_recovers_previous_approved_packet(
+    monkeypatch, tmp_path: Path
+):
+    output_root = tmp_path / "outputs"
+    approved_dir = output_root / "StrategyOS MVP Run-20260607T120000Z"
+    pending_dir = output_root / "StrategyOS MVP Run-20260608T120000Z"
+    approved_dir.mkdir(parents=True)
+    pending_dir.mkdir(parents=True)
+    approved_path = approved_dir / "run_summary.json"
+    pending_path = pending_dir / "run_summary.json"
+    approved_path.write_text(
+        json.dumps(
+            {
+                "run_id": "run-approved",
+                "run_dir": str(approved_dir),
+                "status": "completed",
+                "requires_human_review": True,
+                "approval_status": "approved",
+                "run_outcome": "completed",
+                "deliverables_status": "published",
+            }
+        ),
+        encoding="utf-8",
+    )
+    pending_summary = {
+        "run_id": "run-pending",
+        "run_dir": str(pending_dir),
+        "status": "awaiting_review",
+        "requires_human_review": True,
+        "approval_status": "pending",
+        "run_outcome": "awaiting_review",
+        "deliverables_status": "paused_before_writer",
+    }
+    pending_path.write_text(json.dumps(pending_summary), encoding="utf-8")
+    monkeypatch.setattr(
+        run_registry_module,
+        "CONFIG",
+        SimpleNamespace(output_root=output_root),
+    )
+    run_registry_module.update_latest_run_pointer(pending_summary, pending_path)
+
+    recovered = run_registry_module.load_latest_run_summary()
+
+    assert recovered["run_id"] == "run-approved"
+    assert recovered["latest_pointer"]["recovered_from_publication_gate"] is True
 
 
 def test_run_strategyos_workflow_does_not_fail_when_persistence_fails(
@@ -214,6 +294,7 @@ def test_run_strategyos_workflow_does_not_fail_when_persistence_fails(
 ):
     output_root = tmp_path / "outputs"
     pointer_path = output_root / "latest_run_pointer.json"
+    current_pointer_path = output_root / "current_run_pointer.json"
     run_poc_module.CONFIG = SimpleNamespace(
         require_human_review=True,
         database_url="postgresql://example/db",
@@ -284,7 +365,8 @@ def test_run_strategyos_workflow_does_not_fail_when_persistence_fails(
     assert summary["state_store"]["status"] == "failed"
     assert summary["state_store"]["error_type"] == "RuntimeError"
     assert "database constraint failed" in summary["state_store"]["reason"]
-    assert pointer_path.exists()
+    assert not pointer_path.exists()
+    assert current_pointer_path.exists()
 
 
 def test_run_strategyos_workflow_gates_object_storage_sync_until_policy_approval(

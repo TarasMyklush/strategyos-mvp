@@ -102,6 +102,7 @@ from .review_files import (
 )
 from .run_registry import (
     discover_run_history,
+    load_current_run_summary,
     load_latest_run_summary,
     update_run_pointers,
 )
@@ -754,6 +755,13 @@ def _run_lifecycle_timeline(record: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _latest_summary() -> dict[str, Any] | None:
     summary = load_latest_run_summary()
+    if summary is None:
+        return None
+    return _with_local_run_identity(summary)
+
+
+def _current_summary() -> dict[str, Any] | None:
+    summary = load_current_run_summary()
     if summary is None:
         return None
     return _with_local_run_identity(summary)
@@ -1708,7 +1716,7 @@ def _latest_summary_path(summary: dict[str, Any]) -> Path | None:
 
 
 def _local_review_checkpoint_for_run(run_id: str) -> dict[str, Any] | None:
-    summary = _latest_summary()
+    summary = _current_summary()
     if not summary or str(summary.get("run_id") or "") != str(run_id):
         return None
     checkpoint = summary.get("local_review_checkpoint")
@@ -1793,7 +1801,7 @@ def _checkpoint_with_latest_run_summary(
 
 
 def _local_approval_status_for_run(run_id: str) -> dict[str, Any] | None:
-    summary = _latest_summary()
+    summary = _current_summary()
     if not summary or str(summary.get("run_id") or "") != str(run_id):
         return None
     decision = summary.get("review_decision")
@@ -1824,7 +1832,7 @@ def _local_review_assignment(summary: dict[str, Any]) -> dict[str, Any]:
 
 
 def _latest_local_summary_for_run(run_id: str) -> dict[str, Any] | None:
-    summary = _latest_summary()
+    summary = _current_summary()
     if not summary or str(summary.get("run_id") or "") != str(run_id):
         return None
     return summary
@@ -1848,7 +1856,7 @@ def _local_run_record_for_run_id(run_id: str) -> dict[str, Any] | None:
 
 
 def _local_checkpoint_record_for_id(checkpoint_id: str) -> dict[str, Any] | None:
-    summary = _latest_summary()
+    summary = _current_summary()
     if not summary:
         return None
     checkpoint = summary.get("local_review_checkpoint")
@@ -1926,7 +1934,7 @@ def _local_evidence_preview_for_run(
 
 
 def _local_pending_review_items() -> list[dict[str, Any]]:
-    summary = _latest_summary()
+    summary = _current_summary()
     if not summary:
         return []
     if not summary.get("requires_human_review"):
@@ -1974,7 +1982,7 @@ def _mutate_local_review_assignment(
     reviewer_subject: str,
     claim: bool,
 ) -> dict[str, Any]:
-    summary = _latest_summary()
+    summary = _current_summary()
     if not summary or str(summary.get("run_id") or "") != str(run_id):
         return {"status": "missing", "run_id": run_id}
     if str(summary.get("status") or "").lower() != "awaiting_review":
@@ -2040,7 +2048,7 @@ def _record_local_reviewer_decision(
     principal: dict[str, Any],
     checkpoint: dict[str, Any],
 ) -> dict[str, Any]:
-    summary = _latest_summary()
+    summary = _current_summary()
     if not summary or str(summary.get("run_id") or "") != str(run_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
