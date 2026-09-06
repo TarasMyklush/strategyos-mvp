@@ -921,8 +921,15 @@ class ClaimRepository:
                             where published_at is null and locked_at < now() - interval '5 minutes'
                         ),
                         count(*) filter (where dead_lettered_at is not null),
-                        extract(epoch from now() - min(created_at)) filter (
-                            where published_at is null and dead_lettered_at is null
+                        extract(
+                            epoch from (
+                                now() - (
+                                    min(created_at) filter (
+                                        where published_at is null
+                                          and dead_lettered_at is null
+                                    )
+                                )
+                            )
                         )
                     from strategyos_claim_projection_outbox
                     """

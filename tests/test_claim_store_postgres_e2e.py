@@ -413,6 +413,11 @@ def test_run_backfill_materializes_kpis_lineage_snapshot_and_reconciliation():
     )
     repo.upsert_projection_cache(record)
     repo.mark_projection_published(cache_event["id"], worker_id="e2e-worker")
+    projection_health = repo.projection_health()
+    assert projection_health["status"] == "ready"
+    assert projection_health["pending"] >= 14
+    assert projection_health["leased"] == projection_health["pending"]
+    assert projection_health["oldest_pending_seconds"] >= 0
     with psycopg.connect(url) as conn:
         with conn.cursor() as cur:
             cur.execute(
