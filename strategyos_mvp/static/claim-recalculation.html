@@ -7,6 +7,12 @@
 <a href="/claims">← Governed evidence</a> · <a href="/sources/intake">Add a source</a>
 <h1>Recalculate from revised inputs</h1>
 <p>Operator workspace. Preview the registered formula using current, authorized input revisions. Recording creates unreviewed calculations; it does not approve, publish, replace a briefing, or send anything.</p>
+<details class="card claim-record"><summary>Calculations with revised inputs</summary>
+<p>Review candidates only. The preview separately checks whether current replacement inputs can be used.</p>
+<button type="button" id="recalculation-queue-load">Check for revised inputs</button>
+<p id="recalculation-queue-status" role="status"></p>
+<section id="recalculation-queue" aria-label="Recalculation candidates"></section>
+</details>
 <form id="recalculation-form" class="card claim-query">
 <label class="claim-query-wide">Calculated claim revision<input name="revision_id" required maxlength="36" autocomplete="off"></label>
 <label class="claim-query-wide">Reason for recalculation<textarea name="rationale" required maxlength="2000" rows="3"></textarea></label>

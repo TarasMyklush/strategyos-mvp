@@ -61,6 +61,38 @@ def test_changed_inputs_invalidate_preview_without_writing(ledger):
     assert recalculate(repo,root,**args)['changes'][-1]['proposed_value'] == '13'
 
 
+def test_queue_is_bounded_authorized_and_clears_after_recalculation(ledger):
+    repo,context,root,_,source,policy = calculation(ledger)
+    first = repo.recalculation_queue(context=context,limit=1)
+    assert len(first['items']) == 1 and first['next_cursor']
+    second = repo.recalculation_queue(context=context,limit=1,after=first['next_cursor'])
+    assert len(second['items']) == 1 and second['next_cursor'] is None
+    assert first['items'][0]['claim_revision_id'] != second['items'][0]['claim_revision_id']
+    assert all('value' not in item for item in first['items']+second['items'])
+    args = dict(context=context,rationale='Resolve queue using current evidence')
+    preview = recalculate(repo,root,**args)
+    recalculate(repo,root,expected_preview=preview['preview_key'],**args)
+    assert repo.recalculation_queue(context=context)['items'] == []
+    with pytest.raises(PermissionError):
+        repo.recalculation_queue(context=replace(context,roles=frozenset({'executive'})))
+    with pytest.raises(ValueError):
+        repo.recalculation_queue(context=context,after='not-a-cursor')
+
+
+def test_queue_does_not_leak_revoked_source(ledger):
+    import psycopg
+    from uuid import uuid4
+    repo,context,_,_,source,policy = calculation(ledger)
+    assert len(repo.recalculation_queue(context=context)['items']) == 2
+    with psycopg.connect(ledger[1]) as conn:
+        foreign = str(conn.execute("insert into strategyos_tenants(slug,display_name) values(%s,'Other QA tenant') returning id",
+            ('queue-other-'+str(uuid4()),)).fetchone()[0])
+    assert repo.recalculation_queue(context=replace(context,tenant_id=foreign))['items'] == []
+    repo.register_source(source,policy=replace(policy,allowed_roles=frozenset({'auditor'})),
+        recorded_by='steward',rationale='Revoke source access')
+    assert repo.recalculation_queue(context=context)['items'] == []
+
+
 def test_policy_regrant_requires_a_new_preview_even_if_rights_match(ledger):
     repo,context,root,_,source,policy = calculation(ledger)
     args = dict(context=context,rationale='Recheck policy revision')

@@ -259,3 +259,15 @@ counts alone do not close these boundaries.
 - The recalculation candidate still needs its frozen full-suite and preview
   gates. It does not complete automatic replacement analyses, conflict/source
   precedence or all legacy consumer migration.
+
+### Recalculation discovery
+
+- A bounded operator queue scans current calculated families and exposes only
+  authorized revised-input candidates. It returns no replacement values and
+  does not imply permission to apply; preview repeats the complete checks.
+- Fourteen focused tests passed, including tenant isolation, revoked-source
+  filtering, pagination and queue clearing after explicit recalculation.
+- Local browser discovery opened the correct current calculated revision and
+  previewed the next synthetic change, 12 to 14. No second recording was made.
+- The attempted viewport override remained 1280 px when measured, so that attempt
+  is not mobile acceptance. The temporary override was reset.

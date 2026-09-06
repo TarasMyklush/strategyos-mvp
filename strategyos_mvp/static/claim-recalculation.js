@@ -8,6 +8,26 @@
   if(supplied)form.elements.namedItem('revision_id').value=supplied;
   form.addEventListener('input',()=>{generation++;preview=null;apply.disabled=true;results.replaceChildren();});
   function node(tag,text){const item=document.createElement(tag);item.textContent=text;return item;}
+  const queueButton=document.getElementById('recalculation-queue-load'),queueStatus=document.getElementById('recalculation-queue-status');
+  let queueCursor=null;
+  queueButton.addEventListener('click',async()=>{
+    queueButton.disabled=true;queueStatus.textContent='Checking authorized calculation families…';
+    try{
+      const response=await fetch('/api/claims/recalculation-queue'+(queueCursor?'?after='+encodeURIComponent(queueCursor):''),{credentials:'same-origin',cache:'no-store'});
+      const payload=await response.json();
+      if(!response.ok)throw new Error(typeof payload.detail==='string'?payload.detail:'Queue unavailable.');
+      const queue=document.getElementById('recalculation-queue');queue.replaceChildren();
+      for(const item of payload.items || []){
+        const card=node('article',''),link=node('a',item.metric_key+' · '+item.claim_kind+' · '+(item.business_unit || 'Group'));
+        link.href='/claims/recalculate?revision='+encodeURIComponent(item.claim_revision_id);
+        card.append(link,node('p',(item.period_start || 'Period not supplied')+(item.period_end?' — '+item.period_end:'')));queue.append(card);
+      }
+      queueCursor=payload.next_cursor;
+      queueStatus.textContent=payload.items.length+' authorized '+(payload.items.length===1?'candidate':'candidates')+' in this scan.'+(queueCursor?' More families remain to be checked.':' Scan complete.');
+      queueButton.textContent=queueCursor?'Check next families':'Refresh from beginning';
+    }catch(error){queueStatus.textContent=error instanceof TypeError?'Queue unavailable. Retry.':error.message;}
+    finally{queueButton.disabled=false;}
+  });
   async function run(record){
     if(busy || !form.reportValidity() || (record && !preview))return;
     const ticket=generation,revision=value('revision_id'),body={rationale:value('rationale')};

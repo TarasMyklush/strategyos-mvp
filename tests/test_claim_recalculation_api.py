@@ -6,7 +6,7 @@ from strategyos_mvp import api,claim_api,claim_recalculation
 
 
 def test_recalculation_page_and_api_require_operator_authority():
-    for routes,path in [(api.app.routes,'/claims/recalculate'),(claim_api.router.routes,'/api/claims/{revision_id}/recalculate')]:
+    for routes,path in [(api.app.routes,'/claims/recalculate'),(claim_api.router.routes,'/api/claims/{revision_id}/recalculate'),(claim_api.router.routes,'/api/claims/recalculation-queue')]:
         route = next(r for r in routes if getattr(r,'path',None)==path)
         with pytest.raises(HTTPException) as error:
             route.dependant.dependencies[0].call(principal={'role':'executive'})

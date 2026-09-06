@@ -36,6 +36,21 @@ class RecalculationRequest(BaseModel):
     expected_preview: str | None = Field(default=None,min_length=1,max_length=240)
 
 
+@router.get('/recalculation-queue')
+def recalculation_queue(after: str | None = Query(default=None,max_length=36),
+        limit: int = Query(default=25,ge=1,le=100),
+        principal: dict[str,Any] = require_role('operator','tenant_admin','system')) -> dict[str,Any]:
+    try:
+        return ClaimRepository().recalculation_queue(
+            context=_policy_context(principal,UsePurpose.OPERATIONS),after=after,limit=limit)
+    except PermissionError as exc:
+        raise HTTPException(403,str(exc)) from None
+    except ValueError as exc:
+        raise HTTPException(422,str(exc)) from None
+    except RuntimeError:
+        raise HTTPException(503,'Recalculation queue is temporarily unavailable.') from None
+
+
 @router.post('/{revision_id}/recalculate')
 def recalculate_claim(revision_id: str,request: RecalculationRequest,
         principal: dict[str,Any] = require_role('operator','tenant_admin','system')) -> dict[str,Any]:

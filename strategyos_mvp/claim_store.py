@@ -884,6 +884,60 @@ class ClaimRepository:
             conn.commit()
         return results
 
+    def recalculation_queue(self, *, context: PolicyContext, after: str | None = None,
+                            limit: int = 25) -> dict[str, Any]:
+        """Bounded operator scan, with no replacement values or inferred approval.
+
+        The cursor advances over evaluated families, including unauthorized ones;
+        it is opaque and does not reveal their names, values or total count.
+        """
+        from uuid import UUID
+        if context.purpose != UsePurpose.OPERATIONS or not context.roles.intersection({'operator','tenant_admin','system'}):
+            raise PermissionError('Operator authority is required for recalculation.')
+        if not 1 <= limit <= 100:
+            raise ValueError('Queue limit must be between 1 and 100.')
+        cursor = str(UUID(after)) if after else '00000000-0000-0000-0000-000000000000'
+        with self._require_connection() as conn:
+            self._ensure_schema(conn)
+            with conn.cursor() as cur:
+                context = replace(context,tenant_id=str(self._tenant_uuid(cur,context.tenant_id)))
+                cur.execute('select clock_timestamp()')
+                at = cur.fetchone()[0]
+                cur.execute('''select r.*,f.family_key,f.assertion_namespace,f.subject_type,
+                    f.subject_key,f.metric_key,f.business_unit,f.dimensions,f.period_start,
+                    f.period_end,f.scenario_key from strategyos_claim_families f
+                    join lateral (select rev.* from strategyos_claim_revisions rev
+                        where rev.claim_family_id=f.id order by revision_number desc limit 1) r on true
+                    where f.tenant_id=%s and f.id>%s::uuid and r.production_method='calculated'
+                    order by f.id limit %s''',(context.tenant_id,cursor,limit+1))
+                rows = [_record(cur,row) for row in cur.fetchall()]
+                has_more = len(rows)>limit
+                rows = rows[:limit]
+                items = []
+                for row in rows:
+                    if str(row['claim_kind']) == 'unknown':
+                        continue
+                    row['source_occurrence_keys'] = self._occurrence_keys(cur,row['id'])
+                    row['input_revision_ids'] = self._input_revision_ids(cur,row['id'])
+                    claim = self._hydrate_claim(row)
+                    policies,missing = self._policies_for_revision(cur,context.tenant_id,claim.revision_id)
+                    query = ClaimQuery(tenant_id=context.tenant_id,metric_key=claim.draft.metric_key,
+                        business_unit=claim.draft.business_unit,scenario_key=claim.draft.scenario_key,
+                        allowed_claim_kinds=frozenset({claim.draft.claim_kind}),purpose=context.purpose,as_of_at=at)
+                    if missing or not claim_is_eligible(claim,query=query,context=context,
+                            source_policies=policies,assessments=self._assessments(cur,claim.revision_id,as_of_at=at)).eligible:
+                        continue
+                    if self._revision_is_current(cur,claim.revision_id,at):
+                        continue
+                    items.append({'claim_revision_id':claim.revision_id,'metric_key':claim.draft.metric_key,
+                        'claim_kind':str(claim.draft.claim_kind),'business_unit':claim.draft.business_unit,
+                        'period_start':str(claim.draft.period_start) if claim.draft.period_start else None,
+                        'period_end':str(claim.draft.period_end) if claim.draft.period_end else None,
+                        'status':'revised_inputs','action':'preview_required'})
+            conn.commit()
+        return {'items':items,'next_cursor':str(rows[-1]['claim_family_id']) if rows and has_more else None,
+                'as_of':at.isoformat()}
+
     def snapshot(
         self,
         snapshot_key: str,
