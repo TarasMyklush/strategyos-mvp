@@ -393,7 +393,8 @@ async def bind_authorized_data_scope(request: Request, call_next: Any) -> Any:
             strategyos_session=request.cookies.get("strategyos_session"))
     except HTTPException as exc:
         return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
-    token = principal_scope.set({**principal, "_verified_for_request": True})
+    token = principal_scope.set({**principal, "_verified_for_request": True,
+                                 "_source_read_request": request.method in {"GET", "HEAD"}})
     try:
         response = await call_next(request)
         if principal.get("authenticated"):
@@ -8949,6 +8950,14 @@ def executive_cockpit(
     )
 
 
+@app.get("/claims", response_class=HTMLResponse)
+def governed_evidence_page(principal: dict[str, Any] = Depends(authenticate_optional_request)) -> Any:
+    redirect = _login_or_authorized_html(principal)
+    if redirect is not None:
+        return redirect
+    return HTMLResponse((STATIC_DIR / "claims.html").read_text(encoding="utf-8"), headers={"Cache-Control": "no-store"})
+
+
 @app.get("/architecture", response_class=HTMLResponse)
 def architecture_page(
     principal: dict[str, Any] = Depends(authenticate_optional_request),
@@ -10023,14 +10032,7 @@ def create_source_pack(
             **source_contract,
             "confirmed_by": str(principal.get("subject") or "operator"),
             "confirmed_at": datetime.now(UTC).isoformat(),
-            "access_policy": {
-                "allowed_roles": request.allowed_roles or [],
-                "allowed_purposes": request.allowed_purposes or [],
-                "allowed_business_units": request.allowed_business_units or [],
-                "export_allowed": request.export_allowed,
-                "external_model_allowed": request.external_model_allowed,
-                "quote_allowed": request.quote_allowed,
-            },
+            "capture_method": "file_upload",
         }
     return stage_source_pack_uploads(files, source_contract=source_contract)
 
@@ -10052,6 +10054,15 @@ def create_source_pack_from_path(
             "license_policy_ref": request.license_policy_ref,
             "confirmed_by": str(principal.get("subject") or "operator"),
             "confirmed_at": datetime.now(UTC).isoformat(),
+            "capture_method": "folder_import",
+            "access_policy": {
+                "allowed_roles": request.allowed_roles or [],
+                "allowed_purposes": request.allowed_purposes or [],
+                "allowed_business_units": request.allowed_business_units or [],
+                "export_allowed": request.export_allowed,
+                "external_model_allowed": request.external_model_allowed,
+                "quote_allowed": request.quote_allowed,
+            } if request.allowed_roles else None,
         }
     return stage_source_pack_from_path(
         request.folder_path, source_contract=source_contract
@@ -15956,6 +15967,12 @@ async def _assistant_chat_response(
             except RuntimeError:
                 # The CEO sees a useful board-packet fallback, never provider
                 # transport details. The shared UI keeps its retry/cache path.
+                public_llm_result = None
+            if public_llm_result is not None and public_llm_result.get("policy_denied"):
+                # Transmission consent is independent from permission to read
+                # the packet locally. Keep the deterministic packet path usable
+                # without sending evidence or presenting a refusal as an LLM answer.
+                llm_status = public_llm_result.get("llm_status") or llm_status
                 public_llm_result = None
             if public_llm_result is not None:
                 model_result = {

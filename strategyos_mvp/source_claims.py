@@ -366,6 +366,9 @@ class SourceAccessPolicy:
     quote_allowed: bool = False
 
     def __post_init__(self) -> None:
+        for name in ("export_allowed", "external_model_allowed", "quote_allowed"):
+            if type(getattr(self, name)) is not bool:
+                raise ValueError(f"{name} must be an explicit boolean.")
         if not self.allowed_roles:
             raise ValueError("A source policy must identify at least one allowed role.")
         object.__setattr__(self, "source_key", _identifier(self.source_key, field_name="source_key"))
@@ -449,8 +452,7 @@ def policy_allows(
         reasons.append("tenant_mismatch")
     if (
         context.business_units
-        and claim.draft.business_unit
-        and claim.draft.business_unit not in context.business_units
+        and (not claim.draft.business_unit or claim.draft.business_unit not in context.business_units)
     ):
         reasons.append("principal_business_unit_denied")
     policies = list(source_policies)

@@ -638,7 +638,7 @@ def executive_snapshot_for_run(run_id: str) -> dict[str, Any]:
 
 
 def list_pending_reviews() -> list[dict[str, Any]] | dict[str, Any]:
-    from .access_scope import run_predicate
+    from .access_scope import run_predicate, source_read_allowed
     scope_where, scope_params = run_predicate()
     connection, skipped = database_connection()
     if skipped is not None:
@@ -700,11 +700,13 @@ def list_pending_reviews() -> list[dict[str, Any]] | dict[str, Any]:
                         "review_assignment": review_assignment_payload(normalized),
                     }
                 )
-            return items
+    # Source authorization opens its own transaction. Release schema/run locks
+    # before checking policies; never nest that connection inside this one.
+    return [item for item in items if source_read_allowed(item["run_id"])]
 
 
 def list_recent_runs(limit: int = 12) -> list[dict[str, Any]] | dict[str, Any]:
-    from .access_scope import run_predicate
+    from .access_scope import run_predicate, source_read_allowed
     scope_where, scope_params = run_predicate()
     connection, skipped = database_connection()
     if skipped is not None:
@@ -780,7 +782,7 @@ def list_recent_runs(limit: int = 12) -> list[dict[str, Any]] | dict[str, Any]:
                         "approval_status": approval_status,
                     }
                 )
-            return items
+    return [item for item in items if source_read_allowed(item["run_id"])]
 
 
 def claim_pending_review(
@@ -2668,11 +2670,14 @@ def persist_shadow_claim(
         )
     for input_revision_id in draft.input_revision_ids:
         cur.execute(
-            "select 1 from strategyos_claim_revisions where id = %s and tenant_id = %s",
+            "select claim_kind from strategyos_claim_revisions where id = %s and tenant_id = %s",
             (input_revision_id, tenant_id),
         )
-        if cur.fetchone() is None:
+        input_record = cur.fetchone()
+        if input_record is None:
             raise ValueError("Calculated claim input must exist in the same tenant.")
+        if draft.claim_kind == ClaimKind.ACTUAL and input_record[0] != ClaimKind.ACTUAL:
+            raise ValueError("Calculated actuals require actual inputs.")
         cur.execute(
             """
             insert into strategyos_claim_dependencies
@@ -3182,11 +3187,9 @@ def persist_run_claim_snapshot(
     row = cur.fetchone()
     created = row is not None
     if row is None:
-        cur.execute(
-            "select id from strategyos_analysis_snapshots where tenant_id = %s and snapshot_key = %s",
-            (tenant_id, snapshot_key),
-        )
-        row = cur.fetchone()
+        # Replaying ingestion must not append new families to an already
+        # published analysis. New evidence requires a new run/snapshot.
+        return 0
     snapshot_id = row[0]
     cur.execute(
         """

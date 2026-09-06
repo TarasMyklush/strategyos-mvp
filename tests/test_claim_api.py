@@ -104,3 +104,38 @@ def test_reconciliation_endpoint_is_tenant_scoped(monkeypatch):
     )
     assert result["reconciliation"]["status"] == "passed"
     assert captured == {"run_id": "run-1", "tenant_id": "tenant-1"}
+
+
+def test_typed_intake_does_not_invent_semantics_or_allow_self_verification(monkeypatch):
+    from pydantic import ValidationError
+    captured = {}
+    class Repository:
+        def record_claim(self, draft, *, traceability, context):
+            captured["draft"] = draft
+            captured["context"] = context
+            return {"created": True, "claim_revision_id": "revision"}
+    monkeypatch.setattr(claim_api, "ClaimRepository", Repository)
+    fields = dict(assertion_namespace="email-review", subject_type="business_unit", subject_key="unit",
+                  metric_key="cash", value_text="CFO expects improvement", source_occurrence_keys=["existing-occurrence"])
+    result = claim_api.record_typed_claim(claim_api.TypedClaimIntake(**fields), principal={"tenant_id":"tenant", "role":"operator", "subject":"operator-1"})
+    assert result["claim_kind"] == "unknown"
+    assert result["review_status"] == "unreviewed"
+    assert not result["outbound_delivery"]
+    assert captured["draft"].unit is None
+    assert captured["draft"].period_end is None
+    assert captured["draft"].metadata["recorded_by"] == "operator-1"
+    assert captured["context"].purpose == UsePurpose.OPERATIONS
+    with pytest.raises(ValidationError):
+        claim_api.TypedClaimIntake(**fields, verified=True)
+
+
+def test_typed_numeric_intake_requires_explicit_unit():
+    request = claim_api.TypedClaimIntake(assertion_namespace="review", subject_type="bu", subject_key="unit",
+        metric_key="revenue", claim_kind="actual", value_numeric=12, source_occurrence_keys=["evidence"])
+    with pytest.raises(HTTPException, match="explicit unit"):
+        claim_api.record_typed_claim(request, principal={"tenant_id":"tenant", "role":"operator", "subject":"operator"})
+
+
+def test_business_unit_identity_requires_explicit_scope():
+    with pytest.raises(HTTPException, match="business-unit scope"):
+        claim_api._policy_context({"tenant_id":"tenant", "role":"bu"}, UsePurpose.ANALYSIS)

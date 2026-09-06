@@ -18,6 +18,7 @@ from .source_claims import (
     TraceabilityState,
     UsePurpose,
     claim_is_eligible,
+    policy_allows,
     provenance_view,
 )
 
@@ -249,6 +250,7 @@ class ClaimRepository:
         *,
         traceability: TraceabilityState | str,
         evidence_relationship: str = "supports",
+        context: PolicyContext | None = None,
     ) -> dict[str, Any]:
         traceability = TraceabilityState(str(traceability))
         if evidence_relationship not in {"supports", "contradicts", "reported_in"}:
@@ -259,6 +261,11 @@ class ClaimRepository:
             with conn.cursor() as cur:
                 tenant_id = self._tenant_uuid(cur, draft.tenant_id)
                 draft = replace(draft, tenant_id=str(tenant_id))
+                if context is not None:
+                    resolved = self._tenant_uuid(cur, context.tenant_id)
+                    if str(resolved) != str(tenant_id) or context.purpose != UsePurpose.OPERATIONS:
+                        raise ValueError("Claim intake requires the authenticated tenant and operations purpose.")
+                    context = replace(context, tenant_id=str(resolved))
                 cur.execute(
                     """
                     insert into strategyos_claim_families
@@ -294,6 +301,8 @@ class ClaimRepository:
                 )
                 existing = cur.fetchone()
                 if existing is not None:
+                    if context is not None:
+                        self._authorize_intake(cur, draft, str(existing[0]), context)
                     conn.commit()
                     return {"claim_revision_id": str(existing[0]), "revision_number": existing[1], "created": False}
                 cur.execute(
@@ -371,6 +380,8 @@ class ClaimRepository:
                         """,
                         (revision_id, input_id),
                     )
+                if context is not None:
+                    self._authorize_intake(cur, draft, str(revision_id), context)
                 for projection in ("graph", "vector", "cache"):
                     cur.execute(
                         """
@@ -394,6 +405,13 @@ class ClaimRepository:
             "recorded_at": recorded_at.isoformat(),
             "created": True,
         }
+
+    def _authorize_intake(self, cur: Any, draft: ClaimDraft, revision_id: str, context: PolicyContext) -> None:
+        policies, missing = self._policies_for_revision(cur, draft.tenant_id, revision_id)
+        claim = ClaimRevision(revision_id=revision_id, revision_number=1,
+                              recorded_at=datetime.now(UTC), draft=draft, traceability="present")
+        if missing or not policy_allows(context=context, claim=claim, source_policies=policies).eligible:
+            raise ValueError("Source policy does not authorize this claim intake.")
 
     def assess_claim(self, assessment: ClaimAssessment, *, effect_key: str) -> dict[str, Any]:
         if not effect_key.strip():
@@ -579,7 +597,20 @@ class ClaimRepository:
                     reasons.add(f"{field}_denied")
         return {"allowed": not reasons, "source_count": len(sources), "reasons": sorted(reasons)}
 
-    def query(self, query: ClaimQuery, *, context: PolicyContext) -> list[dict[str, Any]]:
+    def resolve_context(self, context: PolicyContext) -> PolicyContext:
+        """Resolve an authenticated tenant slug without accepting a target tenant."""
+        with self._require_connection() as conn:
+            self._ensure_schema(conn)
+            with conn.cursor() as cur:
+                return replace(context, tenant_id=str(self._tenant_uuid(cur, context.tenant_id)))
+
+    def query(self, query: ClaimQuery, *, context: PolicyContext,
+              revision_ids: Iterable[str] | None = None) -> list[dict[str, Any]]:
+        candidates = None if revision_ids is None else sorted(set(str(x) for x in revision_ids))
+        if candidates == []:
+            return []
+        if candidates is not None and len(candidates) > 200:
+            raise ValueError("At most 200 candidate revisions may be authorized at once.")
         connection = self._require_connection()
         with connection as conn:
             self._ensure_schema(conn)
@@ -598,6 +629,7 @@ class ClaimRepository:
                     join strategyos_claim_families f on f.id = r.claim_family_id
                     where r.tenant_id = %s and f.metric_key = %s
                       and r.recorded_at <= %s
+                      and (%s::text[] is null or r.id::text = any(%s::text[]))
                       and r.revision_number = (
                           select max(r2.revision_number)
                           from strategyos_claim_revisions r2
@@ -605,7 +637,7 @@ class ClaimRepository:
                       )
                     order by f.period_end desc nulls last, r.recorded_at desc
                     """,
-                    (tenant_id, query.metric_key, query.as_of_at, query.as_of_at),
+                    (tenant_id, query.metric_key, query.as_of_at, candidates, candidates, query.as_of_at),
                 )
                 rows = [_record(cur, row) for row in cur.fetchall()]
                 results: list[dict[str, Any]] = []
@@ -620,7 +652,7 @@ class ClaimRepository:
                     policies, missing_policy_sources = self._policies_for_revision(
                         cur, tenant_id, claim.revision_id
                     )
-                    if missing_policy_sources:
+                    if missing_policy_sources or not self._lineage_eligible(cur, claim, query, context):
                         continue
                     eligibility = claim_is_eligible(
                         claim,
@@ -734,7 +766,8 @@ class ClaimRepository:
                         source_policies=policies,
                         assessments=assessments,
                     )
-                    if missing_policy_sources or not eligibility.eligible:
+                    if (missing_policy_sources or not eligibility.eligible
+                            or not self._lineage_eligible(cur, claim, query, context)):
                         denied_count += 1
                         continue
                     record = provenance_view(
@@ -1111,6 +1144,46 @@ class ClaimRepository:
         return [row[0] for row in cur.fetchall()]
 
     @staticmethod
+    def _lineage_eligible(cur: Any, claim: ClaimRevision, query: ClaimQuery, context: PolicyContext) -> bool:
+        """Exact input revisions retain their own lifecycle, time and BU scope.
+
+        A permitted derived label must not launder a withdrawn, expired,
+        untraceable or out-of-scope input. Newer input revisions do not rewrite
+        historical calculations; explicit lifecycle withdrawals do invalidate them.
+        """
+        if not claim.draft.input_revision_ids:
+            return True
+        cur.execute(
+            """
+            with recursive inputs(id) as (
+                select input_claim_revision_id from strategyos_claim_dependencies
+                where derived_claim_revision_id = %s
+                union
+                select d.input_claim_revision_id from strategyos_claim_dependencies d
+                join inputs i on d.derived_claim_revision_id = i.id
+            )
+            select not exists (
+                select 1 from inputs i
+                join strategyos_claim_revisions r on r.id = i.id
+                join strategyos_claim_families f on f.id = r.claim_family_id
+                where r.tenant_id::text <> %s or r.recorded_at > %s
+                  or r.as_of_at > %s or r.valid_until < %s
+                  or r.traceability_state <> 'present'
+                  or (%s::text[] <> '{}'::text[] and
+                      (f.business_unit is null or not f.business_unit = any(%s::text[])))
+                  or exists (select 1 from strategyos_claim_assessments a
+                      where a.claim_revision_id = r.id and a.assessment_type = 'lifecycle'
+                        and a.result in ('retracted','rejected','superseded') and a.assessed_at <= now())
+                  or (not exists (select 1 from strategyos_claim_evidence_links e where e.claim_revision_id = r.id)
+                      and not exists (select 1 from strategyos_claim_dependencies d where d.derived_claim_revision_id = r.id))
+            )
+            """,
+            (claim.revision_id, context.tenant_id, query.as_of_at, query.as_of_at,
+             query.as_of_at, sorted(context.business_units), sorted(context.business_units)),
+        )
+        return bool(cur.fetchone()[0])
+
+    @staticmethod
     def _assessments(
         cur: Any,
         revision_id: str,
@@ -1123,7 +1196,8 @@ class ClaimRepository:
                    assessed_by, assessed_at, reasons, scope_key
             from strategyos_claim_assessments
             where claim_revision_id = %s
-              and (%s::timestamptz is null or assessed_at <= %s)
+              and (%s::timestamptz is null or assessed_at <= %s
+                   or (assessment_type = 'lifecycle' and assessed_at <= now()))
             order by assessed_at
             """,
             (revision_id, as_of_at, as_of_at),

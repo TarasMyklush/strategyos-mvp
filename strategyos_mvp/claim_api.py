@@ -1,16 +1,89 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, status
+from pydantic import BaseModel, ConfigDict, Field
 
 from .auth import require_role
 from .claim_store import ClaimRepository
-from .source_claims import ClaimKind, ClaimQuery, PolicyContext, UsePurpose
+from .source_claims import ClaimDraft, ClaimKind, ClaimQuery, PolicyContext, UsePurpose
 
 
 router = APIRouter(prefix="/api/claims", tags=["governed-claims"])
+
+
+class TypedClaimIntake(BaseModel):
+    """Explicit operator interpretation of evidence; never inferred by a model."""
+    model_config = ConfigDict(extra="forbid")
+    assertion_namespace: str = Field(min_length=1, max_length=160)
+    subject_type: str = Field(min_length=1, max_length=80)
+    subject_key: str = Field(min_length=1, max_length=240)
+    metric_key: str = Field(min_length=1, max_length=240)
+    claim_kind: ClaimKind = ClaimKind.UNKNOWN
+    value_numeric: Decimal | None = None
+    value_text: str | None = Field(default=None, max_length=16000)
+    unit: str | None = Field(default=None, max_length=80)
+    scale: Decimal = Decimal(1)
+    currency: str | None = Field(default=None, max_length=3)
+    business_unit: str | None = Field(default=None, max_length=160)
+    period_start: date | None = None
+    period_end: date | None = None
+    as_of_at: datetime | None = None
+    valid_until: datetime | None = None
+    author_identity: str | None = Field(default=None, max_length=240)
+    scenario_key: str | None = Field(default=None, max_length=160)
+    source_occurrence_keys: list[str] = Field(min_length=1, max_length=100)
+    assumptions: list[str] = Field(default_factory=list, max_length=50)
+
+
+@router.post("/intake")
+def record_typed_claim(request: TypedClaimIntake,
+                       principal: dict[str, Any] = require_role("operator", "tenant_admin", "system")) -> dict[str, Any]:
+    context = _policy_context(principal, UsePurpose.OPERATIONS)
+    try:
+        fields = request.model_dump()
+        fields["source_occurrence_keys"] = tuple(fields["source_occurrence_keys"])
+        fields["assumptions"] = tuple(fields["assumptions"])
+        draft = ClaimDraft(**fields, tenant_id=context.tenant_id, production_method="human_entered",
+                           metadata={"recorded_by": context.principal_id, "intake": "explicit_semantic_contract_v1"})
+        result = ClaimRepository().record_claim(draft, traceability="present", context=context)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except RuntimeError:
+        raise HTTPException(503, "Claim intake is temporarily unavailable.") from None
+    return {"status": "ok", **result, "claim_kind": str(draft.claim_kind),
+            "review_status": "unreviewed", "outbound_delivery": False}
+
+
+@router.get("/search")
+def search_governed_claims(
+    text: str = Query(min_length=1, max_length=4000),
+    metric_key: str = Query(min_length=1, max_length=240),
+    claim_kind: list[ClaimKind] = Query(default=[ClaimKind.ACTUAL]),
+    purpose: UsePurpose = Query(default=UsePurpose.EXECUTIVE_BRIEFING),
+    business_unit: str | None = Query(default=None, max_length=160),
+    scenario_key: str | None = Query(default=None, max_length=160),
+    as_of: str | None = Query(default=None, max_length=80),
+    limit: int = Query(default=10, ge=1, le=50),
+    principal: dict[str, Any] = require_role("executive", "bu", "analyst", "auditor", "reviewer", "operator", "tenant_admin", "system"),
+) -> dict[str, Any]:
+    from .claim_retrieval import search_claims
+    context = _policy_context(principal, purpose)
+    try:
+        query = ClaimQuery(tenant_id=context.tenant_id, metric_key=metric_key,
+                           purpose=purpose, as_of_at=_timestamp(as_of),
+                           allowed_claim_kinds=frozenset(claim_kind),
+                           business_unit=business_unit, scenario_key=scenario_key)
+        records = search_claims(text, query=query, context=context, limit=limit)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except RuntimeError:
+        raise HTTPException(503, "Governed semantic search is temporarily unavailable.") from None
+    return {"status": "ok", "records": records, "analysis_as_of": query.as_of_at.isoformat(),
+            "authority": "postgresql", "ranking": "local_semantic_candidates"}
 
 
 def _timestamp(value: str | None) -> datetime:
@@ -35,6 +108,8 @@ def _policy_context(
             "Authenticated tenant context is required.",
         )
     role = str(principal.get("role") or "").strip()
+    if role == "bu" and not principal.get("business_units"):
+        raise HTTPException(403, "An explicit business-unit scope is required.")
     return PolicyContext(
         tenant_id=tenant_id,
         principal_id=str(principal.get("subject") or "unknown"),
@@ -57,7 +132,7 @@ def query_claims(
     scenario_key: str | None = Query(default=None, max_length=160),
     as_of: str | None = Query(default=None, max_length=80),
     principal: dict[str, Any] = require_role(
-        "executive", "analyst", "auditor", "reviewer", "operator", "tenant_admin", "system"
+        "executive", "bu", "analyst", "auditor", "reviewer", "operator", "tenant_admin", "system"
     ),
 ) -> dict[str, Any]:
     """Return policy-filtered claims with a UI-ready provenance envelope."""

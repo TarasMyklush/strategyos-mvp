@@ -66,15 +66,24 @@ must not replace a caller's tenant with a requested tenant.
 Authenticated canonical Hermes evidence is checked for external-model permission
 before source retrieval or transport. Application-level provider enablement is
 not source consent. Denied or unavailable policy returns an explicit local
-policy response without sending evidence. Public-packet and noncanonical legacy
-provider paths require separate assessment; this is not a claim that every model
-invocation in the repository has migrated.
+policy response without sending evidence. The same gate applies to public packets,
+legacy Hermes summaries and twin reasoning. Legacy twins without a governed
+context use their local fallback, not an implicitly authorized model call.
 
 A claim query explicitly states tenant, metric, requested kinds, business unit,
 scenario, purpose and as-of timestamp. Selection never substitutes a forecast for
 an actual. Future, stale, untraceable, retracted, superseded and unauthorized
 revisions are not eligible. The API returns a UI-ready provenance envelope rather
 than asking each screen to infer units or meaning from prose.
+Current lifecycle withdrawal also invalidates exact-input descendants and cannot
+be bypassed by requesting a historical analysis timestamp. Historical snapshots
+retain their membership on replay; a new analysis requires a new snapshot.
+
+Semantic search ranks up to 200 local-vector candidate IDs, then reauthorizes
+those exact revisions in PostgreSQL. Stale candidates never substitute a newer
+revision, and projection text is never returned directly as evidence. The
+independent `/claims` workspace uses these same query contracts and distinguishes
+traceability from independent review.
 
 ## Ingestion behavior
 

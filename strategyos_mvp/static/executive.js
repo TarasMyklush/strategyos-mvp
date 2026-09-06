@@ -4906,8 +4906,10 @@
     var explicitStatus = String(firstDefined(explicit.status, "")).toLowerCase();
     var grounded = explicitStatus === "grounded" || (!explicitStatus && provenance && provenance.complete === true && source);
     var breakdownPartial = Boolean(explicit.breakdown_partial || (provenance && provenance.breakdown_partial));
-    var label = grounded ? "Evidence verified" : "Evidence gap";
-    if (grounded && breakdownPartial) label = "Headline verified · breakdown partial";
+    // A located source is not an independent review of its truth. Assessment
+    // events are disclosed separately in the governed evidence detail.
+    var label = grounded ? "Source traced" : "Evidence gap";
+    if (grounded && breakdownPartial) label = "Headline traced · breakdown partial";
     var title = grounded
       ? "Traced to " + String(source || "its source document")
       : "This figure cannot yet be traced back to a source document.";
@@ -7376,7 +7378,7 @@
       unavailablePanel.hidden = false;
       unavailablePanel.innerHTML = '<h1>Briefing unavailable</h1><p>'
         + escapeHtml(state.briefingUnavailable)
-        + '</p><p>No previous financial view is being presented as current.</p><button type="button">Retry</button>';
+        + '</p><p>No previous financial view is being presented as current.</p><p><a href="/claims">Inspect individually authorized claims</a></p><button type="button">Retry</button>';
       unavailablePanel.querySelector("button").onclick = function () { refresh(false); };
       if ($("assistant-dock")) $("assistant-dock").hidden = true;
       return;

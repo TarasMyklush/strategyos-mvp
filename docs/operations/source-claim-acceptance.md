@@ -37,8 +37,16 @@ It is not yet a full per-claim rewrite of every legacy presentation component.
 | Projection retries, leases, cache and vector serialization | `test_claim_projection.py`, `test_claim_store_postgres_e2e.py` |
 | Public-web untrusted label, provider/license, forecast and units in audit UI | `executive.js:governedClaimAuditMarkup`; browser acceptance required |
 | Failed briefing refresh hides stale views and offers Retry | `test_frontend_shell.py` |
+| Real pinned local model and Qdrant cross-source ranking, with PostgreSQL reauthorization | `test_cross_source_postgres_e2e.py`, `test_claim_retrieval.py` |
+| Current withdrawal blocks historical queries and derived claims | `test_cross_source_postgres_e2e.py` |
+| Snapshot replay never appends new families | `test_snapshot_immutability.py` |
+| Upload/folder policy preservation and strict consent booleans | `test_source_contract_intake.py` |
+| Legacy read and list source authorization | `test_legacy_source_scope.py`, `test_cross_source_postgres_e2e.py` |
+| Explicit typed manual intake cannot self-verify or send | `test_claim_api.py` |
+| Independent claim workspace, safe source rendering and explicit claim types | `test_claim_workspace.py`; browser acceptance required |
 
-Run the complete suite against dedicated disposable PostgreSQL and Neo4j:
+Run the complete suite against dedicated disposable PostgreSQL, Neo4j and Qdrant,
+with the release-pinned local embedding model provisioned:
 
 ```sh
 python scripts/test.py --services -q tests/ --junitxml=service-results.xml
@@ -52,17 +60,19 @@ image, and rejects skipped tests as well as failures.
 
 ## Remaining boundaries — do not claim universal completion
 
-- Canonical public presentation packets also enforce external-model permission;
-  formatting a packet for display does not grant transmission consent.
-  Noncanonical model invocations still require a separate call-site audit.
+- Evidence-bearing Hermes and twin model calls share a source-consent gate,
+  including legacy summaries and public presentation packets. Missing context
+  denies transmission. Local packet answers remain available independently;
+  the legacy twin runtime falls back locally until it supplies governed context.
 - Arbitrary document extraction is not automatically a typed numerical claim;
   unknown semantics must remain unknown instead of inventing units or kinds.
 - Actual third-party connector authentication, delivery, retries and consent
   need real integrations; no live CFO request or reply is simulated as real.
 - A full per-claim migration of all legacy UI/read models remains distinct from
   the conservative whole-run authorization boundary.
-- Vector serialization has deterministic tests; cross-source real-model/vector
-  acceptance must not be inferred merely from the Neo4j round trip.
+- Source traceability is labelled “Source traced”, not “Evidence verified”.
+  Explicit assessment events remain separately visible; the UI does not infer
+  a review from a source's origin or successful retrieval.
 
 Record the exact workflow SHA and online observations at release sign-off. Test
 counts alone do not close these boundaries.

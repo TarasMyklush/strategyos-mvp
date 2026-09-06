@@ -20,7 +20,7 @@ def main() -> int:
     args = list(sys.argv[1:])
     if "--services" in args:
         args.remove("--services")
-        for key in ("STRATEGYOS_POSTGRES_E2E_DATABASE_URL", "STRATEGYOS_NEO4J_E2E_URI", "STRATEGYOS_NEO4J_E2E_USER", "STRATEGYOS_NEO4J_E2E_PASSWORD"):
+        for key in ("STRATEGYOS_POSTGRES_E2E_DATABASE_URL", "STRATEGYOS_NEO4J_E2E_URI", "STRATEGYOS_NEO4J_E2E_USER", "STRATEGYOS_NEO4J_E2E_PASSWORD", "STRATEGYOS_QDRANT_E2E_URL", "STRATEGYOS_EMBEDDING_E2E_MODEL_PATH"):
             if os.environ.get(key):
                 env[key] = os.environ[key]
         if not env.get("STRATEGYOS_POSTGRES_E2E_DATABASE_URL") or not env.get("STRATEGYOS_NEO4J_E2E_URI"):

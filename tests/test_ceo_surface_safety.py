@@ -2435,7 +2435,7 @@ def test_executive_surface_speaks_english_not_pipeline():
 
 def test_grounding_badge_says_what_it_means():
     js = _static_executive_js()
-    assert "Evidence verified" in js
+    assert "Source traced" in js
     assert "Evidence gap" in js
 
 

@@ -1240,7 +1240,7 @@ def test_ceo_kpi_selection_is_inline_and_never_scrolls_the_page():
     # The badge must be driven by grounding_status. Its wording is copy, not
     # contract -- pinning the exact word made a plain-English rewrite look like
     # a regression.
-    assert '? "Evidence verified"' in js
+    assert '? "Source traced"' in js
     assert "kpi_key:" in js
     assert "Evidence and calculation" in js
     assert "data-kpi-question" in js
@@ -3880,7 +3880,7 @@ def test_persona_title_grounding_badges_and_native_agent_actions_are_visible():
     assert "CEO brief opened in Hermes" in executive_js
     assert "Board room memory opened" in executive_js
     # Plain English for an executive: "grounded" reads as electrical wiring.
-    assert "Evidence verified" in executive_js
+    assert "Source traced" in executive_js
     assert "Evidence gap" in executive_js
     assert ".grounding-badge--grounded" in executive_css
     assert ".grounding-badge--needs-evidence" in executive_css

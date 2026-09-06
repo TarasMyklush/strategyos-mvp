@@ -1862,11 +1862,9 @@ def normalize_source_contract(
                         access_policy_payload.get("allowed_business_units") or []
                     )
                 ),
-                export_allowed=bool(access_policy_payload.get("export_allowed", False)),
-                external_model_allowed=bool(
-                    access_policy_payload.get("external_model_allowed", False)
-                ),
-                quote_allowed=bool(access_policy_payload.get("quote_allowed", False)),
+                export_allowed=access_policy_payload.get("export_allowed", False),
+                external_model_allowed=access_policy_payload.get("external_model_allowed", False),
+                quote_allowed=access_policy_payload.get("quote_allowed", False),
             )
         except ValueError as exc:
             raise HTTPException(

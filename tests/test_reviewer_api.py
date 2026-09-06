@@ -214,7 +214,7 @@ def test_bu_pending_reviews_returns_items_read_only(monkeypatch):
         _restore_env(original)
 
 
-def test_pending_reviews_includes_latest_local_summary_when_store_skipped(tmp_path):
+def test_pending_reviews_omits_local_summary_without_current_policy_store(tmp_path):
     original = _apply_env(
         {
             "DATABASE_URL": None,
@@ -235,8 +235,8 @@ def test_pending_reviews_includes_latest_local_summary_when_store_skipped(tmp_pa
         assert response.status_code == 200
         payload = response.json()
         assert payload["store_status"] == "skipped"
-        assert payload["items"][0]["run_id"] == local["run_id"]
-        assert payload["items"][0]["source"] == "local_summary"
+        assert payload["items"] == []
+        assert local["run_id"] not in response.text
     finally:
         _restore_env(original)
 
@@ -497,7 +497,7 @@ def test_bu_run_detail_sanitizes_artifact_paths(monkeypatch):
         _restore_env(original)
 
 
-def test_run_detail_uses_latest_local_summary_when_store_skipped(tmp_path):
+def test_run_detail_does_not_fall_back_without_current_policy_store(tmp_path):
     original = _apply_env(
         {
             "DATABASE_URL": None,
@@ -515,11 +515,8 @@ def test_run_detail_uses_latest_local_summary_when_store_skipped(tmp_path):
             f"/reviewer/runs/{local['run_id']}", headers=_auth_header("operator-secret")
         )
 
-        assert response.status_code == 200
-        payload = response.json()
-        assert payload["run_id"] == local["run_id"]
-        assert payload["summary_json"]["run_id"] == local["run_id"]
-        assert payload["latest_checkpoint"]["checkpoint_id"].startswith("local-checkpoint:")
+        assert response.status_code == 503
+        assert "summary_json" not in response.json()
     finally:
         _restore_env(original)
 
@@ -556,7 +553,7 @@ def test_checkpoint_detail_requires_auth(monkeypatch):
         _restore_env(original)
 
 
-def test_checkpoint_detail_uses_latest_local_summary_when_store_skipped(tmp_path):
+def test_checkpoint_detail_does_not_fall_back_without_current_policy_store(tmp_path):
     original = _apply_env(
         {
             "DATABASE_URL": None,
@@ -576,11 +573,8 @@ def test_checkpoint_detail_uses_latest_local_summary_when_store_skipped(tmp_path
             headers=_auth_header("operator-secret"),
         )
 
-        assert response.status_code == 200
-        payload = response.json()
-        assert payload["checkpoint_id"] == checkpoint_id
-        assert payload["run_id"] == local["run_id"]
-        assert payload["stage"] == "awaiting_review"
+        assert response.status_code == 503
+        assert "state_json" not in response.json()
     finally:
         _restore_env(original)
 
@@ -806,7 +800,7 @@ def test_run_artifact_preview_returns_json_payload(monkeypatch, tmp_path):
         _restore_env(original)
 
 
-def test_run_artifact_preview_uses_latest_local_summary_when_store_skipped(tmp_path):
+def test_run_artifact_preview_denies_local_fallback_without_policy_store(tmp_path):
     output_root = tmp_path / "outputs"
 
     original = _apply_env(
@@ -832,10 +826,8 @@ def test_run_artifact_preview_uses_latest_local_summary_when_store_skipped(tmp_p
             headers=_auth_header("operator-secret"),
         )
 
-        assert response.status_code == 200
-        payload = response.json()
-        assert payload["artifact_key"] == "summary"
-        assert payload["preview_json"]["status"] == "ok"
+        assert response.status_code == 503
+        assert "preview_json" not in response.json()
     finally:
         _restore_env(original)
 
@@ -1577,7 +1569,7 @@ def test_evidence_preview_returns_stored_citation_context(monkeypatch):
         _restore_env(original)
 
 
-def test_evidence_preview_uses_latest_local_citation_audit_when_store_skipped(tmp_path):
+def test_evidence_preview_denies_local_fallback_without_policy_store(tmp_path):
     output_root = tmp_path / "outputs"
 
     original = _apply_env(
@@ -1633,13 +1625,8 @@ def test_evidence_preview_uses_latest_local_citation_audit_when_store_skipped(tm
             headers=_auth_header("reviewer-secret"),
         )
 
-        assert response.status_code == 200
-        payload = response.json()
-        assert payload["run_id"] == local["run_id"]
-        assert payload["finding_id"] == "F-002"
-        assert payload["source_path"] == "uploads/ap_ledger.csv"
-        assert payload["excerpt"] == "Invoice INV-2026-0341 was paid twice."
-        assert payload["vendor_name"] == "Vendor One"
+        assert response.status_code == 503
+        assert "Invoice INV-2026-0341 was paid twice." not in response.text
     finally:
         _restore_env(original)
 

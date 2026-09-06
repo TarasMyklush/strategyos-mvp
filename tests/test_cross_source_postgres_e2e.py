@@ -9,7 +9,7 @@ import pytest
 
 from strategyos_mvp.claim_store import ClaimRepository
 from strategyos_mvp.source_claims import (
-    ClaimDraft, ClaimQuery, EvidenceOccurrence, PolicyContext,
+    ClaimAssessment, ClaimDraft, ClaimQuery, EvidenceOccurrence, PolicyContext,
     SourceAccessPolicy, SourceRegistration, UsePurpose,
 )
 from strategyos_mvp.state_store import ensure_data_schema
@@ -101,6 +101,7 @@ def test_source_to_ledger_to_authorized_envelope(ledger, monkeypatch, origin, ch
         as_of_at=datetime.now(UTC), allowed_claim_kinds=frozenset({kind}), business_unit="test-bu",
     )
     ctx = PolicyContext(tenant_id=tenant, principal_id="fixture-ceo", roles=frozenset({"executive"}), purpose=q.purpose)
+    assert not repo.record_claim(draft, traceability="present", context=replace(ctx, purpose=UsePurpose.OPERATIONS))["created"]
     records = repo.query(q, context=ctx)
     assert len(records) == 1
     record = records[0]
@@ -114,7 +115,22 @@ def test_source_to_ledger_to_authorized_envelope(ledger, monkeypatch, origin, ch
     assert record["claim_kind"] == kind
     # Provenance/traceability is not an invented verification assessment.
     assert record["assessments"] == []
+    from strategyos_mvp.claim_retrieval import search_claims
+    assert search_claims("revenue", query=q, context=ctx, repository=repo,
+                         candidates=lambda *a, **k: [first["claim_revision_id"]]) == records
     assert repo.run_source_access(run_id, context=ctx)["allowed"]
+    from strategyos_mvp import access_scope, claim_store
+    monkeypatch.setattr(claim_store, "ClaimRepository", lambda: repo)
+    def legacy_read_allowed():
+        token = access_scope.principal_scope.set({
+            "tenant_id": tenant, "subject": "fixture-ceo", "role": "executive",
+            "_source_read_request": True,
+        })
+        try:
+            return access_scope.source_read_allowed(run_id)
+        finally:
+            access_scope.principal_scope.reset(token)
+    assert legacy_read_allowed()
     if kind != "actual":
         with pytest.raises(ValueError, match="Calculated actuals"):
             repo.record_claim(replace(
@@ -145,10 +161,47 @@ def test_source_to_ledger_to_authorized_envelope(ledger, monkeypatch, origin, ch
         ).single()
         assert row["n"] == 1
         assert row["kinds"] == [kind]
+    # Actual model + actual Qdrant; no hash vector or mocked transport.
+    vector_url = os.environ.get("STRATEGYOS_QDRANT_E2E_URL")
+    model_path = os.environ.get("STRATEGYOS_EMBEDDING_E2E_MODEL_PATH")
+    assert vector_url and model_path, "Dedicated vector service and pinned local model required"
+    from strategyos_mvp import vector_store, semantic_embeddings
+    monkeypatch.setenv("STRATEGYOS_EMBEDDING_MODEL_PATH", model_path)
+    monkeypatch.setattr(vector_store, "CONFIG", replace(vector_store.CONFIG, qdrant_url=vector_url))
+    monkeypatch.setattr(vector_store, "VECTOR_SIZE", semantic_embeddings.DIMENSIONS)
+    vector_store.project_claim_record(projected, "upsert")
+    vector_store.project_claim_record(projected, "upsert")
+    assert search_claims("revenue", query=q, context=ctx, repository=repo) == records
     # Permission revocation must apply immediately even to an old revision.
     repo.register_source(source, policy=replace(access, allowed_roles=frozenset({"auditor"})), recorded_by="fixture:operator", rationale="Revoke fixture access")
     assert repo.query(q, context=ctx) == []
     assert not repo.run_source_access(run_id, context=ctx)["allowed"]
+    assert not legacy_read_allowed()
+    with pytest.raises(ValueError, match="Source policy"):
+        repo.record_claim(draft, traceability="present", context=replace(ctx, purpose=UsePurpose.OPERATIONS))
+    assert search_claims("revenue", query=q, context=ctx, repository=repo,
+                         candidates=lambda *a, **k: [first["claim_revision_id"]]) == []
+    assert search_claims("revenue", query=q, context=ctx, repository=repo) == []
+    vector_store.project_claim_record(projected, "revoke")
+    # A stale projection must not silently substitute a newer revision.
+    latest = repo.record_claim(replace(draft, value_numeric=Decimal("2.5")), traceability="present")
+    now_query = replace(q, as_of_at=datetime.now(UTC))
+    auditor = replace(ctx, roles=frozenset({"auditor"}))
+    assert repo.query(now_query, context=auditor, revision_ids=[first["claim_revision_id"]]) == []
+    assert repo.query(now_query, context=auditor, revision_ids=[latest["claim_revision_id"]])[0]["value"] == "2.5"
+    derived = repo.record_claim(replace(draft, metric_key="test.derived", value_numeric=Decimal("2.5"),
+        production_method="calculated", source_occurrence_keys=(), formula_key="identity",
+        formula_version="1", input_revision_ids=(latest["claim_revision_id"],)), traceability="present")
+    derived_query = replace(now_query, metric_key="test.derived", as_of_at=datetime.now(UTC))
+    assert repo.query(derived_query, context=auditor)[0]["claim_revision_id"] == derived["claim_revision_id"]
+    repo.assess_claim(ClaimAssessment(
+        claim_revision_id=latest["claim_revision_id"], assessment_type="lifecycle",
+        result="retracted", rule_version="fixture-v1", assessed_by="fixture:reviewer",
+        assessed_at=datetime.now(UTC), reasons=("Fixture withdrawn after the analysis time",),
+    ), effect_key=f"retract:{latest['claim_revision_id']}")
+    # Historical selection cannot resurrect currently withdrawn evidence.
+    assert repo.query(now_query, context=auditor) == []
+    assert repo.query(derived_query, context=auditor) == []
 
 
 def test_repository_rejects_cross_tenant_context(ledger):

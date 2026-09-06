@@ -107,7 +107,12 @@ def test_postgres_backed_governed_source_pack_flow(tmp_path: Path):
         staged = client.post(
             "/source-packs/from-path",
             headers=_auth_header("operator-secret"),
-            json={"folder_path": str(source_dataset)},
+            json={"folder_path": str(source_dataset), "source_key": "review-flow-fixture",
+                  "source_display_name": "Governed review fixture", "origin_category": "internal_system",
+                  "governed_owner": "fixture:finance", "authorization_basis": "Explicit isolated test consent",
+                  "allowed_roles": ["operator", "reviewer", "executive"],
+                  "allowed_purposes": ["executive_briefing", "analysis", "operations", "export"],
+                  "export_allowed": True},
         )
         assert staged.status_code == 200
         source_pack = staged.json()

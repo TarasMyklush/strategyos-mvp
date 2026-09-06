@@ -29,6 +29,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     services:
+      qdrant:
+        image: qdrant/qdrant:v1.14.1
+        ports:
+          - 6333:6333
       postgres:
         image: postgres:16-alpine
         env:
@@ -54,6 +58,8 @@ jobs:
       STRATEGYOS_NEO4J_E2E_URI: bolt://localhost:7687
       STRATEGYOS_NEO4J_E2E_USER: neo4j
       STRATEGYOS_NEO4J_E2E_PASSWORD: isolated-proof-only
+      STRATEGYOS_QDRANT_E2E_URL: http://localhost:6333
+      STRATEGYOS_EMBEDDING_E2E_MODEL_PATH: /tmp/strategyos-proof-model
     steps:
       - name: Check out repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -79,7 +85,10 @@ jobs:
       - name: Install package and test runner
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e . pytest
+          python -m pip install -e '.[search]' pytest
+
+      - name: Provision pinned local proof model
+        run: python scripts/provision_embeddings.py --destination /tmp/strategyos-proof-model
 
       - name: Run tests
         run: python scripts/test.py --services -q ${CI_TEST_TARGETS} --junitxml=service-results.xml

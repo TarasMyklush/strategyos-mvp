@@ -332,6 +332,8 @@ def test_reasoning_trace_records_transport_retries(tmp_path, monkeypatch):
             return FakeResponse()
 
         monkeypatch.setattr(reasoning_module.llm_qa, "urlopen", fake_urlopen)
+        from strategyos_mvp import model_policy
+        monkeypatch.setattr(model_policy, "evidence_model_access", lambda summary: True)
         monkeypatch.setattr(reasoning_module.llm_qa.time, "sleep", lambda *_args, **_kwargs: None)
 
         repositories = build_repositories(tmp_path / "twins")

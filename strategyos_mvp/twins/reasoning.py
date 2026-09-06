@@ -183,6 +183,11 @@ def _call_litellm_reasoning(
     input_context: dict[str, Any],
     transport_trace: list[dict[str, Any]] | None = None,
 ) -> str:
+    from ..model_policy import evidence_model_access
+    # Legacy twin observations lack canonical per-source attribution. Keep their
+    # deterministic fallback until a server-governed source context is present.
+    if not evidence_model_access(input_context):
+        raise RuntimeError("Source permission required for external twin reasoning; local rules remain active.")
     url = _chat_completions_url(str(config.llm_base_url))
     payload = {
         "model": config.llm_model,

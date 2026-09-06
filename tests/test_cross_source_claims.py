@@ -103,3 +103,29 @@ def test_policy_refusal_is_not_advice_or_verified_evidence():
     assert not result["citations"]
     assert not result["response_sections"]
     assert not result["external_consultation"]["used"]
+
+
+@pytest.mark.parametrize("summary", [{}, {"run_id": "legacy-run"}, {"tenant_context": {"tenant_id": "tenant"}}])
+def test_missing_model_source_context_fails_closed(summary):
+    from strategyos_mvp.model_policy import evidence_model_access
+    assert not evidence_model_access(summary)
+
+
+def test_twin_transport_cannot_send_ungoverned_observations(monkeypatch):
+    from strategyos_mvp.twins.reasoning import _call_litellm_reasoning
+    from strategyos_mvp import llm_qa
+    from tests.test_llm_qa import _config
+    monkeypatch.setattr(llm_qa, "_post_with_retry", lambda **kwargs: pytest.fail("unauthorized transport"))
+    with pytest.raises(RuntimeError, match="Source permission"):
+        _call_litellm_reasoning(config=_config(), stage="orient", input_context={"observations": {"private": "data"}})
+
+
+def test_bu_restricted_principal_cannot_read_unscoped_group_claim():
+    result = claim_is_eligible(
+        revision(actual_draft(business_unit=None)),
+        query=query(business_unit=None),
+        context=context(business_units=frozenset({"tamween"})),
+        source_policies=[policy()],
+    )
+    assert not result.eligible
+    assert "principal_business_unit_denied" in result.reasons
