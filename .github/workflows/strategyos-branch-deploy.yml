@@ -79,7 +79,7 @@ jobs:
             sudo rm -f "$f"
           done
           sudo find /etc/apt/ -type f \( -name '*microsoft*' -o -name '*azure*' \) -delete 2>/dev/null || true
-          sudo apt-get update -o Acquire::AllowInsecureRepositories=true
+          sudo apt-get update
           sudo apt-get install -y --no-install-recommends poppler-utils tesseract-ocr tesseract-ocr-eng
 
       - name: Install package and test runner

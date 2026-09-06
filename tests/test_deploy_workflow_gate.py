@@ -24,6 +24,13 @@ def _deploy_yaml() -> str:
     return DEPLOY_WORKFLOW.read_text(encoding="utf-8")
 
 
+def test_preview_deploy_does_not_allow_unsigned_package_indexes() -> None:
+    text = (ROOT / '.github/workflows/strategyos-branch-deploy.yml').read_text(encoding='utf-8')
+    assert 'AllowInsecureRepositories' not in text
+    assert '--allow-unauthenticated' not in text
+    assert 'sudo apt-get update' in text
+
+
 def test_deploy_workflow_has_a_fail_closed_ci_verification_gate() -> None:
     text = _deploy_yaml()
 
