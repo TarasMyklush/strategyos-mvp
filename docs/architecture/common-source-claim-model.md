@@ -18,6 +18,13 @@ not return pre-cutover values. Whole-run source authorization additionally
 protects legacy narrative and trend siblings. A partially authorized user must
 use claim-level reads rather than receive a partially redacted bulk view.
 
+The finance display contract validates each component's metric, actual/plan
+kind, unit, currency and finite positive scale. Competing component claims or
+misaligned actual/plan periods make the briefing unavailable rather than using
+last-write-wins or legacy values. The existing SAR-specific finance presentation
+rejects other reporting currencies; the independent claim workspace retains and
+displays their native currency and scale without conversion or relabelling.
+
 ## Independent dimensions
 
 Source origin, capture channel, claim kind, production method, traceability,
@@ -78,6 +85,10 @@ than asking each screen to infer units or meaning from prose.
 Current lifecycle withdrawal also invalidates exact-input descendants and cannot
 be bypassed by requesting a historical analysis timestamp. Historical snapshots
 retain their membership on replay; a new analysis requires a new snapshot.
+Whole-run authorization also follows the snapshot's exact input lineage across
+ingestion batches. An input's source restriction or current lifecycle withdrawal
+blocks legacy bulk views and model transmission, even when the run's own primary
+source still permits access. It does not attempt to redact free-form prose.
 
 Semantic search ranks up to 200 local-vector candidate IDs, then reauthorizes
 those exact revisions in PostgreSQL. Stale candidates never substitute a newer

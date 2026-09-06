@@ -42,6 +42,8 @@ It is not yet a full per-claim rewrite of every legacy presentation component.
 | Snapshot replay never appends new families | `test_snapshot_immutability.py` |
 | Upload/folder policy preservation and strict consent booleans | `test_source_contract_intake.py` |
 | Legacy read and list source authorization | `test_legacy_source_scope.py`, `test_cross_source_postgres_e2e.py` |
+| Bulk snapshot input-source permissions and lifecycle withdrawal across ingestion batches | `test_bulk_claim_lineage_postgres_e2e.py` |
+| KPI component metric/kind/unit/currency/scale and comparison-period validation | `test_governed_finance.py`, `test_governed_claim_adoption.py` |
 | Explicit typed manual intake cannot self-verify or send | `test_claim_api.py` |
 | Independent claim workspace, safe source rendering and explicit claim types | `test_claim_workspace.py`; browser acceptance required |
 

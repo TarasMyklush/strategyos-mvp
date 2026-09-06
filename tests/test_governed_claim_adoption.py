@@ -31,6 +31,7 @@ def test_authenticated_summary_uses_policy_filtered_snapshot_without_legacy_leak
                         "value": "100",
                         "scale": "1",
                         "unit": "SAR",
+                        "currency": "SAR",
                         "dimensions": {"component_key": "revenue_actual"},
                         "sources": [{"source_key": "erp", "origin_category": "internal_system"}],
                     }
@@ -90,6 +91,29 @@ def test_missing_snapshot_never_returns_pre_cutover_payload(monkeypatch):
             principal={"tenant_id": "tenant-1", "role": "executive"},
         )
     assert error.value.status_code == 503
+
+
+def test_invalid_financial_contract_returns_unavailable_without_legacy_fallback(monkeypatch):
+    class Repository:
+        def run_source_access(self, *args, **kwargs):
+            return {"allowed": True}
+
+        def snapshot(self, *args, **kwargs):
+            return {"records": [{"metric_key": "ceo.revenue", "claim_kind": "forecast",
+                "value": "100", "scale": "1", "unit": "SAR", "currency": "SAR",
+                "dimensions": {"component_key": "revenue_actual"}}]}
+
+        def reconciliation(self, *args, **kwargs):
+            return {"status": "passed"}
+
+    monkeypatch.setattr(api, "ClaimRepository", Repository)
+    with pytest.raises(HTTPException) as error:
+        api._summary_with_governed_claim_snapshot(
+            {"run_id": "run-1", "finance_kpi": {"components": {"revenue_actual": "999"}}},
+            principal={"tenant_id": "tenant-1", "role": "executive"},
+        )
+    assert error.value.status_code == 503
+    assert "display contract" in error.value.detail
 
 
 @pytest.mark.parametrize("denied,records,reconciliation,expected", [

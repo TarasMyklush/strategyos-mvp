@@ -4886,11 +4886,17 @@ def _summary_with_governed_claim_snapshot(
             status_code=503,
             detail="No eligible governed headline claims are available for this briefing.",
         )
-    result["finance_kpi"] = finance_payload_from_claim_snapshot(
-        result.get("finance_kpi") if isinstance(result.get("finance_kpi"), Mapping) else {},
-        snapshot,
-        reconciliation=reconciliation,
-    )
+    try:
+        result["finance_kpi"] = finance_payload_from_claim_snapshot(
+            result.get("finance_kpi") if isinstance(result.get("finance_kpi"), Mapping) else {},
+            snapshot,
+            reconciliation=reconciliation,
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=503,
+            detail="The governed financial claims do not satisfy the display contract. No legacy values were substituted.",
+        ) from None
     result["claim_snapshot"] = {
         key: value for key, value in snapshot.items() if key != "records"
     }

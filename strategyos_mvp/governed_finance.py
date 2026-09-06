@@ -38,15 +38,45 @@ EVIDENCE_COMPONENTS: dict[str, tuple[str, ...]] = {
 }
 
 
-def _normalized_value(record: Mapping[str, Any]) -> str | None:
-    value = record.get("value")
-    if value is None:
-        return None
+COMPONENT_CONTRACTS = {
+    "revenue_actual": ("ceo.revenue", "actual"),
+    "revenue_plan": ("ceo.revenue", "plan"),
+    "cogs_actual": ("ceo.cogs", "actual"),
+    "ebitda_actual": ("ceo.ebitda", "actual"),
+    "ebitda_plan": ("ceo.ebitda", "plan"),
+    "operating_cost_actual": ("ceo.operating_cost", "actual"),
+    "operating_cost_plan": ("ceo.operating_cost", "plan"),
+    "cash_balance": ("ceo.cash_balance", "actual"),
+    "board_floor": ("ceo.cash_floor", "plan"),
+    "ebitda_margin_actual": ("ceo.ebitda_margin", "actual"),
+    "ebitda_margin_plan": ("ceo.ebitda_margin", "plan"),
+}
+
+
+def _normalized_value(record: Mapping[str, Any]) -> str:
     try:
-        normalized = Decimal(str(value)) * Decimal(str(record.get("scale") or "1"))
+        value = Decimal(str(record.get("value")))
+        scale = Decimal(str(record.get("scale")))
+        if not value.is_finite() or not scale.is_finite() or scale <= 0:
+            raise ValueError("Non-finite value or invalid scale")
+        normalized = value * scale
     except (InvalidOperation, ValueError):
-        return str(value)
+        raise ValueError("A financial display claim needs a finite number and positive explicit scale.") from None
     return format(normalized, "f")
+
+
+def _validate_component(record: Mapping[str, Any], key: str, currency: str) -> None:
+    metric, kind = COMPONENT_CONTRACTS[key]
+    if record.get("metric_key") != metric or record.get("claim_kind") != kind:
+        raise ValueError("Financial claim metric or kind does not match its display component.")
+    expected_unit = "percent" if key.startswith("ebitda_margin_") else currency
+    if record.get("unit") != expected_unit:
+        raise ValueError("Financial claim unit does not match its display component.")
+    if expected_unit != "percent" and record.get("currency") != currency:
+        raise ValueError("Financial claim currency does not match the reporting currency.")
+    if record.get("business_unit") or record.get("scenario") or record.get("scenario_key"):
+        raise ValueError("A scoped business-unit or scenario claim cannot become a group headline.")
+    _normalized_value(record)
 
 
 def finance_payload_from_claim_snapshot(
@@ -68,12 +98,21 @@ def finance_payload_from_claim_snapshot(
 
     component_claims: dict[str, dict[str, Any]] = {}
     derived_claims: dict[str, dict[str, Any]] = {}
+    currency = str(payload.get("reporting_currency") or "SAR")
+    if currency != "SAR":
+        raise ValueError("This finance presentation supports SAR only; inspect other currencies in the claim workspace.")
+    seen_components: set[str] = set()
     for raw_record in list(snapshot.get("records") or []):
         if not isinstance(raw_record, Mapping):
             continue
         record = dict(raw_record)
         dimensions = record.get("dimensions") if isinstance(record.get("dimensions"), Mapping) else {}
         component_key = str(dimensions.get("component_key") or "").strip()
+        if component_key in COMPONENT_CONTRACTS:
+            _validate_component(record, component_key, currency)
+            if component_key in seen_components:
+                raise ValueError("Multiple claims compete for a financial headline; explicit resolution is required.")
+            seen_components.add(component_key)
         if component_key in COMPONENT_KEYS:
             normalized = _normalized_value(record)
             if normalized is not None:
@@ -81,6 +120,20 @@ def finance_payload_from_claim_snapshot(
                 component_claims[component_key] = record
         elif component_key in {"ebitda_margin_actual", "ebitda_margin_plan"}:
             derived_claims[component_key] = record
+
+    # Never compare different reporting periods merely because component names
+    # look compatible. Absence remains explicit; no dates are inferred here.
+    for actual_key, plan_key in (("revenue_actual", "revenue_plan"),
+                                 ("ebitda_actual", "ebitda_plan"),
+                                 ("operating_cost_actual", "operating_cost_plan")):
+        actual, plan = component_claims.get(actual_key), component_claims.get(plan_key)
+        if actual and plan:
+            def period(record: Mapping[str, Any]) -> tuple[Any, Any]:
+                nested = record.get("period") or {}
+                return (nested.get("start", record.get("period_start")),
+                        nested.get("end", record.get("period_end")))
+            if None in period(actual) or None in period(plan) or period(actual) != period(plan):
+                raise ValueError("Actual and plan claim periods do not align.")
 
     evidence = {
         str(key): dict(value) if isinstance(value, Mapping) else {}

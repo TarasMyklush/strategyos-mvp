@@ -194,6 +194,7 @@ def test_source_to_ledger_to_authorized_envelope(ledger, monkeypatch, origin, ch
         formula_version="1", input_revision_ids=(latest["claim_revision_id"],)), traceability="present")
     derived_query = replace(now_query, metric_key="test.derived", as_of_at=datetime.now(UTC))
     assert repo.query(derived_query, context=auditor)[0]["claim_revision_id"] == derived["claim_revision_id"]
+    assert repo.run_source_access(run_id, context=auditor)["allowed"]
     repo.assess_claim(ClaimAssessment(
         claim_revision_id=latest["claim_revision_id"], assessment_type="lifecycle",
         result="retracted", rule_version="fixture-v1", assessed_by="fixture:reviewer",
@@ -202,6 +203,9 @@ def test_source_to_ledger_to_authorized_envelope(ledger, monkeypatch, origin, ch
     # Historical selection cannot resurrect currently withdrawn evidence.
     assert repo.query(now_query, context=auditor) == []
     assert repo.query(derived_query, context=auditor) == []
+    bulk_access = repo.run_source_access(run_id, context=auditor)
+    assert not bulk_access["allowed"]
+    assert "bulk_withdrawn_evidence" in bulk_access["reasons"]
 
 
 def test_repository_rejects_cross_tenant_context(ledger):

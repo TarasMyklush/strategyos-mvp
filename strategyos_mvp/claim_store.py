@@ -552,7 +552,24 @@ class ClaimRepository:
                 tenant_id = self._tenant_uuid(cur, context.tenant_id)
                 cur.execute(
                     """
-                    with run_sources as (
+                    with recursive run_roots(id) as (
+                        select sc.claim_revision_id
+                        from strategyos_analysis_snapshots s
+                        join strategyos_analysis_snapshot_claims sc on sc.snapshot_id = s.id
+                        where s.tenant_id = %s and s.snapshot_key = 'run:' || %s
+                        union
+                        select cel.claim_revision_id
+                        from strategyos_ingestion_batches b
+                        join strategyos_evidence_occurrences eo on eo.ingestion_batch_id = b.id
+                        join strategyos_claim_evidence_links cel on cel.evidence_occurrence_id = eo.id
+                        where b.tenant_id = %s and b.run_id::text = %s
+                    ), run_lineage(id) as (
+                        select id from run_roots
+                        union
+                        select d.input_claim_revision_id
+                        from strategyos_claim_dependencies d
+                        join run_lineage l on d.derived_claim_revision_id = l.id
+                    ), run_sources as (
                         select b.source_system_id from strategyos_ingestion_batches b
                         where b.tenant_id = %s and b.run_id::text = %s
                         union
@@ -564,16 +581,29 @@ class ClaimRepository:
                         select eo.source_system_id from strategyos_ingestion_batches b
                         join strategyos_evidence_occurrences eo on eo.ingestion_batch_id = b.id
                         where b.tenant_id = %s and b.run_id::text = %s
+                        union
+                        select eo.source_system_id
+                        from run_lineage l
+                        join strategyos_claim_evidence_links cel on cel.claim_revision_id = l.id
+                        join strategyos_evidence_occurrences eo on eo.id = cel.evidence_occurrence_id
                     )
                     select ss.source_key, p.allowed_roles, p.allowed_purposes,
                            p.allowed_business_units, p.export_allowed,
-                           p.external_model_allowed, p.quote_allowed
+                           p.external_model_allowed, p.quote_allowed,
+                           exists (
+                               select 1 from run_lineage l
+                               join strategyos_claim_assessments a on a.claim_revision_id = l.id
+                               where a.assessment_type = 'lifecycle'
+                                 and a.result in ('retracted', 'rejected', 'superseded')
+                                 and a.assessed_at <= now()
+                           ) as withdrawn_evidence
                     from run_sources r
                     join strategyos_source_systems ss on ss.id = r.source_system_id
                     left join strategyos_source_access_policies p
                       on p.source_system_id = ss.id and p.effective_to is null
                     """,
-                    (tenant_id, run_id, tenant_id, run_id, tenant_id, run_id),
+                    (tenant_id, run_id, tenant_id, run_id, tenant_id, run_id,
+                     tenant_id, run_id, tenant_id, run_id),
                 )
                 sources = [_record(cur, row) for row in cur.fetchall()]
         reasons: set[str] = set()
@@ -582,6 +612,8 @@ class ClaimRepository:
         if context.business_units:
             reasons.add("bulk_business_unit_scope_denied")
         for source in sources:
+            if source.get("withdrawn_evidence"):
+                reasons.add("bulk_withdrawn_evidence")
             if not context.roles.intersection(source.get("allowed_roles") or ()):
                 reasons.add("source_role_denied")
             if context.purpose not in (source.get("allowed_purposes") or ()):
