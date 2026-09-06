@@ -223,6 +223,17 @@ to a user or model.
 
 ## Operational migration
 
+Database ownership is enforced independently of application filtering. Composite
+foreign keys bind sources, policies, occurrences, revisions, assessments,
+projection entries and intake receipts to their tenant. Evidence, dependency and
+snapshot links must have parents in the same tenant; snapshot revisions must
+also belong to the declared family, and predecessors must remain in the same
+family and kind lane. Existing writers may omit redundant link tenant columns:
+triggers derive them from the canonical parent, never replace an explicitly
+supplied tenant, and foreign keys validate the other end. Migration fails on
+inconsistent historical rows rather than guessing ownership. These constraints
+supplement, not replace, role/purpose/source authorization on every read/write.
+
 Migrations are ordered, checksummed and serialized with a PostgreSQL advisory
 transaction lock. A changed already-applied migration fails startup rather than
 silently drifting the schema. Production rollout must be additive, preview-first,
