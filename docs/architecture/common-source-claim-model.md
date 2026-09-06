@@ -1,7 +1,7 @@
 # Common source and claim model
 
 This document describes the contract implemented by `source_claims.py`,
-`claim_store.py` and migration `0001_common_source_claim.sql`.
+`claim_store.py` and the ordered common-claim migrations beginning with `0001`.
 
 ## Authority boundary
 
@@ -105,6 +105,34 @@ those exact revisions in PostgreSQL. Stale candidates never substitute a newer
 revision, and projection text is never returned directly as evidence. The
 independent `/claims` workspace uses these same query contracts and distinguishes
 traceability from independent review.
+
+### Conflict and source-priority decisions
+
+The ledger compares authorized assertions in the same metric, subject, kind,
+dimensions, scenario and reporting-time scope before semantic shortlisting.
+Scale-equivalent numbers compare exactly; no exchange rate or unit conversion is
+invented. Different assertion namespaces do not hide competing values.
+
+`POST /api/claims/priority-policies` records an explicit tenant-admin configuration
+for one such scope. It requires a reference revision, a complete ranked source
+list, a review requirement (or explicit null), rationale and expected policy
+version. Authentication supplies actor and tenant; system identities cannot
+self-authorize. There is no default priority. History is versioned, concurrent
+stale updates fail, and exact retries do not duplicate decisions.
+
+Missing source coverage or required review, expiry, and disagreement at the best
+rank leave selection unresolved. Derived claims inherit their weakest source's
+rank. Preferred evidence is not independently verified evidence; non-preferred
+authorized assertions remain inspectable. Repeated or syndicated occurrences do
+not establish independent corroboration.
+
+Frozen snapshot reads disclose the authorized comparison at their analysis time,
+including competing claims outside a selected page. A priority rule recorded
+later does not rewrite the historical selection. A briefing with unresolved or
+non-preferred frozen selections requires a reviewed replacement; it is not
+silently repopulated. Snapshot pagination and reconciliation totals have a bulk
+source-access boundary so they cannot reveal restricted record counts. Granular
+authorized evidence remains available through the claim query.
 
 ## Ingestion behavior
 
@@ -220,6 +248,7 @@ to a model. Cyclic or oversized current lineage is rejected.
 
 Recording atomically creates unreviewed claim revisions, projection events and
 an actor-bound retry receipt. It does not inherit assessments, alter frozen
-snapshots, publish a briefing or send messages. An operator queue and replacement
-analysis approval remain separate work. PostgreSQL parses migration scripts as
+snapshots, publish a briefing or send messages. A bounded operator queue discovers
+calculations with revised inputs; replacement analysis approval remains separate
+work. PostgreSQL parses migration scripts as
 whole scripts, preserving semicolons in comments, literals and function bodies.
