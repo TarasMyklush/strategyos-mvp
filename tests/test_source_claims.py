@@ -253,6 +253,15 @@ def test_claim_expiry_is_exclusive_at_the_exact_deadline():
         assert result.eligible is expected
 
 
+def test_exact_subject_selection_is_paired_and_cannot_cross_entities():
+    for fields in [{'subject_type':'business_unit'}, {'subject_key':'tamween'},
+                   {'subject_type':'','subject_key':'tamween'}]:
+        with pytest.raises(ValueError):query(**fields)
+    for subject,expected in [('tamween',True),('another',False)]:
+        selected=query(subject_type='business_unit',subject_key=subject)
+        assert claim_is_eligible(revision(),query=selected,context=context(),source_policies=[policy()]).eligible is expected
+
+
 def test_retracted_claim_is_ineligible_and_assessment_is_not_self_reported_confidence():
     assessment = ClaimAssessment(
         claim_revision_id="revision-1",

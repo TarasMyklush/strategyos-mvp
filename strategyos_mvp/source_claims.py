@@ -443,6 +443,8 @@ class ClaimQuery:
     period_start: date | None = None
     period_end: date | None = None
     fiscal_calendar: str | None = None
+    subject_type: str | None = None
+    subject_key: str | None = None
 
     def __post_init__(self) -> None:
         if not _text(self.tenant_id):
@@ -471,6 +473,11 @@ class ClaimQuery:
                 raise ValueError('Period end cannot precede period start.')
         if self.fiscal_calendar is not None and (not self.fiscal_calendar.strip() or len(self.fiscal_calendar)>160):
             raise ValueError('Fiscal calendar must be an explicit identifier of at most 160 characters.')
+        if (self.subject_type is None) != (self.subject_key is None):
+            raise ValueError('Subject selection requires both type and key.')
+        if self.subject_type is not None and (not self.subject_type.strip() or not self.subject_key.strip()
+                or len(self.subject_type)>240 or len(self.subject_key)>240):
+            raise ValueError('Subject type and key must be nonempty and at most 240 characters.')
 
 
 @dataclass(frozen=True)
@@ -538,6 +545,9 @@ def claim_is_eligible(
         reasons.append("business_unit_mismatch")
     if query.scenario_key != claim.draft.scenario_key:
         reasons.append("scenario_mismatch")
+    if query.subject_type is not None and (query.subject_type != claim.draft.subject_type
+            or query.subject_key != claim.draft.subject_key):
+        reasons.append('subject_mismatch')
     if query.period_start is not None and (query.period_start != claim.draft.period_start or query.period_end != claim.draft.period_end):
         reasons.append('period_mismatch')
     if query.fiscal_calendar is not None and query.fiscal_calendar != claim.draft.fiscal_calendar:

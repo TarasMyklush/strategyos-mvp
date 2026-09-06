@@ -72,3 +72,11 @@ def test_derived_claim_uses_weakest_contributing_source():
     # Both now have the same weakest source and disagree. A high-ranked input
     # must not launder the lower-ranked input into a preferred derived value.
     assert priority_selection(rows,policy(),at=NOW)['status']=='conflicting_top_priority'
+
+
+def test_subject_comparison_batch_is_bounded_and_explicit():
+    from strategyos_mvp.claim_store import ClaimRepository
+    repository=ClaimRepository(lambda:pytest.fail('Invalid scope cannot reach the database'))
+    for scopes in [[('enterprise','group')]*201, ['ab'], [('enterprise','')], [('enterprise',)]]:
+        with pytest.raises(ValueError):
+            repository.query(None,context=None,subject_scopes=scopes)

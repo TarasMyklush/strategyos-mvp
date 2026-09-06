@@ -802,7 +802,19 @@ class ClaimRepository:
                 return replace(context, tenant_id=str(self._tenant_uuid(cur, context.tenant_id)))
 
     def query(self, query: ClaimQuery, *, context: PolicyContext,
-              revision_ids: Iterable[str] | None = None) -> list[dict[str, Any]]:
+              revision_ids: Iterable[str] | None = None,
+              subject_scopes: Iterable[tuple[str,str]] | None = None) -> list[dict[str, Any]]:
+        scopes = None
+        if subject_scopes is not None:
+            from itertools import islice
+            scopes = list(islice(subject_scopes,201))
+            if not scopes:
+                return []
+            if len(scopes)>200 or any(not isinstance(pair,tuple) or len(pair)!=2
+                    or any(not isinstance(value,str) or not value.strip() or len(value)>240 for value in pair)
+                    for pair in scopes):
+                raise ValueError('At most 200 explicit subject type/key pairs may be compared at once.')
+            scopes = json.dumps(sorted(set(scopes)))
         candidates = None if revision_ids is None else sorted(set(str(x) for x in revision_ids))
         if candidates == []:
             return []
@@ -831,6 +843,9 @@ class ClaimRepository:
                       and r.claim_kind = any(%s::text[])
                       and (%s::date is null or (f.period_start=%s::date and f.period_end=%s::date))
                       and (%s::text is null or r.fiscal_calendar=%s)
+                      and (%s::text is null or (f.subject_type=%s and f.subject_key=%s))
+                      and (%s::jsonb is null or (f.subject_type,f.subject_key) in
+                          (select item->>0,item->>1 from jsonb_array_elements(%s::jsonb) item))
                       and r.revision_number = (
                           select max(r2.revision_number)
                           from strategyos_claim_revisions r2
@@ -840,7 +855,8 @@ class ClaimRepository:
                     """,
                     (tenant_id, query.metric_key, query.as_of_at,query.business_unit,query.scenario_key,
                      sorted(str(kind) for kind in query.allowed_claim_kinds),query.period_start,
-                     query.period_start,query.period_end,query.fiscal_calendar,query.fiscal_calendar,query.as_of_at),
+                     query.period_start,query.period_end,query.fiscal_calendar,query.fiscal_calendar,
+                     query.subject_type,query.subject_type,query.subject_key,scopes,scopes,query.as_of_at),
                 )
                 rows = [_record(cur, row) for row in cur.fetchall()]
                 results: list[dict[str, Any]] = []
@@ -1067,18 +1083,22 @@ class ClaimRepository:
         # Pagination and frozen selection must not hide competing evidence that
         # existed at analysis time. Reuse the same authorized comparison path as
         # typed/semantic reads; never replace the immutable selected revisions.
-        comparison_cache = {}
+        comparison_groups = {}
         for record in records:
             key = (record['metric_key'], record['claim_kind'],
                    record.get('business_unit'), record.get('scenario'))
-            if key not in comparison_cache:
-                query = ClaimQuery(tenant_id=str(tenant_id), metric_key=key[0],
-                    allowed_claim_kinds=frozenset({key[1]}), business_unit=key[2],
-                    scenario_key=key[3], purpose=context.purpose,
-                    as_of_at=snapshot['as_of_at'])
-                comparison_cache[key] = {item['claim_revision_id']: item['comparison']
-                    for item in self.query(query, context=context)}
-            comparison = comparison_cache[key].get(record['claim_revision_id'])
+            comparison_groups.setdefault(key,[]).append(record)
+        comparisons = {}
+        for key,members in comparison_groups.items():
+            subjects = sorted({(record['subject']['type'],record['subject']['key']) for record in members})
+            query = ClaimQuery(tenant_id=str(tenant_id), metric_key=key[0],
+                allowed_claim_kinds=frozenset({key[1]}), business_unit=key[2],
+                scenario_key=key[3], purpose=context.purpose, as_of_at=snapshot['as_of_at'])
+            for start in range(0,len(subjects),200):
+                comparisons.update({item['claim_revision_id']: item['comparison']
+                    for item in self.query(query,context=context,subject_scopes=subjects[start:start+200])})
+        for record in records:
+            comparison = comparisons.get(record['claim_revision_id'])
             record['comparison'] = comparison or {
                 'status': 'snapshot_selection_not_current_at_analysis',
                 'requires_resolution': True,

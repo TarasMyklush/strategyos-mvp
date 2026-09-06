@@ -400,3 +400,21 @@ counts alone do not close these boundaries.
   not automatically add an attachment to an approved briefing.
 - 167 focused frontend, attachment and governed-adoption tests passed. This
   candidate still needs the full gate and preview visual acceptance.
+
+### Snapshot volume regression caught before cutover
+
+- Boundary commit `fc26c90` passed 2,082 tests, zero skips
+  (`/tmp/strategyos-boundary-full.xml`, 306.70 seconds).
+- The 200-record restored-preview benchmark then exposed a 39.435-second read:
+  comparison was examining unrelated transaction subjects. Workflow `34059991941`
+  for candidate `15049aa` was cancelled during testing, before build/deployment.
+  Deployed preview remains `c95d01a`.
+- Exact subject scoping reduced the read to 6.540 seconds. Batching up to 200
+  subject pairs reduced it further to 2.324 seconds; the prior read without
+  comparison took 1.152 seconds. These are isolated measurements, not SLOs.
+- Comparisons still include every authorized competing assertion for each
+  selected subject. SQL filters unrelated subjects before hydration, and batch
+  scope is bounded, explicit and parameterized. Thirty-five focused tests passed
+  against a fresh database. An earlier rerun on a reused test database failed on
+  an existing fixture tenant; it was not counted as passing evidence.
+- The optimized combined candidate still requires a full gate and live QA.

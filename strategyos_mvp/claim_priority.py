@@ -130,7 +130,8 @@ def record_priority(repository,decision: PriorityDecision,*,context):
         conn.commit()
     query=ClaimQuery(tenant_id=context.tenant_id,metric_key=claim.draft.metric_key,
         purpose=context.purpose,as_of_at=datetime.now(UTC),allowed_claim_kinds=frozenset({claim.draft.claim_kind}),
-        business_unit=claim.draft.business_unit,scenario_key=claim.draft.scenario_key)
+        business_unit=claim.draft.business_unit,scenario_key=claim.draft.scenario_key,
+        subject_type=claim.draft.subject_type,subject_key=claim.draft.subject_key)
     records=repository.query(query,context=context)
     reference=next((record for record in records if record['claim_revision_id']==claim.revision_id),None)
     if reference is None:

@@ -10,7 +10,7 @@ from tests.test_tabular_claims_postgres_e2e import setup_intake
 pytestmark = pytest.mark.integration
 
 
-def test_shortlist_cannot_hide_an_authorized_conflict_but_revocation_does(ledger):
+def test_shortlist_cannot_hide_an_authorized_conflict_but_revocation_does(ledger,monkeypatch):
     repo,context,occurrence,source,policy = setup_intake(ledger)
     source2 = replace(source,source_key='second-source')
     policy2 = replace(policy,source_key='second-source')
@@ -24,11 +24,17 @@ def test_shortlist_cannot_hide_an_authorized_conflict_but_revocation_does(ledger
     first=repo.record_claim(draft,traceability='present')['claim_revision_id']
     second=repo.record_claim(replace(draft,assertion_namespace='source-two',value_numeric=12,
         source_occurrence_keys=(second_occurrence,)),traceability='present')['claim_revision_id']
+    unrelated=repo.record_claim(replace(draft,subject_key='unrelated-enterprise',value_numeric=999),
+        traceability='present')['claim_revision_id']
     query=ClaimQuery(tenant_id=context.tenant_id,metric_key='qa.conflict',purpose=context.purpose,
         as_of_at=datetime.now(UTC),allowed_claim_kinds=frozenset({'actual'}))
     result=repo.query(query,context=context,revision_ids=[first])
     assert len(result)==1 and result[0]['comparison']['requires_resolution']
     assert result[0]['comparison']['authorized_competing_revisions']==[second]
+    scoped=repo.query(query,context=context,subject_scopes=[('enterprise','group')])
+    assert {row['claim_revision_id'] for row in scoped}=={first,second}
+    assert all(row['comparison']['requires_resolution'] for row in scoped)
+    assert repo.query(query,context=context,subject_scopes=[])==[]
     import psycopg
     with psycopg.connect(ledger[1]) as conn:
         snapshot_id=conn.execute('''insert into strategyos_analysis_snapshots
@@ -39,7 +45,16 @@ def test_shortlist_cannot_hide_an_authorized_conflict_but_revocation_does(ledger
             (snapshot_id,claim_family_id,claim_revision_id,selection_reason)
             select %s,claim_family_id,id,'Frozen single selection' from strategyos_claim_revisions where id=%s''',
             (snapshot_id,first))
+    hydrated=[]
+    original=repo._hydrate_claim
+    def tracking(row):
+        claim=original(row)
+        hydrated.append(claim.revision_id)
+        return claim
+    monkeypatch.setattr(repo,'_hydrate_claim',tracking)
     frozen=repo.snapshot('conflict-snapshot',context=context,limit=1)
+    assert unrelated not in hydrated  # Database scope filter precedes hydration.
+    monkeypatch.setattr(repo,'_hydrate_claim',original)
     assert frozen['requires_resolution']
     assert frozen['records'][0]['claim_revision_id']==first
     assert frozen['records'][0]['comparison']['authorized_competing_revisions']==[second]
