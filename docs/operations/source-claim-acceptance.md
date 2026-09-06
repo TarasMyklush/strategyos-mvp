@@ -507,3 +507,7 @@ counts alone do not close these boundaries.
   invalidity/conversation checks passed. Negative finance audit recording requires
   a matching freshly recomputed source digest and is idempotent; it cannot approve
   or reclassify values. No historical business audit events were applied online.
+- Tenant references now resolve a UUID only by primary ID and a non-UUID only
+  by slug. Eight unit checks and two real PostgreSQL checks passed, including
+  an adversarial UUID-shaped slug that must not redirect ledger authority.
+  Read-only preview inspection found zero UUID-shaped tenant slugs.

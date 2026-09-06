@@ -10,7 +10,7 @@ def fixture_audit(monkeypatch, tmp_path, *, digest=None, paths=None):
     artifact.write_bytes(b"synthetic fixture bytes")
     connection = MagicMock()
     cursor = connection.__enter__.return_value.cursor.return_value.__enter__.return_value
-    cursor.fetchone.return_value = (str(tmp_path),'tenant-fixture')
+    cursor.fetchone.side_effect = [(str(tmp_path),'tenant-fixture'),('tenant-fixture',)]
     monkeypatch.setattr(audit, "database_connection", lambda: (connection, None))
     monkeypatch.setattr(audit, "derive_source_finance_kpis", lambda _: {
         "source_files": ["finance.xlsx"], "source_semantics_version": "2",

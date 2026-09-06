@@ -26,7 +26,8 @@ def audit_run(run_id: str) -> dict[str, Any]:
         if found is None:
             raise KeyError("Run not found.")
         root = Path(found[0]).resolve(strict=True)
-        tenant_key = found[1]
+        from .tenant_identity import resolve_tenant_reference
+        tenant_id = resolve_tenant_reference(cur, found[1])
         cur.execute("""select distinct d.source_path,d.source_hash from strategyos_evidence_documents d
             join strategyos_ingestion_batch_documents bd on bd.evidence_document_id=d.id
             join strategyos_ingestion_batches b on b.id=bd.batch_id where b.run_id=%s""", (run_id,))
@@ -63,9 +64,9 @@ def audit_run(run_id: str) -> dict[str, Any]:
                        r.value_numeric,r.metadata
             from strategyos_claim_revisions r join strategyos_claim_families f on f.id=r.claim_family_id
             where r.metadata->>'run_id'=%s
-              and r.tenant_id in (select id from strategyos_tenants where id::text=%s or slug=%s)
+              and r.tenant_id=%s
               and r.metadata->>'legacy_projection'='run_summary.finance_kpi.components'
-            order by f.metric_key,r.revision_number""", (str(run_id), tenant_key, tenant_key))
+            order by f.metric_key,r.revision_number""", (str(run_id), tenant_id))
         candidates = []
         for record in fetchall_dicts(cur):
             key = (record.get("dimensions") or {}).get("component_key")

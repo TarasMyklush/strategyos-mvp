@@ -1469,11 +1469,8 @@ class ClaimRepository:
 
     @staticmethod
     def _tenant_uuid(cur: Any, tenant: str) -> Any:
-        cur.execute("select id from strategyos_tenants where id::text = %s or slug = %s", (tenant, tenant))
-        row = cur.fetchone()
-        if row is None:
-            raise KeyError("Tenant not found.")
-        return row[0]
+        from .tenant_identity import resolve_tenant_reference
+        return resolve_tenant_reference(cur, tenant)
 
     @staticmethod
     def _source_uuid(cur: Any, tenant_id: Any, source_key: str) -> Any:
