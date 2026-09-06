@@ -29,6 +29,10 @@ from .source_claims import (
 )
 
 
+_SCHEMA_READY_DATABASES: set[tuple[str, str, str, str]] = set()
+_SCHEMA_READY_LOCK = threading.RLock()
+
+
 def create_run(
     summary_seed: dict[str, Any], *, requires_human_review: bool
 ) -> dict[str, Any]:
@@ -1336,11 +1340,42 @@ def data_management_status(run_id: str | None = None) -> dict[str, Any]:
 
 
 def ensure_data_schema(conn: Any) -> None:
-    sql = schema_path().read_text(encoding="utf-8")
-    with conn.cursor() as cur:
-        _execute_sql_statements(cur, sql)
-        apply_schema_migrations(cur)
-    conn.commit()
+    cache_key = _schema_database_key(conn)
+    if cache_key is not None and cache_key in _SCHEMA_READY_DATABASES:
+        return
+    with _SCHEMA_READY_LOCK:
+        if cache_key is not None and cache_key in _SCHEMA_READY_DATABASES:
+            return
+        sql = schema_path().read_text(encoding="utf-8")
+        with conn.cursor() as cur:
+            _execute_sql_statements(cur, sql)
+            apply_schema_migrations(cur)
+        conn.commit()
+        if cache_key is not None:
+            _SCHEMA_READY_DATABASES.add(cache_key)
+
+
+def _schema_database_key(conn: Any) -> tuple[str, str, str, str] | None:
+    """Identify a real PostgreSQL database without caching test doubles.
+
+    The application applies the additive schema during startup. Re-running the
+    full DDL contract on every request can block ordinary reads behind a long
+    ingestion transaction, so successful initialization is cached per process
+    and physical database. Lightweight test doubles intentionally have no
+    psycopg ``info`` object and retain the uncached validation path.
+    """
+    info = getattr(conn, "info", None)
+    if info is None:
+        return None
+    database = str(getattr(info, "dbname", "") or "").strip()
+    if not database:
+        return None
+    return (
+        str(getattr(info, "host", "") or ""),
+        str(getattr(info, "port", "") or ""),
+        database,
+        str(getattr(info, "user", "") or ""),
+    )
 
 
 def _execute_sql_statements(cur: Any, sql: str) -> None:
