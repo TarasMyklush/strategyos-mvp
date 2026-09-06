@@ -380,13 +380,15 @@ class SourceAccessPolicy:
     export_allowed: bool = False
     external_model_allowed: bool = False
     quote_allowed: bool = False
+    storage_allowed: bool = False
+    index_allowed: bool = False
 
     def __post_init__(self) -> None:
-        for name in ("export_allowed", "external_model_allowed", "quote_allowed"):
+        for name in ("export_allowed", "external_model_allowed", "quote_allowed", "storage_allowed", "index_allowed"):
             if type(getattr(self, name)) is not bool:
                 raise ValueError(f"{name} must be an explicit boolean.")
-        if not self.allowed_roles:
-            raise ValueError("A source policy must identify at least one allowed role.")
+        # An empty role set is an explicit deny-all read policy. This permits
+        # storage-only quarantine without manufacturing a read authorization.
         object.__setattr__(self, "source_key", _identifier(self.source_key, field_name="source_key"))
         object.__setattr__(
             self,
@@ -405,6 +407,8 @@ class SourceAccessPolicy:
             self.export_allowed,
             self.external_model_allowed,
             self.quote_allowed,
+            self.storage_allowed,
+            self.index_allowed,
         )
 
 
@@ -481,6 +485,8 @@ def policy_allows(
     if not policies:
         reasons.append("source_policy_missing")
     for policy in policies:
+        if not policy.storage_allowed:
+            reasons.append(f"storage_denied:{policy.source_key}")
         if not context.roles.intersection(policy.allowed_roles):
             reasons.append(f"role_denied:{policy.source_key}")
         if context.purpose not in policy.allowed_purposes:

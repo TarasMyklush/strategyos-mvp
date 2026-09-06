@@ -86,7 +86,7 @@ def test_source_pack_stage_exposes_tenant_and_ingestion_contracts(tmp_path: Path
         response = client.post(
             "/source-packs/from-path",
             headers={"X-API-Key": "operator-secret"},
-            json={"folder_path": str(source_dir)},
+            json={"folder_path": str(source_dir), "storage_allowed": True},
         )
 
         assert response.status_code == 200

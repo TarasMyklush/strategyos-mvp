@@ -91,6 +91,8 @@ class ClaimProjectionWorker:
             record = self.repository.projection_record(
                 revision_id, tenant_id=tenant_id
             )
+            if record.get("indexing_allowed") is False:
+                operation = "delete"
         elif operation in {"delete", "revoke"}:
             record = {
                 "tenant_id": tenant_id,

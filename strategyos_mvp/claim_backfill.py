@@ -42,6 +42,8 @@ LEGACY_READ_POLICY = {
     "export_allowed": True,
     "external_model_allowed": False,
     "quote_allowed": False,
+    "storage_allowed": True,
+    "index_allowed": True,
 }
 
 

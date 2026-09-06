@@ -84,12 +84,12 @@ def test_source_pack_from_path_stages_into_deterministic_folder(tmp_path):
         first = client.post(
             "/source-packs/from-path",
             headers=_auth_header("operator-secret"),
-            json={"folder_path": str(pack_root)},
+            json={"storage_allowed": True, "folder_path": str(pack_root)},
         )
         second = client.post(
             "/source-packs/from-path",
             headers=_auth_header("operator-secret"),
-            json={"folder_path": str(pack_root)},
+            json={"storage_allowed": True, "folder_path": str(pack_root)},
         )
 
         assert first.status_code == 200
@@ -144,7 +144,7 @@ def test_source_pack_from_path_rejects_path_outside_workspace(tmp_path):
         response = client.post(
             "/source-packs/from-path",
             headers=_auth_header("operator-secret"),
-            json={"folder_path": str(outside_root)},
+            json={"storage_allowed": True, "folder_path": str(outside_root)},
         )
 
         assert response.status_code == 400
@@ -185,11 +185,13 @@ def test_source_pack_upload_is_deterministic_and_supports_revalidation(tmp_path)
         first = client.post(
             "/source-packs",
             headers=_auth_header("operator-secret"),
+            data={"source_contract_json": '{"access_policy":{"storage_allowed":true}}'},
             files=files,
         )
         second = client.post(
             "/source-packs",
             headers=_auth_header("operator-secret"),
+            data={"source_contract_json": '{"access_policy":{"storage_allowed":true}}'},
             files=list(reversed(files)),
         )
 
@@ -288,6 +290,7 @@ def test_source_pack_upload_rejects_parent_traversal(tmp_path):
         response = client.post(
             "/source-packs",
             headers=_auth_header("operator-secret"),
+            data={"source_contract_json": '{"access_policy":{"storage_allowed":true}}'},
             files=[("files", ("../escape.csv", b"id\n1\n", "text/csv"))],
         )
 
@@ -356,6 +359,7 @@ def test_source_pack_registers_ocr_text_records_for_scans_and_uses_them_for_clas
         response = client.post(
             "/source-packs",
             headers=_auth_header("operator-secret"),
+            data={"source_contract_json": '{"access_policy":{"storage_allowed":true}}'},
             files=[
                 ("files", ("pack-a/scan.pdf", b"%PDF-1.4 fake", "application/pdf")),
                 ("files", ("pack-a/invoice.png", b"png-binary", "image/png")),
@@ -418,6 +422,7 @@ def test_source_pack_text_extraction_failures_are_recorded_without_blocking_inta
         response = client.post(
             "/source-packs",
             headers=_auth_header("operator-secret"),
+            data={"source_contract_json": '{"access_policy":{"storage_allowed":true}}'},
             files=[("files", ("pack-a/scan.png", b"png-binary", "image/png"))],
         )
 
@@ -474,6 +479,7 @@ def test_source_pack_prompt_injection_payload_is_wrapped_as_untrusted_evidence(t
         response = client.post(
             "/source-packs",
             headers=_auth_header("operator-secret"),
+            data={"source_contract_json": '{"access_policy":{"storage_allowed":true}}'},
             files=[("files", ("pack-a/malicious-invoice.pdf", b"%PDF-1.4 fake", "application/pdf"))],
         )
 

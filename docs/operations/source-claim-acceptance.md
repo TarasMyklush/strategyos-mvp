@@ -95,3 +95,48 @@ image, and rejects skipped tests as well as failures.
 
 Record the exact workflow SHA and online observations at release sign-off. Test
 counts alone do not close these boundaries.
+
+## Preview checkpoint — 6 September 2026
+
+- Release `0dfbfc5557f4e4e66bfc82f324a3e83b2a4b71f7`, GitHub Actions run
+  `34052334365`: test, build and preview deployment succeeded. Production was
+  not targeted.
+- Saved executive-tester login: authenticated claim queries, snapshots and real
+  local-model semantic retrieval passed. External-model and quotation use
+  returned no claims; executive intake was denied (403), anonymous reads 401.
+- Browser: signed in after deployment and checked the claims form and scoped
+  forecast empty state. It explicitly reported that no other type was substituted.
+  This is not evidence of complete consumer adoption: the legacy executive
+  briefing still displays historical financial claims needing semantic review.
+- Recovery rehearsal: the preview custom-format PostgreSQL backup was restored
+  into the isolated local proof database, with 22,846 revisions, two snapshots,
+  zero assessments and passed current-run reconciliation (11,554 / 11,554).
+  No deployed database was restored or overwritten.
+- Read baseline (five requests per endpoint, concurrency at most two): single
+  actual claim median 499 ms, empty forecast 497 ms, 200-record snapshot 4,116 ms.
+  These are observations, not an agreed SLO or load certification.
+- Historical audit initially refused normalization aliases. Read-only comparison
+  found identical hashes under recorded `99_Historic_Context/...` paths for the
+  budget and analytics workbooks. Audit alias handling must retain explicit
+  recorded paths and reject ambiguity; no approved history was changed.
+- Storage/index rights are under development and have not been deployed at this
+  checkpoint. New intake is denied without explicit storage permission; search
+  rights are separate. Complete legacy-index coverage remains to be verified.
+
+### Content-rights candidate verification
+
+- Full dedicated PostgreSQL/Neo4j/Qdrant/local-model suite: **2,015 passed,
+  zero skipped**, receipt `/tmp/strategyos-rights-proof2.xml`, 291.46 seconds.
+- Current-policy storage and indexing gates cover claim intake, shadow writes,
+  graph/vector projectors and legacy bulk indexing. Revocation and subsequent
+  re-grant produce audited policy versions; dependent projections are refreshed.
+- `test_source_storage_rights.py` proves missing/false/string-valued consent is
+  rejected before durable source copying. Storage-only quarantine grants no read,
+  indexing, export, quotation or external-model use implicitly.
+- Isolated browser proof used synthetic text only: no consent blocked staging;
+  storage-only consent staged one file, showed “Stored for classification” and
+  did not start analysis. The legacy operator route is unreachable from `/app`;
+  a clean authorized intake entry remains a separate UI closure item.
+- Read-only audit with explicit normalized-path aliases verified all five
+  finance source hashes and identified three historical actual claims for
+  correction (cash, cost, revenue). No assessments or snapshots were modified.

@@ -72,6 +72,7 @@ def test_source_occurrence_claim_revision_and_policy_query_round_trip():
         ),
         policy=SourceAccessPolicy(
             source_key="erp-finance",
+            storage_allowed=True, index_allowed=True,
             allowed_roles=frozenset({"executive", "analyst"}),
             allowed_purposes=frozenset(
                 {UsePurpose.EXECUTIVE_BRIEFING, UsePurpose.ANALYSIS, UsePurpose.EXTERNAL_MODEL}
@@ -93,6 +94,7 @@ def test_source_occurrence_claim_revision_and_policy_query_round_trip():
         ),
         policy=SourceAccessPolicy(
             source_key="erp-finance",
+            storage_allowed=True, index_allowed=True,
             allowed_roles=frozenset({"executive", "analyst"}),
             allowed_purposes=frozenset(
                 {UsePurpose.EXECUTIVE_BRIEFING, UsePurpose.ANALYSIS, UsePurpose.EXTERNAL_MODEL}
@@ -264,9 +266,9 @@ def test_run_backfill_materializes_kpis_lineage_snapshot_and_reconciliation():
                 """
                 insert into strategyos_source_access_policies
                     (tenant_id, source_system_id, policy_version, policy_fingerprint,
-                     allowed_roles, allowed_purposes, recorded_by)
+                     allowed_roles, allowed_purposes, recorded_by, storage_allowed, index_allowed)
                 values (%s, %s, 1, 'policy-backfill-e2e',
-                        array['executive'], array['executive_briefing'], 'test:operator')
+                        array['executive'], array['executive_briefing'], 'test:operator', true, true)
                 """,
                 (tenant_id, source_system_id),
             )
@@ -455,7 +457,9 @@ def test_run_backfill_materializes_kpis_lineage_snapshot_and_reconciliation():
     assert len(margin["formula"]["inputs"]) == 2
     assert margin["sources"][0]["source_key"] == "erp-backfill"
     assert repo.reconciliation(run_id, tenant_id=tenant_id)["status"] == "passed"
-    events = repo.lease_projection_batch(worker_id="e2e-worker", limit=100)
+    events = []
+    while batch_events := repo.lease_projection_batch(worker_id="e2e-worker", limit=500):
+        events.extend(batch_events)
     tenant_events = [item for item in events if item["tenant_id"] == tenant_id]
     assert len(tenant_events) == 15
     cache_event = next(item for item in tenant_events if item["projection_type"] == "cache")

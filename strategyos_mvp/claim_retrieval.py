@@ -40,5 +40,5 @@ def search_claims(text: str, *, query: ClaimQuery, context: PolicyContext,
     scoped = replace(query, tenant_id=resolved.tenant_id)
     ids = list(dict.fromkeys((candidates or vector_candidates)(text, query=scoped, limit=200)))[:200]
     records = repo.query(scoped, context=resolved, revision_ids=ids)
-    authorized = {row["claim_revision_id"]: row for row in records}
+    authorized = {row["claim_revision_id"]: row for row in records if row.get("indexing_allowed") is True}
     return [authorized[key] for key in ids if key in authorized][:limit]

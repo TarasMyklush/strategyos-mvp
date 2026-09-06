@@ -15,6 +15,7 @@ def setup_intake(ledger):
     source = SourceRegistration(tenant_id=tenant, source_key="mapped-erp", display_name="Mapped ERP",
                                 origin_category="internal_system", capture_method="file_upload")
     policy = SourceAccessPolicy(source_key=source.source_key, allowed_roles=frozenset({"operator"}),
+                               storage_allowed=True, index_allowed=True,
                                allowed_purposes=frozenset({UsePurpose.OPERATIONS}))
     registered = repo.register_source(source, policy=policy, recorded_by="test", rationale="Explicit fixture authority")
     with psycopg.connect(url) as conn, conn.cursor() as cur:

@@ -24,6 +24,7 @@ def test_bulk_snapshot_cannot_bypass_sources_outside_its_ingestion_batch(ledger)
             display_name="Synthetic external-batch input", origin_category="internal_system",
             capture_method="file_upload")
         policy = SourceAccessPolicy(source_key=source.source_key,
+            storage_allowed=True, index_allowed=True,
             allowed_roles=frozenset({"executive", "auditor"}),
             allowed_purposes=frozenset({UsePurpose.EXECUTIVE_BRIEFING}))
         registered = repo.register_source(source, policy=policy, recorded_by="fixture", rationale="Test")

@@ -112,7 +112,7 @@ def test_postgres_backed_governed_source_pack_flow(tmp_path: Path):
                   "governed_owner": "fixture:finance", "authorization_basis": "Explicit isolated test consent",
                   "allowed_roles": ["operator", "reviewer", "executive"],
                   "allowed_purposes": ["executive_briefing", "analysis", "operations", "export"],
-                  "export_allowed": True},
+                  "export_allowed": True, "storage_allowed": True, "index_allowed": True},
         )
         assert staged.status_code == 200
         source_pack = staged.json()

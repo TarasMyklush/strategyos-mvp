@@ -72,6 +72,8 @@ def revision(draft=None, **overrides):
 def policy(**overrides):
     values = {
         "source_key": "finance-erp",
+        "storage_allowed": True,
+        "index_allowed": True,
         "allowed_roles": frozenset({"executive", "analyst"}),
         "allowed_purposes": frozenset({UsePurpose.EXECUTIVE_BRIEFING, UsePurpose.ANALYSIS}),
         "allowed_business_units": frozenset({"tamween"}),

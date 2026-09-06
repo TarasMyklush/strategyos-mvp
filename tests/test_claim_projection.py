@@ -83,6 +83,19 @@ def test_worker_records_bounded_retry_and_dead_letter_state():
     assert "projection service unavailable" in failure["error"]
 
 
+def test_index_revocation_turns_stale_upsert_into_content_free_delete():
+    repository = FakeRepository([_event()])
+    repository.projection_record = lambda revision_id, tenant_id: {
+        "tenant_id": tenant_id, "claim_revision_id": revision_id, "indexing_allowed": False,
+    }
+    delivered = []
+    worker = ClaimProjectionWorker(repository, worker_id="rights-proof",
+        handlers={"graph": lambda record, operation: delivered.append((record, operation))})
+    assert worker.run_once() == ProjectionRunResult(1, 1, 0, 0)
+    assert delivered[0][1] == "delete"
+    assert set(delivered[0][0]) <= {"tenant_id", "claim_revision_id", "indexing_allowed"}
+
+
 def test_default_projectors_fail_closed_without_pinned_embedding(monkeypatch):
     from strategyos_mvp import semantic_embeddings
 

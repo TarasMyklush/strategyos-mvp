@@ -1599,9 +1599,10 @@ def upsert_source_system(
         insert into strategyos_source_access_policies
             (tenant_id, source_system_id, policy_version, policy_fingerprint,
              allowed_roles, allowed_purposes,
-             export_allowed, external_model_allowed, quote_allowed, recorded_by, rationale)
+             export_allowed, external_model_allowed, quote_allowed,
+             storage_allowed, index_allowed, recorded_by, rationale)
         values (%s, %s, 1, %s, %s, %s,
-                true, false, false, 'system:migration',
+                true, false, false, true, true, 'system:migration',
                 'Legacy-parity policy; external-model use remains denied until explicitly authorized.')
         on conflict (source_system_id, policy_version) do nothing
         """,
@@ -1633,16 +1634,20 @@ def persist_source_access_policy(
         allowed_business_units=frozenset(
             policy_payload.get("allowed_business_units") or []
         ),
-        export_allowed=bool(policy_payload.get("export_allowed", False)),
-        external_model_allowed=bool(
-            policy_payload.get("external_model_allowed", False)
-        ),
-        quote_allowed=bool(policy_payload.get("quote_allowed", False)),
+        export_allowed=policy_payload.get("export_allowed", False),
+        external_model_allowed=policy_payload.get("external_model_allowed", False),
+        quote_allowed=policy_payload.get("quote_allowed", False),
+        storage_allowed=policy_payload.get("storage_allowed", False),
+        index_allowed=policy_payload.get("index_allowed", False),
     )
+    cur.execute("select id from strategyos_source_systems where id=%s and tenant_id=%s for update",
+                (source_system_id, tenant_id))
+    if cur.fetchone() is None:
+        raise ValueError("Source does not belong to the ingestion tenant.")
     cur.execute(
         """
         select policy_version from strategyos_source_access_policies
-        where source_system_id = %s and policy_fingerprint = %s
+        where source_system_id = %s and policy_fingerprint = %s and effective_to is null
         """,
         (source_system_id, policy.fingerprint),
     )
@@ -1655,7 +1660,7 @@ def persist_source_access_policy(
     )
     version = int(cur.fetchone()[0]) + 1
     cur.execute(
-        "update strategyos_source_access_policies set effective_to = now() where source_system_id = %s and effective_to is null",
+        "update strategyos_source_access_policies set effective_to = clock_timestamp() where source_system_id = %s and effective_to is null",
         (source_system_id,),
     )
     cur.execute(
@@ -1663,8 +1668,9 @@ def persist_source_access_policy(
         insert into strategyos_source_access_policies
             (tenant_id, source_system_id, policy_version, policy_fingerprint,
              allowed_roles, allowed_purposes, allowed_business_units, export_allowed,
-             external_model_allowed, quote_allowed, recorded_by, rationale)
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+             external_model_allowed, quote_allowed, storage_allowed, index_allowed, recorded_by, rationale)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        returning id
         """,
         (
             tenant_id,
@@ -1677,11 +1683,33 @@ def persist_source_access_policy(
             policy.export_allowed,
             policy.external_model_allowed,
             policy.quote_allowed,
+            policy.storage_allowed,
+            policy.index_allowed,
             recorded_by,
             rationale,
         ),
     )
+    policy_id = cur.fetchone()[0]
+    queue_source_policy_refresh(cur, tenant_id=tenant_id, source_id=source_system_id, policy_id=policy_id)
     return version
+
+
+def queue_source_policy_refresh(cur: Any, *, tenant_id: Any, source_id: Any, policy_id: Any) -> None:
+    """Invalidate every direct and derived projection in the policy transaction."""
+    cur.execute("""with recursive affected(id) as (
+        select cel.claim_revision_id from strategyos_claim_evidence_links cel
+        join strategyos_evidence_occurrences eo on eo.id=cel.evidence_occurrence_id
+        where eo.source_system_id=%s
+        union
+        select d.derived_claim_revision_id from strategyos_claim_dependencies d
+        join affected a on a.id=d.input_claim_revision_id)
+        insert into strategyos_claim_projection_outbox
+          (tenant_id,claim_revision_id,projection_type,operation,payload,idempotency_key)
+        select %s,a.id,p.kind,'upsert',jsonb_build_object('policy_id',%s::text),
+               'policy:' || %s::text || ':' || a.id::text || ':' || p.kind
+        from affected a cross join (values ('graph'),('vector'),('cache')) p(kind)
+        on conflict(tenant_id,projection_type,idempotency_key) do nothing""",
+        (source_id, tenant_id, str(policy_id), str(policy_id)))
 
 
 def persist_source_registration_version(
@@ -2527,6 +2555,18 @@ def persist_shadow_claim(
     input_revision_ids: tuple[str, ...] = (),
 ) -> tuple[str, bool]:
     """Shadow-write one immutable claim without changing existing read paths."""
+    cur.execute("""select p.storage_allowed from strategyos_ingestion_batches b
+        join strategyos_source_access_policies p on p.source_system_id=b.source_system_id
+        where b.id=%s and b.tenant_id=%s and p.effective_to is null""", (batch_id, tenant_id))
+    storage = cur.fetchone()
+    if storage is None or storage[0] is not True:
+        raise ValueError("Source policy does not permit storage of imported claims.")
+    if input_revision_ids:
+        from .claim_store import ClaimRepository
+        for input_id in input_revision_ids:
+            policies, missing = ClaimRepository._policies_for_revision(cur, tenant_id, input_id)
+            if missing or not policies or not all(policy.storage_allowed for policy in policies):
+                raise ValueError("An input source does not permit storage of the calculated claim.")
     occurrence_key: str | None = None
     occurrence_id: str | None = None
     if source_document_id is not None:

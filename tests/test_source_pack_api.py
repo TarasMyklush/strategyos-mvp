@@ -89,7 +89,7 @@ def test_source_pack_from_path_returns_manifest_and_readiness(tmp_path: Path):
         response = client.post(
             "/source-packs/from-path",
             headers=_auth_header("operator-secret"),
-            json={"folder_path": str(source_dir)},
+            json={"storage_allowed": True, "folder_path": str(source_dir)},
         )
 
         assert response.status_code == 200
@@ -131,7 +131,7 @@ def test_source_pack_from_path_rejects_outside_workspace(tmp_path: Path):
         response = client.post(
             "/source-packs/from-path",
             headers=_auth_header("operator-secret"),
-            json={"folder_path": str(outside_dir)},
+            json={"storage_allowed": True, "folder_path": str(outside_dir)},
         )
 
         assert response.status_code == 400
@@ -156,6 +156,7 @@ def test_source_pack_upload_preserves_relative_paths_and_support_flags(tmp_path:
         response = client.post(
             "/source-packs",
             headers=_auth_header("operator-secret"),
+            data={"source_contract_json": '{"access_policy":{"storage_allowed":true}}'},
             files=[
                 ("files", ("folder/AP/report.csv", b"a,b\n1,2\n", "text/csv")),
                 ("files", ("folder/docs/scan.png", b"png-binary", "image/png")),
@@ -210,6 +211,7 @@ def test_source_pack_upload_expands_canonical_dataset_zip(tmp_path: Path):
         response = client.post(
             "/source-packs",
             headers=_auth_header("operator-secret"),
+            data={"source_contract_json": '{"access_policy":{"storage_allowed":true}}'},
             files=[
                 (
                     "files",
@@ -279,6 +281,7 @@ def test_source_pack_upload_routes_canonical_document_folders_before_text_heuris
         response = client.post(
             "/source-packs",
             headers=_auth_header("operator-secret"),
+            data={"source_contract_json": '{"access_policy":{"storage_allowed":true}}'},
             files=[
                 (
                     "files",
@@ -410,7 +413,7 @@ def test_source_pack_classification_and_run_creation_execute_end_to_end(tmp_path
         staged = client.post(
             "/source-packs/from-path",
             headers=_auth_header("operator-secret"),
-            json={"folder_path": str(staged_root)},
+            json={"storage_allowed": True, "folder_path": str(staged_root)},
         )
 
         assert staged.status_code == 200
@@ -488,7 +491,7 @@ def test_source_pack_staged_equivalent_dataset_preserves_core_finance_findings(t
         staged = client.post(
             "/source-packs/from-path",
             headers=_auth_header("operator-secret"),
-            json={"folder_path": str(staged_root)},
+            json={"storage_allowed": True, "folder_path": str(staged_root)},
         )
 
         assert staged.status_code == 200
@@ -526,6 +529,7 @@ def test_source_pack_candidate_mapping_can_be_confirmed_and_canonicalized(tmp_pa
         response = client.post(
             "/source-packs",
             headers=_auth_header("operator-secret"),
+            data={"source_contract_json": '{"access_policy":{"storage_allowed":true}}'},
             files=[
                 (
                     "files",
@@ -608,7 +612,7 @@ def test_source_pack_preserves_calendar_metadata_sheets(tmp_path: Path):
         response = client.post(
             "/source-packs/from-path",
             headers=_auth_header("operator-secret"),
-            json={"folder_path": str(source_dir)},
+            json={"storage_allowed": True, "folder_path": str(source_dir)},
         )
 
         assert response.status_code == 200
@@ -637,6 +641,7 @@ def test_source_pack_document_classifier_marks_ambiguous_text_with_reasons(tmp_p
         response = client.post(
             "/source-packs",
             headers=_auth_header("operator-secret"),
+            data={"source_contract_json": '{"access_policy":{"storage_allowed":true}}'},
             files=[
                 (
                     "files",
@@ -698,7 +703,7 @@ def test_partial_source_pack_run_true_skips_missing_roles_without_synthetic_fill
         staged = client.post(
             "/source-packs/from-path",
             headers=_auth_header("operator-secret"),
-            json={"folder_path": str(staged_root)},
+            json={"storage_allowed": True, "folder_path": str(staged_root)},
         )
         assert staged.status_code == 200
         assert staged.json()["task_readiness"]["ready_for_run"] is False
@@ -763,7 +768,7 @@ def test_source_pack_task_readiness_reports_ap_only_gaps_per_business_task(tmp_p
         staged = client.post(
             "/source-packs/from-path",
             headers=_auth_header("operator-secret"),
-            json={"folder_path": str(staged_root)},
+            json={"storage_allowed": True, "folder_path": str(staged_root)},
         )
 
         assert staged.status_code == 200
@@ -799,7 +804,7 @@ def test_partial_source_pack_run_still_blocks_zero_supported_files(tmp_path: Pat
         staged = client.post(
             "/source-packs/from-path",
             headers=_auth_header("operator-secret"),
-            json={"folder_path": str(staged_root)},
+            json={"storage_allowed": True, "folder_path": str(staged_root)},
         )
         assert staged.status_code == 200
         payload = staged.json()
@@ -858,7 +863,7 @@ def test_low_confidence_mapping_blocks_run_until_confirmed(tmp_path: Path):
         staged = client.post(
             "/source-packs/from-path",
             headers=_auth_header("operator-secret"),
-            json={"folder_path": str(staged_root)},
+            json={"storage_allowed": True, "folder_path": str(staged_root)},
         )
         assert staged.status_code == 200
         payload = staged.json()

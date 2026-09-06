@@ -172,6 +172,10 @@ def sync_findings_vector_store(
         return {"status": "skipped", "reason": "QDRANT_URL is not configured."}
     if not run_id:
         return {"status": "missing", "reason": "Run ID is unavailable."}
+    from .access_scope import source_index_allowed
+    if not source_index_allowed(run_id, tenant_slug):
+        return {"status": "blocked", "run_id": run_id,
+                "reason": "Source policy does not permit this bulk search index."}
     points = _build_points(
         run_id=run_id,
         tenant_slug=tenant_slug,

@@ -123,6 +123,7 @@ class FakeDriver:
 def test_sync_knowledge_graph_loads_nodes_edges_and_exposes_sample_query(
     tmp_path, monkeypatch
 ):
+    monkeypatch.setattr("strategyos_mvp.access_scope.source_index_allowed", lambda *args: True)
     graph_path = tmp_path / "StrategyOS Knowledge Graph.json"
     graph_path.write_text(
         json.dumps(
@@ -190,6 +191,7 @@ def test_sync_knowledge_graph_loads_nodes_edges_and_exposes_sample_query(
 def test_sync_knowledge_graph_blocks_when_postgres_source_of_truth_is_missing(
     tmp_path, monkeypatch
 ):
+    monkeypatch.setattr("strategyos_mvp.access_scope.source_index_allowed", lambda *args: True)
     graph_path = tmp_path / "StrategyOS Knowledge Graph.json"
     graph_path.write_text(json.dumps({"nodes": [{"id": "n1"}], "edges": []}), encoding="utf-8")
     fake_driver = FakeDriver()

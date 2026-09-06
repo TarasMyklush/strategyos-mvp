@@ -3616,6 +3616,7 @@
 
   function sourcePackCanStart(payload) {
     const readiness = payload?.task_readiness || {};
+    if (payload?.source_contract?.classification_status !== "confirmed") return false;
     if (!payload || sourcePackHasNoReadableFiles(payload) || hasUnconfirmedMappings()) return false;
     if (readiness.ready_for_run) return true;
     return Boolean(els.startRunAllowPartialSourcePack.checked);
@@ -3629,6 +3630,7 @@
   function startRunDisabledReason() {
     if (!isOperator()) return "Operator role required.";
     if (state.runSubmitting) return "Analysis is already starting.";
+    if (state.sourcePack?.source_contract?.classification_status !== "confirmed" && state.sourcePack) return "Complete the source classification and permitted-use contract, then stage the files again.";
     if (!state.sourcePack && !els.startRunDataset.value.trim()) return "Choose files before starting analysis.";
     if (state.sourcePack && sourcePackHasNoReadableFiles(state.sourcePack)) return "No readable finance files were found.";
     if (hasUnconfirmedMappings()) return "Confirm the suggested column mappings first.";
@@ -3641,7 +3643,9 @@
   function renderSourcePackStatus(payload) {
     const readiness = payload?.task_readiness || {};
     const reasons = sourcePackBlockingReasons(payload);
-    if (sourcePackHasNoReadableFiles(payload)) {
+    if (payload?.source_contract?.classification_status !== "confirmed") {
+      setSourcePackStatus("warn", "Stored for classification", "Complete Source classification and permitted use, then stage the files again. Analysis has not started.");
+    } else if (sourcePackHasNoReadableFiles(payload)) {
       setSourcePackStatus("danger", "No readable finance files", "Upload invoices, ledgers, statements, ERP exports, or use the sample dataset.");
     } else if (hasUnconfirmedMappings()) {
       setSourcePackStatus("warn", "Column check needed", "Confirm the suggested spreadsheet columns before starting analysis.");
@@ -3708,9 +3712,29 @@
     els.startRunStatus.innerHTML = `${statusPill(tone, title)} ${escapeHtml(message || "")}`;
   }
 
+  function sourceIntakeContract() {
+    const value = (name) => byId(`source-contract-${name}`).value.trim();
+    const list = (name) => value(name).split(",").map((item) => item.trim()).filter(Boolean);
+    return {
+      source_key: value("key") || undefined, display_name: value("name"),
+      origin_category: value("origin"), governed_owner: value("owner"),
+      authorization_basis: value("basis"), provider_name: value("provider") || null,
+      license_policy_ref: value("license") || null,
+      access_policy: {storage_allowed: byId("source-pack-storage-consent").checked,
+        index_allowed: byId("source-contract-index").checked,
+        export_allowed: byId("source-contract-export").checked,
+        allowed_roles: list("roles"), allowed_purposes: list("purposes"),
+        allowed_business_units: list("units"), external_model_allowed: false, quote_allowed: false},
+    };
+  }
+
   async function submitSourcePackUpload(event) {
     event?.preventDefault?.();
     if (!isOperator()) return;
+    if (!byId("source-pack-storage-consent").checked) {
+      setSourcePackStatus("warn", "Storage permission required", "Confirm that you are authorized to store these files before uploading.");
+      return;
+    }
     const files = [
       ...Array.from(els.sourcePackFiles.files || []),
       ...Array.from(els.sourcePackFolderFiles.files || []),
@@ -3720,6 +3744,7 @@
       return;
     }
     const formData = new FormData();
+    formData.append("source_contract_json", JSON.stringify(sourceIntakeContract()));
     files.forEach((file) => formData.append("files", file, file.webkitRelativePath || file.name));
     state.sourcePackSubmitting = true;
     setSourcePackStatus("warn", "Starting", "Uploading and checking files.");
@@ -3743,6 +3768,10 @@
   async function submitSourcePackPath(event) {
     event?.preventDefault?.();
     if (!isOperator()) return;
+    if (!byId("source-pack-storage-consent").checked) {
+      setSourcePackStatus("warn", "Storage permission required", "Confirm that you are authorized to store these files before staging.");
+      return;
+    }
     const folderPath = els.sourcePackPath.value.trim();
     if (!folderPath) {
       setSourcePackStatus("warn", "No path", "Enter a workspace-bounded folder path.");
@@ -3752,9 +3781,11 @@
     setSourcePackStatus("warn", "Checking folder", "Reading files from the selected server folder.");
     renderSourcePackPanel();
     try {
+      const contract = sourceIntakeContract();
       state.sourcePack = await requestJson("/source-packs/from-path", {
         method: "POST",
-        body: JSON.stringify({ folder_path: folderPath }),
+        body: JSON.stringify({folder_path: folderPath, ...contract,
+          source_display_name: contract.display_name, ...contract.access_policy}),
       });
       renderSourcePackStatus(state.sourcePack);
     } catch (error) {

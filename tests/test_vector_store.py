@@ -39,6 +39,7 @@ def _matches_filter(point, filter_payload):
 
 
 def test_sync_and_search_vectors_for_a_run(monkeypatch, tmp_path):
+    monkeypatch.setattr("strategyos_mvp.access_scope.source_index_allowed", lambda *args: True)
     state = {"collections": set(), "points": []}
 
     def fake_request(method: str, path: str, payload=None):
@@ -154,6 +155,7 @@ def test_sync_and_search_vectors_for_a_run(monkeypatch, tmp_path):
 
 
 def test_empty_vector_status_is_not_reported_as_missing(monkeypatch, tmp_path):
+    monkeypatch.setattr("strategyos_mvp.access_scope.source_index_allowed", lambda *args: True)
     state = {"collections": set()}
 
     def fake_request(method: str, path: str, payload=None):

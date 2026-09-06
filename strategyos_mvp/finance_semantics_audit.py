@@ -42,9 +42,18 @@ def audit_run(run_id: str) -> dict[str, Any]:
             if not path.is_relative_to(root):
                 raise ValueError("Source path escapes the recorded dataset.")
             digest = hashlib.sha256(path.read_bytes()).hexdigest()
-            if hashes.get(source) != digest:
+            recorded_path = source
+            if source not in hashes:
+                # Normalization can relocate an unchanged workbook. Accept only
+                # one recorded suffix match with the exact original bytes, and
+                # expose both paths rather than silently merging occurrences.
+                candidates = [name for name, value in hashes.items()
+                              if name.endswith("/" + source) and value == digest]
+                if len(candidates) == 1:
+                    recorded_path = candidates[0]
+            if hashes.get(recorded_path) != digest:
                 raise ValueError("Source bytes do not match the recorded run; re-import is required.")
-            checked.append({"source_path": source, "sha256": digest})
+            checked.append({"source_path": source, "recorded_source_path": recorded_path, "sha256": digest})
         if not checked:
             raise ValueError("No reproducible finance sources are available for this run.")
         ambiguous = fresh.get("ambiguous_components", {})

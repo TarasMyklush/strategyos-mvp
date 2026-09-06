@@ -580,6 +580,26 @@
         </div>
 
         <div class="drawer-section" id="source-pack-section">
+          <label class="form-hint"><input id="source-pack-storage-consent" type="checkbox" /> I am authorized to store these files in this workspace. This does not grant search, export, or external-model permission.</label>
+          <details class="advanced-options compact-diagnostics">
+            <summary>Source classification and permitted use</summary>
+            <p class="form-hint">Complete this contract before analysis. Leaving it incomplete stores the files for classification only. Separate sources with different rights into separate uploads.</p>
+            <div class="form-stack">
+              <label>Stable source key<input id="source-contract-key" placeholder="finance-erp" /></label>
+              <label>Source name<input id="source-contract-name" /></label>
+              <label>Source origin<select id="source-contract-origin"><option value="unknown">Not classified</option value="internal_system">Internal system</option><option value="public_web">Public web — untrusted</option><option value="licensed_external">Licensed external provider</option><option value="correspondence">Email or chat correspondence</option></select></label>
+              <label>Accountable data owner<input id="source-contract-owner" /></label>
+              <label>Authorization basis<input id="source-contract-basis" placeholder="Policy or approval reference" /></label>
+              <label>Provider, if licensed<input id="source-contract-provider" /></label>
+              <label>License reference, if licensed<input id="source-contract-license" /></label>
+              <label>Allowed roles, comma-separated<input id="source-contract-roles" placeholder="operator, executive" /></label>
+              <label>Allowed purposes, comma-separated<input id="source-contract-purposes" placeholder="operations, analysis, executive_briefing" /></label>
+              <label>Business-unit scope, comma-separated<input id="source-contract-units" placeholder="Blank only for an authorized group-wide source" /></label>
+              <label><input id="source-contract-index" type="checkbox" /> Local search indexing is permitted</label>
+              <label><input id="source-contract-export" type="checkbox" /> Export is permitted</label>
+              <p class="form-hint">Quotation and external-model use remain denied. This form never authorizes sending data to an external model.</p>
+            </div>
+          </details>
           <form id="source-pack-upload-form" class="form-stack">
             <div class="source-upload-grid">
               <label class="upload-choice">

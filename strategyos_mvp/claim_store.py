@@ -111,7 +111,7 @@ class ClaimRepository:
                     """
                     select id, policy_version
                     from strategyos_source_access_policies
-                    where source_system_id = %s and policy_fingerprint = %s
+                    where source_system_id = %s and policy_fingerprint = %s and effective_to is null
                     """,
                     (source_id, policy.fingerprint),
                 )
@@ -141,8 +141,8 @@ class ClaimRepository:
                         (tenant_id, source_system_id, policy_version, policy_fingerprint,
                          allowed_roles, allowed_purposes,
                          allowed_business_units, export_allowed, external_model_allowed, quote_allowed,
-                         recorded_by, rationale)
-                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                         storage_allowed, index_allowed, recorded_by, rationale)
+                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     returning id
                     """,
                     (
@@ -156,11 +156,15 @@ class ClaimRepository:
                         policy.export_allowed,
                         policy.external_model_allowed,
                         policy.quote_allowed,
+                        policy.storage_allowed,
+                        policy.index_allowed,
                         recorded_by,
                         rationale,
                     ),
                 )
                 policy_id = cur.fetchone()[0]
+                from .state_store import queue_source_policy_refresh
+                queue_source_policy_refresh(cur, tenant_id=tenant_id, source_id=source_id, policy_id=policy_id)
             conn.commit()
         return {
             "source_system_id": str(source_id),
@@ -185,6 +189,10 @@ class ClaimRepository:
                 tenant_id = self._tenant_uuid(cur, occurrence.tenant_id)
                 occurrence = replace(occurrence, tenant_id=str(tenant_id))
                 source_id = self._source_uuid(cur, tenant_id, occurrence.source_key)
+                cur.execute("select storage_allowed from strategyos_source_access_policies where source_system_id=%s and effective_to is null", (source_id,))
+                storage = cur.fetchone()
+                if storage is None or storage[0] is not True:
+                    raise ValueError("Source policy does not permit storage of evidence occurrences.")
                 cur.execute(
                     "select source_hash from strategyos_evidence_documents where id = %s and tenant_id = %s",
                     (evidence_document_id, tenant_id),
@@ -259,7 +267,8 @@ class ClaimRepository:
                 context = replace(context, tenant_id=tenant)
                 cur.execute("""select eo.id, ss.source_key, ed.source_hash,
                     p.allowed_roles, p.allowed_purposes, p.allowed_business_units,
-                    p.export_allowed, p.external_model_allowed, p.quote_allowed
+                    p.export_allowed, p.external_model_allowed, p.quote_allowed,
+                    p.storage_allowed, p.index_allowed
                     from strategyos_evidence_occurrences eo
                     join strategyos_source_systems ss on ss.id = eo.source_system_id
                     join strategyos_evidence_documents ed on ed.id = eo.evidence_document_id
@@ -276,7 +285,8 @@ class ClaimRepository:
                     allowed_purposes=frozenset(source["allowed_purposes"]),
                     allowed_business_units=frozenset(source.get("allowed_business_units") or ()),
                     export_allowed=source["export_allowed"],
-                    external_model_allowed=source["external_model_allowed"], quote_allowed=source["quote_allowed"])
+                    external_model_allowed=source["external_model_allowed"], quote_allowed=source["quote_allowed"],
+                    storage_allowed=source["storage_allowed"], index_allowed=source["index_allowed"])
                 mapped = map_table(rows, mapping, tenant_id=tenant, source_key=source["source_key"],
                     occurrence_key=occurrence_key, recorded_by=context.principal_id)
                 drafts = mapped.pop("drafts")
@@ -425,6 +435,7 @@ class ClaimRepository:
         )
         existing = cur.fetchone()
         if existing is not None:
+            self._authorize_storage(cur, draft.tenant_id, str(existing[0]))
             if context is not None:
                 self._authorize_intake(cur, draft, str(existing[0]), context)
             return {"claim_revision_id": str(existing[0]), "revision_number": existing[1], "created": False}
@@ -503,6 +514,7 @@ class ClaimRepository:
                 """,
                 (revision_id, input_id),
             )
+        self._authorize_storage(cur, draft.tenant_id, str(revision_id))
         if context is not None:
             self._authorize_intake(cur, draft, str(revision_id), context)
         for projection in ("graph", "vector", "cache"):
@@ -534,6 +546,11 @@ class ClaimRepository:
                               recorded_at=datetime.now(UTC), draft=draft, traceability="present")
         if missing or not policy_allows(context=context, claim=claim, source_policies=policies).eligible:
             raise ValueError("Source policy does not authorize this claim intake.")
+
+    def _authorize_storage(self, cur: Any, tenant_id: str, revision_id: str) -> None:
+        policies, missing = self._policies_for_revision(cur, tenant_id, revision_id)
+        if missing or not policies or not all(policy.storage_allowed for policy in policies):
+            raise ValueError("Source policy does not permit storage of this claim.")
 
     def assess_claim(self, assessment: ClaimAssessment, *, effect_key: str,
                      context: PolicyContext | None = None) -> dict[str, Any]:
@@ -710,7 +727,8 @@ class ClaimRepository:
         )
         return version, True
 
-    def run_source_access(self, run_id: str, *, context: PolicyContext) -> dict[str, Any]:
+    def run_source_access(self, run_id: str, *, context: PolicyContext,
+                          require_index: bool = False) -> dict[str, Any]:
         """Authorize a whole-run projection before legacy prose or tables are read.
 
         Bulk projections cannot safely honor row-level BU restrictions. They are
@@ -761,7 +779,7 @@ class ClaimRepository:
                     )
                     select ss.source_key, p.allowed_roles, p.allowed_purposes,
                            p.allowed_business_units, p.export_allowed,
-                           p.external_model_allowed, p.quote_allowed,
+                           p.external_model_allowed, p.quote_allowed, p.storage_allowed, p.index_allowed,
                            exists (
                                select 1 from run_lineage l
                                join strategyos_claim_assessments a on a.claim_revision_id = l.id
@@ -784,6 +802,10 @@ class ClaimRepository:
         if context.business_units:
             reasons.add("bulk_business_unit_scope_denied")
         for source in sources:
+            if require_index and not source.get("index_allowed"):
+                reasons.add("source_index_denied")
+            if not source.get("storage_allowed"):
+                reasons.add("source_storage_denied")
             if source.get("withdrawn_evidence"):
                 reasons.add("bulk_withdrawn_evidence")
             if not context.roles.intersection(source.get("allowed_roles") or ()):
@@ -878,6 +900,7 @@ class ClaimRepository:
                             and bool(context.roles.intersection({"executive", "reviewer", "tenant_admin"}))
                             and policy_allows(context=replace(context, purpose=UsePurpose.OPERATIONS),
                                 claim=claim, source_policies=policies).eligible)
+                        record["indexing_allowed"] = bool(policies) and all(p.index_allowed for p in policies)
                         results.append(record)
             conn.commit()
         return results
@@ -1212,6 +1235,12 @@ class ClaimRepository:
                 row["source_occurrence_keys"] = self._occurrence_keys(cur, row["id"])
                 row["input_revision_ids"] = self._input_revision_ids(cur, row["id"])
                 claim = self._hydrate_claim(row)
+                policies, missing = self._policies_for_revision(cur, resolved_tenant_id, claim.revision_id)
+                if missing or not policies or not all(p.storage_allowed and p.index_allowed for p in policies):
+                    # Return only deletion identifiers, never content denied
+                    # indexing rights, including while stale jobs are queued.
+                    return {"tenant_id":str(resolved_tenant_id), "claim_revision_id":claim.revision_id,
+                            "indexing_allowed":False}
                 record = provenance_view(
                     claim,
                     source_details=self._source_details(cur, claim.revision_id),
@@ -1219,6 +1248,7 @@ class ClaimRepository:
                 )
             conn.commit()
         record["tenant_id"] = str(resolved_tenant_id)
+        record["indexing_allowed"] = True
         return record
 
     def upsert_projection_cache(self, record: Mapping[str, Any]) -> None:
@@ -1530,7 +1560,8 @@ class ClaimRepository:
                 from strategyos_claim_dependencies d join lineage l on d.derived_claim_revision_id = l.id
             )
             select distinct ss.source_key, p.allowed_roles, p.allowed_purposes,
-                   p.allowed_business_units, p.export_allowed, p.external_model_allowed, p.quote_allowed
+                   p.allowed_business_units, p.export_allowed, p.external_model_allowed, p.quote_allowed,
+                   p.storage_allowed, p.index_allowed
             from lineage l
             join strategyos_claim_evidence_links cel on cel.claim_revision_id = l.id
             join strategyos_evidence_occurrences eo on eo.id = cel.evidence_occurrence_id
@@ -1557,6 +1588,8 @@ class ClaimRepository:
                     export_allowed=bool(item["export_allowed"]),
                     external_model_allowed=bool(item["external_model_allowed"]),
                     quote_allowed=bool(item["quote_allowed"]),
+                    storage_allowed=bool(item["storage_allowed"]),
+                    index_allowed=bool(item["index_allowed"]),
                 )
             )
         return out, sorted(set(missing))

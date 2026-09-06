@@ -6,6 +6,30 @@ from uuid import UUID
 principal_scope: ContextVar[Mapping[str, Any] | None] = ContextVar("strategyos_principal_scope", default=None)
 
 
+def source_index_allowed(run_id: str, tenant_id: str) -> bool:
+    """Fail closed before legacy bulk content is sent to local search stores.
+
+    Background jobs act as system/operations, not as an invented executive.
+    Interactive indexing retains the initiating principal's source authority.
+    """
+    from .claim_store import ClaimRepository
+    from .source_claims import PolicyContext, UsePurpose
+    principal = principal_scope.get() or {}
+    if principal and principal.get("tenant_id") != tenant_id:
+        return False
+    try:
+        result = ClaimRepository().run_source_access(run_id, context=PolicyContext(
+            tenant_id=tenant_id,
+            principal_id=str(principal.get("subject") or "system:local-indexer"),
+            roles=frozenset({str(principal.get("role") or "system")}),
+            business_units=frozenset(principal.get("business_units") or ()),
+            purpose=UsePurpose.OPERATIONS,
+        ), require_index=True)
+        return result.get("allowed") is True
+    except (ValueError, RuntimeError, KeyError):
+        return False
+
+
 def guard_source_read(run_id: str | None) -> None:
     """Fail closed for request-bound legacy bulk reads, including file fallbacks.
 

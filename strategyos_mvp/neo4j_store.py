@@ -207,6 +207,10 @@ def sync_knowledge_graph(
     if not CONFIG.neo4j_uri:
         return _status("skipped", run_id=run_id, reason="NEO4J_URI is not configured.")
 
+    from .access_scope import source_index_allowed
+    if not source_index_allowed(run_id, tenant_slug):
+        return _status("blocked", run_id=run_id, reason="Source policy does not permit this bulk graph index.")
+
     graph = json.loads(knowledge_graph_path.read_text(encoding="utf-8"))
     source_counts = _graph_source_counts(graph)
     projection_guardrails = _projection_guardrails(

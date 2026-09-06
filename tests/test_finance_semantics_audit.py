@@ -5,7 +5,7 @@ import pytest
 from strategyos_mvp import finance_semantics_audit as audit
 
 
-def fixture_audit(monkeypatch, tmp_path, *, digest=None):
+def fixture_audit(monkeypatch, tmp_path, *, digest=None, paths=None):
     artifact = tmp_path / "finance.xlsx"
     artifact.write_bytes(b"synthetic fixture bytes")
     connection = MagicMock()
@@ -16,7 +16,8 @@ def fixture_audit(monkeypatch, tmp_path, *, digest=None):
         "source_files": ["finance.xlsx"], "source_semantics_version": "2",
         "ambiguous_components": {"revenue_actual": {"value": "100", "reason": "Actual/Est"}}})
     responses = iter([
-        [{"source_path": "finance.xlsx", "source_hash": digest or hashlib.sha256(artifact.read_bytes()).hexdigest()}],
+        [{"source_path": path, "source_hash": digest or hashlib.sha256(artifact.read_bytes()).hexdigest()}
+         for path in (paths or ["finance.xlsx"])],
         [{"id": "revision", "claim_kind": "actual", "metric_key": "ceo.revenue",
           "dimensions": {"component_key": "revenue_actual"}}],
     ])
@@ -34,5 +35,18 @@ def test_audit_verifies_bytes_and_never_writes(monkeypatch, tmp_path):
 
 def test_changed_source_cannot_be_used_to_adjudicate_old_claim(monkeypatch, tmp_path):
     fixture_audit(monkeypatch, tmp_path, digest="0"*64)
+    with pytest.raises(ValueError, match="Source bytes do not match"):
+        audit.audit_run("run")
+
+
+def test_normalized_alias_requires_exact_bytes_and_reports_original_path(monkeypatch, tmp_path):
+    fixture_audit(monkeypatch, tmp_path, paths=["historic/finance.xlsx"])
+    result = audit.audit_run("run")
+    assert result["checked_sources"][0]["recorded_source_path"] == "historic/finance.xlsx"
+    assert result["checked_sources"][0]["source_path"] == "finance.xlsx"
+
+
+def test_multiple_identical_occurrences_cannot_be_silently_merged(monkeypatch, tmp_path):
+    fixture_audit(monkeypatch, tmp_path, paths=["first/finance.xlsx", "second/finance.xlsx"])
     with pytest.raises(ValueError, match="Source bytes do not match"):
         audit.audit_run("run")

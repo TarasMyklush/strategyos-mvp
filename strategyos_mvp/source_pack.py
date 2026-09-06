@@ -1592,6 +1592,7 @@ def _source_pack_id_for_tree(
 def stage_source_pack_from_path(
     folder_path: str, *, source_contract: dict[str, Any] | None = None
 ) -> dict[str, Any]:
+    _require_source_storage_permission(source_contract)
     resolved = Path(folder_path).expanduser().resolve()
     if not _path_is_within(resolved, CONFIG.workspace_root):
         raise HTTPException(
@@ -1710,6 +1711,7 @@ def _append_upload_manifest_seed(
 def stage_source_pack_uploads(
     files: list[UploadFile], *, source_contract: dict[str, Any] | None = None
 ) -> dict[str, Any]:
+    _require_source_storage_permission(source_contract)
     if not files:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1797,6 +1799,18 @@ def validate_source_pack(source_pack_id: str) -> dict[str, Any]:
     )
 
 
+def _require_source_storage_permission(contract: dict[str, Any] | None) -> None:
+    """Validate rights before copying, extracting, or persisting source content."""
+    normalized = normalize_source_contract(
+        source_pack_id="pending-storage-review", source_kind="unknown", contract=contract
+    )
+    if (normalized.get("access_policy") or {}).get("storage_allowed") is not True:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Explicit permission to store this source is required before intake.",
+        )
+
+
 def normalize_source_contract(
     *,
     source_pack_id: str,
@@ -1865,6 +1879,8 @@ def normalize_source_contract(
                 export_allowed=access_policy_payload.get("export_allowed", False),
                 external_model_allowed=access_policy_payload.get("external_model_allowed", False),
                 quote_allowed=access_policy_payload.get("quote_allowed", False),
+                storage_allowed=access_policy_payload.get("storage_allowed", False),
+                index_allowed=access_policy_payload.get("index_allowed", False),
             )
         except ValueError as exc:
             raise HTTPException(
@@ -1878,6 +1894,8 @@ def normalize_source_contract(
             "export_allowed": policy.export_allowed,
             "external_model_allowed": policy.external_model_allowed,
             "quote_allowed": policy.quote_allowed,
+            "storage_allowed": policy.storage_allowed,
+            "index_allowed": policy.index_allowed,
             "policy_fingerprint": policy.fingerprint,
         }
     if confirmed_by and origin == OriginCategory.LICENSED_EXTERNAL and (
@@ -1929,6 +1947,8 @@ def confirm_source_pack_source_contract(
     export_allowed: bool = False,
     external_model_allowed: bool = False,
     quote_allowed: bool = False,
+    storage_allowed: bool = False,
+    index_allowed: bool = False,
 ) -> dict[str, Any]:
     raw_root = _raw_dir(source_pack_id)
     if not raw_root.is_dir():
@@ -1954,8 +1974,11 @@ def confirm_source_pack_source_contract(
             "export_allowed": export_allowed,
             "external_model_allowed": external_model_allowed,
             "quote_allowed": quote_allowed,
+            "storage_allowed": storage_allowed,
+            "index_allowed": index_allowed,
         },
     }
+    _require_source_storage_permission(contract)
     confirmed_pack_id = _source_pack_id_for_tree(raw_root, source_key=source_key)
     if confirmed_pack_id != source_pack_id:
         confirmed_raw_root = _raw_dir(confirmed_pack_id)

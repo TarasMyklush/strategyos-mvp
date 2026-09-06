@@ -37,7 +37,9 @@ def test_exact_poc2_pack_has_complete_governed_accounting(tmp_path: Path, monkey
         ),
     )
 
-    payload = source_pack_module.stage_source_pack_from_path(str(poc_root))
+    payload = source_pack_module.stage_source_pack_from_path(
+        str(poc_root), source_contract={"access_policy": {"storage_allowed": True}}
+    )
     manifest = {item["relative_path"]: item for item in payload["manifest"]}
 
     assert payload["manifest_summary"]["file_count"] == 81

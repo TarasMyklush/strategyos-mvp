@@ -51,6 +51,7 @@ def test_source_to_ledger_to_authorized_envelope(ledger, monkeypatch, origin, ch
         license_policy_ref="fixture-contract:1" if origin == "licensed_external" else None,
     )
     access = SourceAccessPolicy(
+        storage_allowed=True, index_allowed=True,
         source_key=source.source_key, allowed_roles=frozenset({"executive"}),
         allowed_purposes=frozenset(UsePurpose),
     )
@@ -172,6 +173,17 @@ def test_source_to_ledger_to_authorized_envelope(ledger, monkeypatch, origin, ch
     vector_store.project_claim_record(projected, "upsert")
     vector_store.project_claim_record(projected, "upsert")
     assert search_claims("revenue", query=q, context=ctx, repository=repo) == records
+    # Revoking indexing leaves direct authorized use intact, but immediately
+    # denies search even before queued deletion of the old vector has run.
+    repo.register_source(source, policy=replace(access, index_allowed=False),
+        recorded_by="fixture:operator", rationale="Revoke indexing only")
+    assert repo.query(q, context=ctx)[0]["indexing_allowed"] is False
+    assert search_claims("revenue", query=q, context=ctx, repository=repo) == []
+    denied_projection = repo.projection_record(first["claim_revision_id"], tenant_id=tenant)
+    assert denied_projection == {"tenant_id": tenant, "claim_revision_id": first["claim_revision_id"], "indexing_allowed": False}
+    repo.register_source(source, policy=access, recorded_by="fixture:operator", rationale="Restore fixture indexing")
+    assert repo.query(q, context=ctx)[0]["indexing_allowed"] is True
+    assert search_claims("revenue", query=q, context=ctx, repository=repo) == records
     # Permission revocation must apply immediately even to an old revision.
     repo.register_source(source, policy=replace(access, allowed_roles=frozenset({"auditor"})), recorded_by="fixture:operator", rationale="Revoke fixture access")
     assert repo.query(q, context=ctx) == []
@@ -195,6 +207,21 @@ def test_source_to_ledger_to_authorized_envelope(ledger, monkeypatch, origin, ch
     derived_query = replace(now_query, metric_key="test.derived", as_of_at=datetime.now(UTC))
     assert repo.query(derived_query, context=auditor)[0]["claim_revision_id"] == derived["claim_revision_id"]
     assert repo.run_source_access(run_id, context=auditor)["allowed"]
+    revoked = repo.register_source(source, policy=replace(access, storage_allowed=False),
+        recorded_by="fixture:operator", rationale="Revoke storage")
+    with pytest.raises(ValueError, match="storage"):
+        repo.record_claim(draft, traceability="present")
+    with pytest.raises(ValueError, match="storage"):
+        repo.record_occurrence(occurrence, evidence_document_id=document)
+    assert repo.query(derived_query, context=auditor) == []
+    with psycopg.connect(url) as conn:
+        with conn.cursor() as cur:
+            cur.execute("select count(*) from strategyos_claim_projection_outbox where claim_revision_id=%s and payload->>'policy_id'=%s",
+                        (derived["claim_revision_id"], revoked["policy_id"]))
+            assert cur.fetchone()[0] == 3
+    repo.register_source(source, policy=replace(access, allowed_roles=frozenset({"auditor"})),
+        recorded_by="fixture:operator", rationale="Restore fixture storage")
+    assert repo.query(derived_query, context=auditor)
     repo.assess_claim(ClaimAssessment(
         claim_revision_id=latest["claim_revision_id"], assessment_type="lifecycle",
         result="retracted", rule_version="fixture-v1", assessed_by="fixture:reviewer",

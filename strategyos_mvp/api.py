@@ -24,7 +24,7 @@ try:
     from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile, status
     from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
     from fastapi.staticfiles import StaticFiles
-    from pydantic import BaseModel, Field
+    from pydantic import BaseModel, Field, StrictBool
 except Exception as exc:  # pragma: no cover - optional cloud dependency
     raise RuntimeError(
         "FastAPI and pydantic are required to run the StrategyOS API."
@@ -207,9 +207,11 @@ class SourcePackPathRequest(BaseModel):
     allowed_roles: list[str] | None = None
     allowed_purposes: list[str] | None = None
     allowed_business_units: list[str] | None = None
-    export_allowed: bool = False
-    external_model_allowed: bool = False
-    quote_allowed: bool = False
+    export_allowed: StrictBool = False
+    external_model_allowed: StrictBool = False
+    quote_allowed: StrictBool = False
+    storage_allowed: StrictBool = False
+    index_allowed: StrictBool = False
 
 
 class SourcePackValidateRequest(BaseModel):
@@ -235,9 +237,11 @@ class SourcePackSourceContractRequest(BaseModel):
     allowed_roles: list[str]
     allowed_purposes: list[str]
     allowed_business_units: list[str] = Field(default_factory=list)
-    export_allowed: bool = False
-    external_model_allowed: bool = False
-    quote_allowed: bool = False
+    export_allowed: StrictBool = False
+    external_model_allowed: StrictBool = False
+    quote_allowed: StrictBool = False
+    storage_allowed: StrictBool = False
+    index_allowed: StrictBool = False
 
 
 class IngestionConnectorsResponse(BaseModel):
@@ -10055,7 +10059,7 @@ def create_source_pack_from_path(
     principal: dict[str, Any] = require_role("operator"),
 ) -> dict[str, Any]:
     source_contract = None
-    if request.source_key or request.origin_category:
+    if request.source_key or request.origin_category or request.storage_allowed:
         source_contract = {
             "source_key": request.source_key,
             "display_name": request.source_display_name,
@@ -10072,9 +10076,11 @@ def create_source_pack_from_path(
                 "allowed_purposes": request.allowed_purposes or [],
                 "allowed_business_units": request.allowed_business_units or [],
                 "export_allowed": request.export_allowed,
+                "storage_allowed": request.storage_allowed,
+                "index_allowed": request.index_allowed,
                 "external_model_allowed": request.external_model_allowed,
                 "quote_allowed": request.quote_allowed,
-            } if request.allowed_roles else None,
+            },
         }
     return stage_source_pack_from_path(
         request.folder_path, source_contract=source_contract
@@ -10120,6 +10126,8 @@ def confirm_source_pack_source_endpoint(
         allowed_purposes=request.allowed_purposes,
         allowed_business_units=request.allowed_business_units,
         export_allowed=request.export_allowed,
+        storage_allowed=request.storage_allowed,
+        index_allowed=request.index_allowed,
         external_model_allowed=request.external_model_allowed,
         quote_allowed=request.quote_allowed,
         confirmed_by=str(principal.get("subject") or "operator"),
