@@ -20,6 +20,7 @@ from .source_claims import (
     claim_is_eligible,
     policy_allows,
     provenance_view,
+    stable_key,
 )
 
 
@@ -244,6 +245,87 @@ class ClaimRepository:
             conn.commit()
         return {"evidence_occurrence_id": str(row[0]), "occurrence_key": row[1]}
 
+    def ingest_mapped_table(self, rows: list[dict[str, Any]], mapping: Any, *,
+                            occurrence_key: str, source_hash: str,
+                            context: PolicyContext, apply: bool = False) -> dict[str, Any]:
+        """Verify the exact artifact and atomically record a steward interpretation."""
+        from .tabular_claims import map_table
+        if context.purpose != UsePurpose.OPERATIONS:
+            raise ValueError("Table intake requires operations authority.")
+        with self._require_connection() as conn:
+            self._ensure_schema(conn)
+            with conn.cursor() as cur:
+                tenant = str(self._tenant_uuid(cur, context.tenant_id))
+                context = replace(context, tenant_id=tenant)
+                cur.execute("""select eo.id, ss.source_key, ed.source_hash,
+                    p.allowed_roles, p.allowed_purposes, p.allowed_business_units,
+                    p.export_allowed, p.external_model_allowed, p.quote_allowed
+                    from strategyos_evidence_occurrences eo
+                    join strategyos_source_systems ss on ss.id = eo.source_system_id
+                    join strategyos_evidence_documents ed on ed.id = eo.evidence_document_id
+                    left join strategyos_source_access_policies p
+                      on p.source_system_id = ss.id and p.effective_to is null
+                    where eo.tenant_id = %s and eo.occurrence_key = %s""", (tenant, occurrence_key))
+                source = _record(cur, cur.fetchone())
+                if not source or source.get("source_hash") != source_hash:
+                    raise ValueError("The workbook must match an existing evidence occurrence in this tenant.")
+                if not source.get("allowed_roles") or not source.get("allowed_purposes"):
+                    raise ValueError("Source policy does not authorize this interpretation.")
+                policy = SourceAccessPolicy(source_key=source["source_key"],
+                    allowed_roles=frozenset(source["allowed_roles"]),
+                    allowed_purposes=frozenset(source["allowed_purposes"]),
+                    allowed_business_units=frozenset(source.get("allowed_business_units") or ()),
+                    export_allowed=source["export_allowed"],
+                    external_model_allowed=source["external_model_allowed"], quote_allowed=source["quote_allowed"])
+                mapped = map_table(rows, mapping, tenant_id=tenant, source_key=source["source_key"],
+                    occurrence_key=occurrence_key, recorded_by=context.principal_id)
+                drafts = mapped.pop("drafts")
+                if not drafts:
+                    if (not context.roles.intersection(policy.allowed_roles)
+                            or context.purpose not in policy.allowed_purposes
+                            or context.business_units or policy.allowed_business_units):
+                        raise ValueError("Source policy does not authorize this interpretation.")
+                for draft in drafts:
+                    transient = ClaimRevision(revision_id="intake-preview", revision_number=1,
+                        recorded_at=datetime.now(UTC), draft=draft, traceability="present")
+                    if not policy_allows(context=context, claim=transient, source_policies=[policy]).eligible:
+                        raise ValueError("Source policy does not authorize this interpretation.")
+                if len({draft.family_key for draft in drafts}) != len(drafts):
+                    raise ValueError("Competing rows require explicit source conflict resolution.")
+                result = {**mapped, "mapping_key": mapping.mapping_key, "mapping_version": mapping.mapping_version,
+                    "review_status": "unreviewed", "outbound_delivery": False}
+                if not apply:
+                    return {**result, "status": "preview", "created_count": 0,
+                        "claims": [{"metric_key": d.metric_key, "claim_kind": str(d.claim_kind),
+                            "value": str(d.value_numeric) if d.value_numeric is not None else d.value_text,
+                            "unit": d.unit, "scale": str(d.scale), "currency": d.currency,
+                            "period_start": str(d.period_start) if d.period_start else None,
+                            "period_end": str(d.period_end) if d.period_end else None,
+                            "locator": d.metadata["source_locator"]} for d in drafts]}
+                contract = mapping.model_dump(mode="json")
+                key = stable_key("table-intake", tenant, occurrence_key, source_hash, contract)
+                cur.execute("select pg_advisory_xact_lock(hashtextextended(%s, 0))", (key,))
+                cur.execute("select id, result from strategyos_claim_intake_receipts where tenant_id=%s and effect_key=%s",
+                    (tenant, key))
+                prior = cur.fetchone()
+                if prior:
+                    return {**prior[1], "receipt_id": str(prior[0]), "replayed": True, "created_count": 0}
+                records = [self._write_claim(cur, draft, traceability=TraceabilityState.PRESENT,
+                    evidence_relationship="reported_in", context=context)
+                    for draft in sorted(drafts, key=lambda item: item.family_key)]
+                result.update(status="applied_with_exceptions" if result["issues"] else "applied",
+                    created_count=sum(bool(record["created"]) for record in records),
+                    claim_revision_ids=[record["claim_revision_id"] for record in records])
+                cur.execute("""insert into strategyos_claim_intake_receipts
+                    (tenant_id,evidence_occurrence_id,effect_key,mapping_key,mapping_version,
+                     mapping_contract,source_hash,recorded_by,result)
+                    values (%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s::jsonb) returning id""",
+                    (tenant, source["id"], key, mapping.mapping_key, mapping.mapping_version,
+                     _json(contract), source_hash, context.principal_id, _json(result)))
+                result["receipt_id"] = str(cur.fetchone()[0])
+            conn.commit()
+        return result
+
     def record_claim(
         self,
         draft: ClaimDraft,
@@ -252,153 +334,192 @@ class ClaimRepository:
         evidence_relationship: str = "supports",
         context: PolicyContext | None = None,
     ) -> dict[str, Any]:
+        return self.record_claim_batch([draft], traceability=traceability,
+            evidence_relationship=evidence_relationship, context=context)[0]
+
+    def record_claim_batch(
+        self, drafts: Iterable[ClaimDraft], *,
+        traceability: TraceabilityState | str,
+        evidence_relationship: str = "supports",
+        context: PolicyContext | None = None,
+    ) -> list[dict[str, Any]]:
+        """Persist one bounded interpretation atomically, including its outbox.
+
+        Failed permission checks or invalid cells roll back the entire batch.
+        Family locks are acquired in canonical order to avoid batch deadlocks.
+        """
+        drafts = list(drafts)
+        if not drafts or len(drafts) > 500:
+            raise ValueError("A claim batch must contain between 1 and 500 claims.")
         traceability = TraceabilityState(str(traceability))
         if evidence_relationship not in {"supports", "contradicts", "reported_in"}:
             raise ValueError("Unsupported evidence relationship.")
-        connection = self._require_connection()
-        with connection as conn:
+        with self._require_connection() as conn:
             self._ensure_schema(conn)
             with conn.cursor() as cur:
-                tenant_id = self._tenant_uuid(cur, draft.tenant_id)
-                draft = replace(draft, tenant_id=str(tenant_id))
-                if context is not None:
-                    resolved = self._tenant_uuid(cur, context.tenant_id)
-                    if str(resolved) != str(tenant_id) or context.purpose != UsePurpose.OPERATIONS:
-                        raise ValueError("Claim intake requires the authenticated tenant and operations purpose.")
-                    context = replace(context, tenant_id=str(resolved))
-                cur.execute(
-                    """
-                    insert into strategyos_claim_families
-                        (tenant_id, family_key, assertion_namespace, claim_kind_lane,
-                         subject_type, subject_key, metric_key, business_unit,
-                         dimensions, period_start, period_end, scenario_key)
-                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s)
-                    on conflict (tenant_id, family_key) do nothing
-                    """,
-                    (
-                        tenant_id,
-                        draft.family_key,
-                        draft.assertion_namespace,
-                        draft.claim_kind,
-                        draft.subject_type,
-                        draft.subject_key,
-                        draft.metric_key,
-                        draft.business_unit,
-                        _json(dict(draft.dimensions)),
-                        draft.period_start,
-                        draft.period_end,
-                        draft.scenario_key,
-                    ),
-                )
-                cur.execute(
-                    "select id from strategyos_claim_families where tenant_id = %s and family_key = %s for update",
-                    (tenant_id, draft.family_key),
-                )
-                family_id = cur.fetchone()[0]
-                cur.execute(
-                    "select id, revision_number from strategyos_claim_revisions where claim_family_id = %s and fingerprint = %s",
-                    (family_id, draft.fingerprint),
-                )
-                existing = cur.fetchone()
-                if existing is not None:
-                    if context is not None:
-                        self._authorize_intake(cur, draft, str(existing[0]), context)
-                    conn.commit()
-                    return {"claim_revision_id": str(existing[0]), "revision_number": existing[1], "created": False}
-                cur.execute(
-                    "select id, revision_number from strategyos_claim_revisions where claim_family_id = %s order by revision_number desc limit 1",
-                    (family_id,),
-                )
-                previous = cur.fetchone()
-                revision_number = int(previous[1]) + 1 if previous else 1
-                supersedes_id = previous[0] if previous else None
-                cur.execute(
-                    """
-                    insert into strategyos_claim_revisions
-                        (tenant_id, claim_family_id, revision_number, fingerprint, claim_kind,
-                         production_method, value_numeric, value_text, unit, scale, currency, as_of_at,
-                         fiscal_calendar, timezone, author_identity, valid_until, assumptions,
-                         formula_key, formula_version, traceability_state, supersedes_revision_id, metadata)
-                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                            %s::jsonb, %s, %s, %s, %s, %s::jsonb)
-                    returning id, recorded_at
-                    """,
-                    (
-                        tenant_id,
-                        family_id,
-                        revision_number,
-                        draft.fingerprint,
-                        draft.claim_kind,
-                        draft.production_method,
-                        draft.value_numeric,
-                        draft.value_text,
-                        draft.unit,
-                        draft.scale,
-                        draft.currency.upper() if draft.currency else None,
-                        draft.as_of_at,
-                        draft.fiscal_calendar,
-                        draft.timezone,
-                        draft.author_identity,
-                        draft.valid_until,
-                        _json(list(draft.assumptions)),
-                        draft.formula_key,
-                        draft.formula_version,
-                        traceability,
-                        supersedes_id,
-                        _json(dict(draft.metadata)),
-                    ),
-                )
-                revision_id, recorded_at = cur.fetchone()
-                occurrence_ids = self._occurrence_ids(cur, tenant_id, draft.source_occurrence_keys)
-                if len(occurrence_ids) != len(draft.source_occurrence_keys):
-                    raise ValueError("Every evidence occurrence must exist in the same tenant before recording a claim.")
-                for occurrence_id in occurrence_ids:
-                    cur.execute(
-                        """
-                        insert into strategyos_claim_evidence_links
-                            (claim_revision_id, evidence_occurrence_id, relationship_type)
-                        values (%s, %s, %s)
-                        on conflict do nothing
-                        """,
-                        (revision_id, occurrence_id, evidence_relationship),
-                    )
-                for input_id in draft.input_revision_ids:
-                    cur.execute(
-                        "select claim_kind from strategyos_claim_revisions where id = %s and tenant_id = %s",
-                        (input_id, tenant_id),
-                    )
-                    input_row = cur.fetchone()
-                    if input_row is None:
-                        raise ValueError("Derived inputs must be existing claim revisions in the same tenant.")
-                    if draft.claim_kind == ClaimKind.ACTUAL and input_row[0] != ClaimKind.ACTUAL:
-                        raise ValueError("Calculated actuals cannot contain forecast, plan or unclassified inputs.")
-                    cur.execute(
-                        """
-                        insert into strategyos_claim_dependencies
-                            (derived_claim_revision_id, input_claim_revision_id, input_role)
-                        values (%s, %s, 'input')
-                        """,
-                        (revision_id, input_id),
-                    )
-                if context is not None:
-                    self._authorize_intake(cur, draft, str(revision_id), context)
-                for projection in ("graph", "vector", "cache"):
-                    cur.execute(
-                        """
-                        insert into strategyos_claim_projection_outbox
-                            (tenant_id, claim_revision_id, projection_type, operation, payload, idempotency_key)
-                        values (%s, %s, %s, 'upsert', %s::jsonb, %s)
-                        on conflict do nothing
-                        """,
-                        (
-                            tenant_id,
-                            revision_id,
-                            projection,
-                            _json({"claim_revision_id": str(revision_id), "family_key": draft.family_key}),
-                            f"claim:{revision_id}:upsert",
-                        ),
-                    )
+                normalized = []
+                for draft in drafts:
+                    tenant = str(self._tenant_uuid(cur, draft.tenant_id))
+                    normalized.append(replace(draft, tenant_id=tenant))
+                if len({draft.tenant_id for draft in normalized}) != 1:
+                    raise ValueError("A claim batch must belong to exactly one tenant.")
+                if len({draft.family_key for draft in normalized}) != len(normalized):
+                    raise ValueError("Competing claims in one batch require explicit conflict resolution.")
+                ordered = sorted(enumerate(normalized), key=lambda pair: pair[1].family_key)
+                results = {}
+                for index, draft in ordered:
+                    results[index] = self._write_claim(cur, draft,
+                        traceability=traceability, evidence_relationship=evidence_relationship,
+                        context=context)
             conn.commit()
+        return [results[index] for index in range(len(drafts))]
+
+    def _write_claim(
+        self, cur: Any, draft: ClaimDraft, *,
+        traceability: TraceabilityState,
+        evidence_relationship: str,
+        context: PolicyContext | None,
+    ) -> dict[str, Any]:
+        tenant_id = self._tenant_uuid(cur, draft.tenant_id)
+        draft = replace(draft, tenant_id=str(tenant_id))
+        from .claim_calculations import validate_persisted_calculation
+        validate_persisted_calculation(cur, draft)
+        if context is not None:
+            resolved = self._tenant_uuid(cur, context.tenant_id)
+            if str(resolved) != str(tenant_id) or context.purpose != UsePurpose.OPERATIONS:
+                raise ValueError("Claim intake requires the authenticated tenant and operations purpose.")
+            context = replace(context, tenant_id=str(resolved))
+        cur.execute(
+            """
+            insert into strategyos_claim_families
+                (tenant_id, family_key, assertion_namespace, claim_kind_lane,
+                 subject_type, subject_key, metric_key, business_unit,
+                 dimensions, period_start, period_end, scenario_key)
+            values (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s)
+            on conflict (tenant_id, family_key) do nothing
+            """,
+            (
+                tenant_id,
+                draft.family_key,
+                draft.assertion_namespace,
+                draft.claim_kind,
+                draft.subject_type,
+                draft.subject_key,
+                draft.metric_key,
+                draft.business_unit,
+                _json(dict(draft.dimensions)),
+                draft.period_start,
+                draft.period_end,
+                draft.scenario_key,
+            ),
+        )
+        cur.execute(
+            "select id from strategyos_claim_families where tenant_id = %s and family_key = %s for update",
+            (tenant_id, draft.family_key),
+        )
+        family_id = cur.fetchone()[0]
+        cur.execute(
+            "select id, revision_number from strategyos_claim_revisions where claim_family_id = %s and fingerprint = %s",
+            (family_id, draft.fingerprint),
+        )
+        existing = cur.fetchone()
+        if existing is not None:
+            if context is not None:
+                self._authorize_intake(cur, draft, str(existing[0]), context)
+            return {"claim_revision_id": str(existing[0]), "revision_number": existing[1], "created": False}
+        cur.execute(
+            "select id, revision_number from strategyos_claim_revisions where claim_family_id = %s order by revision_number desc limit 1",
+            (family_id,),
+        )
+        previous = cur.fetchone()
+        revision_number = int(previous[1]) + 1 if previous else 1
+        supersedes_id = previous[0] if previous else None
+        cur.execute(
+            """
+            insert into strategyos_claim_revisions
+                (tenant_id, claim_family_id, revision_number, fingerprint, claim_kind,
+                 production_method, value_numeric, value_text, unit, scale, currency, as_of_at,
+                 fiscal_calendar, timezone, author_identity, valid_until, assumptions,
+                 formula_key, formula_version, traceability_state, supersedes_revision_id, metadata)
+            values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s::jsonb, %s, %s, %s, %s, %s::jsonb)
+            returning id, recorded_at
+            """,
+            (
+                tenant_id,
+                family_id,
+                revision_number,
+                draft.fingerprint,
+                draft.claim_kind,
+                draft.production_method,
+                draft.value_numeric,
+                draft.value_text,
+                draft.unit,
+                draft.scale,
+                draft.currency.upper() if draft.currency else None,
+                draft.as_of_at,
+                draft.fiscal_calendar,
+                draft.timezone,
+                draft.author_identity,
+                draft.valid_until,
+                _json(list(draft.assumptions)),
+                draft.formula_key,
+                draft.formula_version,
+                traceability,
+                supersedes_id,
+                _json(dict(draft.metadata)),
+            ),
+        )
+        revision_id, recorded_at = cur.fetchone()
+        occurrence_ids = self._occurrence_ids(cur, tenant_id, draft.source_occurrence_keys)
+        if len(occurrence_ids) != len(draft.source_occurrence_keys):
+            raise ValueError("Every evidence occurrence must exist in the same tenant before recording a claim.")
+        for occurrence_id in occurrence_ids:
+            cur.execute(
+                """
+                insert into strategyos_claim_evidence_links
+                    (claim_revision_id, evidence_occurrence_id, relationship_type, source_locator)
+                values (%s, %s, %s, %s)
+                on conflict do nothing
+                """,
+                (revision_id, occurrence_id, evidence_relationship, draft.metadata.get("source_locator")),
+            )
+        for input_id in draft.input_revision_ids:
+            cur.execute(
+                "select claim_kind from strategyos_claim_revisions where id = %s and tenant_id = %s",
+                (input_id, tenant_id),
+            )
+            input_row = cur.fetchone()
+            if input_row is None:
+                raise ValueError("Derived inputs must be existing claim revisions in the same tenant.")
+            if draft.claim_kind == ClaimKind.ACTUAL and input_row[0] != ClaimKind.ACTUAL:
+                raise ValueError("Calculated actuals cannot contain forecast, plan or unclassified inputs.")
+            cur.execute(
+                """
+                insert into strategyos_claim_dependencies
+                    (derived_claim_revision_id, input_claim_revision_id, input_role)
+                values (%s, %s, 'input')
+                """,
+                (revision_id, input_id),
+            )
+        if context is not None:
+            self._authorize_intake(cur, draft, str(revision_id), context)
+        for projection in ("graph", "vector", "cache"):
+            cur.execute(
+                """
+                insert into strategyos_claim_projection_outbox
+                    (tenant_id, claim_revision_id, projection_type, operation, payload, idempotency_key)
+                values (%s, %s, %s, 'upsert', %s::jsonb, %s)
+                on conflict do nothing
+                """,
+                (
+                    tenant_id,
+                    revision_id,
+                    projection,
+                    _json({"claim_revision_id": str(revision_id), "family_key": draft.family_key}),
+                    f"claim:{revision_id}:upsert",
+                ),
+            )
         return {
             "claim_revision_id": str(revision_id),
             "revision_number": revision_number,
@@ -1185,6 +1306,11 @@ class ClaimRepository:
         """
         if not claim.draft.input_revision_ids:
             return True
+        from .claim_calculations import validate_persisted_calculation
+        try:
+            validate_persisted_calculation(cur, claim.draft)
+        except ValueError:
+            return False
         cur.execute(
             """
             with recursive inputs(id) as (

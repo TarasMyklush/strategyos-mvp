@@ -59,6 +59,16 @@ fingerprint is idempotent.
 Calculated claims require a formula key/version and exact input revision IDs.
 Dependencies and evidence links allow provenance reconstruction. Projection work
 is committed through a transactional outbox.
+Supported calculation contracts are executed at both write and eligible-read
+boundaries. Version 1 supports identity, same-scope monetary sums and
+EBITDA/revenue margin. Inputs must have compatible claim kinds, units, currencies
+and periods; ratios cannot be summed, duplicate candidate metrics cannot be
+treated as additive corroboration, and no implicit FX is performed. The stored
+result must equal the deterministic result. Unsupported formulas are ineligible
+until an executable contract is introduced; a formula label alone is not proof.
+Margin formula version 1 uses Decimal arithmetic and half-even rounding to 12
+decimal places of percentage. Historical ratio representations are checked at
+that same explicit precision; monetary inputs are not rounded by this contract.
 
 ## Access and selection
 
@@ -118,6 +128,32 @@ legacy finance-source policy only for the known finance-dataset intake, and is
 idempotent on replay.
 
 ## Projection delivery
+
+### Explicit mixed-workbook interpretation
+
+Operators can use `/claims/intake` and `POST /api/claims/intake/workbook` to preview
+an explicit versioned mapping before recording claims. The workbook's SHA-256
+must match an existing evidence occurrence in the authenticated tenant. Neither
+the filename nor neighboring cells confer actual/forecast semantics.
+
+Mappings specify each value column's metric, unit, scale, currency and period,
+and either a fixed claim kind or a per-row kind column. Forecasts require an
+attributable author. Ambiguous kinds, invalid numbers and unresolved periods
+are quarantined as unknown; missing values and unresolved subjects receive
+explicit no-claim dispositions. Original worksheet row/column locators survive
+internal blank rows. Batches are bounded to 500 mapped cells and 5 MiB uploads.
+
+Apply writes claims, evidence links, projection outbox events and an interpretation
+receipt in one transaction. Any failure rolls back the batch. The receipt key
+contains tenant, evidence occurrence, artifact digest and the complete mapping
+contract, making retries idempotent. Current source permissions are checked
+before both preview and replay. A new mapping version produces new revisions,
+not an overwrite of historical interpretations. Competing rows are rejected
+until the operator resolves their semantics. No interpretation self-verifies,
+changes an approved snapshot, or authorizes outbound delivery.
+
+The UI clears stale results when inputs change and disables apply until a fresh
+preview succeeds. It renders source-provided values as text, never markup.
 
 The claim transaction writes graph, vector and cache work to an outbox. The
 `strategyos-claim-projector` service leases rows with `FOR UPDATE SKIP LOCKED`,

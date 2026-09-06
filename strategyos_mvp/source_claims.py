@@ -282,7 +282,7 @@ class ClaimDraft:
 
     @property
     def fingerprint(self) -> str:
-        return stable_key(
+        base = stable_key(
             "claim-revision",
             self.family_key,
             self.claim_kind,
@@ -301,6 +301,12 @@ class ClaimDraft:
             self.formula_version,
             self.input_revision_ids,
         )
+        # Preserve legacy fingerprints. A newly versioned mapping changes the
+        # extraction revision, not the assertion family or its business meaning.
+        if self.metadata.get("mapping_key") and self.metadata.get("mapping_version"):
+            return stable_key("mapped-claim-revision", base,
+                self.metadata["mapping_key"], self.metadata["mapping_version"])
+        return base
 
 
 @dataclass(frozen=True)
@@ -575,6 +581,11 @@ def provenance_view(
             )
         ],
         "assumptions": list(draft.assumptions),
+        "interpretation": {
+            key: draft.metadata[key] for key in (
+                "mapping_key", "mapping_version", "mapping_rationale", "recorded_by", "quarantine_reasons"
+            ) if key in draft.metadata
+        },
         "formula": (
             {"key": draft.formula_key, "version": draft.formula_version, "inputs": list(draft.input_revision_ids)}
             if draft.production_method == ProductionMethod.CALCULATED
@@ -593,7 +604,7 @@ def display_label(claim: ClaimRevision) -> str:
         ClaimKind.ACTUAL: "Actual",
         ClaimKind.PLAN: "Plan",
         ClaimKind.ASSUMPTION: "Assumption",
-        ClaimKind.REPORTED_CLAIM: "Reported externally",
+        ClaimKind.REPORTED_CLAIM: "Reported claim",
         ClaimKind.UNKNOWN: "Unclassified",
     }[kind]
 

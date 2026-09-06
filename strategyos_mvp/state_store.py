@@ -2589,6 +2589,8 @@ def persist_shadow_claim(
         input_revision_ids=input_revision_ids,
         metadata=(metadata or {}) | {"batch_id": str(batch_id)},
     )
+    from .claim_calculations import validate_persisted_calculation
+    validate_persisted_calculation(cur, draft)
     cur.execute(
         """
         insert into strategyos_claim_families
@@ -3011,11 +3013,18 @@ def persist_finance_kpi_claims(
     claims = 0
     exceptions = 0
     component_revisions: dict[str, str] = {}
+    from .source_claims import decimal_value
+    from .claim_calculations import margin_percent
+    def component_decimal(value: Any) -> Decimal | None:
+        try:
+            return decimal_value(value)
+        except ValueError:
+            return None
     for component_key, (metric_key, claim_kind, evidence_key) in _FINANCE_KPI_COMPONENTS.items():
         value = components.get(component_key)
         if value in (None, ""):
             continue
-        amount = money_value(value)
+        amount = component_decimal(value)
         evidence_payload = evidence.get(evidence_key) if isinstance(evidence.get(evidence_key), dict) else {}
         source_document_id, source_path = _kpi_source_document(evidence_ids, evidence_payload)
         if amount is None:
@@ -3076,10 +3085,10 @@ def persist_finance_kpi_claims(
 
     ebitda_revision = component_revisions.get("ebitda_actual")
     revenue_revision = component_revisions.get("revenue_actual")
-    ebitda = money_value(components.get("ebitda_actual"))
-    revenue = money_value(components.get("revenue_actual"))
+    ebitda = component_decimal(components.get("ebitda_actual"))
+    revenue = component_decimal(components.get("revenue_actual"))
     if ebitda_revision and revenue_revision and ebitda is not None and revenue not in (None, 0):
-        margin = (ebitda / revenue) * 100
+        margin = margin_percent(ebitda, revenue)
         _revision_id, created = persist_shadow_claim(
             cur,
             tenant_id=tenant_id,
@@ -3110,15 +3119,15 @@ def persist_finance_kpi_claims(
         claims += int(created)
     plan_ebitda_revision = component_revisions.get("ebitda_plan")
     plan_revenue_revision = component_revisions.get("revenue_plan")
-    plan_ebitda = money_value(components.get("ebitda_plan"))
-    plan_revenue = money_value(components.get("revenue_plan"))
+    plan_ebitda = component_decimal(components.get("ebitda_plan"))
+    plan_revenue = component_decimal(components.get("revenue_plan"))
     if (
         plan_ebitda_revision
         and plan_revenue_revision
         and plan_ebitda is not None
         and plan_revenue not in (None, 0)
     ):
-        plan_margin = (plan_ebitda / plan_revenue) * 100
+        plan_margin = margin_percent(plan_ebitda, plan_revenue)
         _revision_id, created = persist_shadow_claim(
             cur,
             tenant_id=tenant_id,

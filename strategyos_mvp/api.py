@@ -8964,6 +8964,12 @@ def governed_evidence_page(principal: dict[str, Any] = Depends(authenticate_opti
     return HTMLResponse((STATIC_DIR / "claims.html").read_text(encoding="utf-8"), headers={"Cache-Control": "no-store"})
 
 
+@app.get("/claims/intake", response_class=HTMLResponse)
+def governed_intake_page(principal: dict[str, Any] = require_role("operator", "tenant_admin", "system")) -> Any:
+    return HTMLResponse((STATIC_DIR / "claim-intake.html").read_text(encoding="utf-8"),
+                        headers={"Cache-Control": "no-store"})
+
+
 @app.get("/architecture", response_class=HTMLResponse)
 def architecture_page(
     principal: dict[str, Any] = Depends(authenticate_optional_request),

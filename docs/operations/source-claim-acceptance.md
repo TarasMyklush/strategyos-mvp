@@ -44,7 +44,11 @@ It is not yet a full per-claim rewrite of every legacy presentation component.
 | Legacy read and list source authorization | `test_legacy_source_scope.py`, `test_cross_source_postgres_e2e.py` |
 | Bulk snapshot input-source permissions and lifecycle withdrawal across ingestion batches | `test_bulk_claim_lineage_postgres_e2e.py` |
 | KPI component metric/kind/unit/currency/scale and comparison-period validation | `test_governed_finance.py`, `test_governed_claim_adoption.py` |
+| Executable calculation contracts, exact result checking and forbidden ratio/time/FX mixing | `test_claim_calculations.py`, `test_bulk_claim_lineage_postgres_e2e.py` |
 | Explicit typed manual intake cannot self-verify or send | `test_claim_api.py` |
+| Mixed workbook types, ambiguous cells, missing values, exact row locators and mapping revisions | `test_tabular_claims.py` |
+| Atomic batch rollback, artifact binding, idempotent receipt and current-policy replay checks | `test_tabular_claims_postgres_e2e.py` |
+| Multipart preview-first endpoint and operator screen | `test_workbook_intake_api.py`; browser acceptance required |
 | Independent claim workspace, safe source rendering and explicit claim types | `test_claim_workspace.py`; browser acceptance required |
 
 Run the complete suite against dedicated disposable PostgreSQL, Neo4j and Qdrant,

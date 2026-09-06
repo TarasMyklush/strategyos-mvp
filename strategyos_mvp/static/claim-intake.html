@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Workbook interpretation — StrategyOS</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/executive.css"><link rel="stylesheet" href="/static/claims.css">
+<script src="/static/claim-intake.js" defer></script></head>
+<body><main class="claim-workspace">
+<a href="/claims">← Governed evidence</a><h1>Interpret a workbook</h1>
+<p>Operator workspace. Map columns explicitly to actuals, plans or authored forecasts. Preview first; ambiguous cells remain unclassified. Recording claims does not approve them, change an approved briefing, or send a message.</p>
+<form id="intake-form" class="card claim-query">
+<label>Registered evidence occurrence<input name="occurrence_key" required maxlength="240" autocomplete="off"></label>
+<label>Original workbook<input type="file" name="file" accept=".xlsx" required></label>
+<label class="claim-query-wide">Versioned mapping contract (JSON)<textarea name="mapping_json" rows="14" required maxlength="64000" spellcheck="false" aria-describedby="mapping-help"></textarea></label>
+<p id="mapping-help" class="claim-query-wide">Specify the worksheet, subject column, each value column’s metric, unit, scale, currency and period, and either its claim type or a per-row type column. Forecasts also need an author. The uploaded bytes must match the registered evidence.</p>
+<button type="submit">Preview interpretation</button>
+<button id="intake-apply" type="button" disabled>Record previewed claims</button>
+</form>
+<p id="intake-status" role="status" aria-live="polite">No claims have been recorded.</p>
+<section class="card claim-record" aria-label="Interpretation results"><pre id="intake-result"></pre></section>
+<details class="card claim-record"><summary>Mapping example — replace with your source definitions</summary><pre id="mapping-example"></pre></details>
+</main></body></html>

@@ -4,7 +4,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status, File, Form, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 
 from .auth import require_role
@@ -13,6 +13,35 @@ from .source_claims import ClaimDraft, ClaimKind, ClaimQuery, PolicyContext, Use
 
 
 router = APIRouter(prefix="/api/claims", tags=["governed-claims"])
+
+
+@router.post("/intake/workbook")
+def intake_mapped_workbook(
+    file: UploadFile = File(...),
+    occurrence_key: str = Form(min_length=1, max_length=240),
+    mapping_json: str = Form(min_length=2, max_length=64000),
+    apply: bool = Form(default=False),
+    principal: dict[str, Any] = require_role("operator", "tenant_admin", "system"),
+) -> dict[str, Any]:
+    """Preview by default; apply only an explicit mapping of registered bytes."""
+    import hashlib
+    from .tabular_claims import TableClaimMapping, read_workbook_rows
+    context = _policy_context(principal, UsePurpose.OPERATIONS)
+    content = file.file.read(5 * 1024 * 1024 + 1)
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(413, "Workbook intake is limited to 5 MiB.")
+    if not str(file.filename or "").lower().endswith(".xlsx"):
+        raise HTTPException(422, "Only an XLSX workbook is accepted for mapped intake.")
+    try:
+        mapping = TableClaimMapping.model_validate_json(mapping_json)
+        rows = read_workbook_rows(content, mapping)
+        return ClaimRepository().ingest_mapped_table(rows, mapping,
+            occurrence_key=occurrence_key, source_hash=hashlib.sha256(content).hexdigest(),
+            context=context, apply=apply)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except RuntimeError:
+        raise HTTPException(503, "Mapped claim intake is temporarily unavailable.") from None
 
 
 class TypedClaimIntake(BaseModel):

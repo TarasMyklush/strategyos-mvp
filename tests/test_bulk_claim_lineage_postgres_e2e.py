@@ -1,6 +1,6 @@
 """Legacy bulk reads inherit the exact snapshot's transitive source boundary."""
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import uuid4
 
 import pytest
@@ -41,14 +41,19 @@ def test_bulk_snapshot_cannot_bypass_sources_outside_its_ingestion_batch(ledger)
         claim = repo.record_claim(ClaimDraft(tenant_id=tenant, assertion_namespace="fixture",
             subject_type="enterprise", subject_key="group", metric_key=f"test.input.{number}",
             claim_kind="actual", production_method="imported", value_numeric=number,
+            period_start=date(2026, 6, 1), period_end=date(2026, 6, 30),
             unit="SAR", currency="SAR", source_occurrence_keys=(occurrence["occurrence_key"],)),
             traceability="present")
         inputs.append(claim["claim_revision_id"])
-    derived = repo.record_claim(ClaimDraft(tenant_id=tenant, assertion_namespace="fixture",
+    calculated = ClaimDraft(tenant_id=tenant, assertion_namespace="fixture",
         subject_type="enterprise", subject_key="group", metric_key="test.sum",
         claim_kind="actual", production_method="calculated", value_numeric=3,
+        period_start=date(2026, 6, 1), period_end=date(2026, 6, 30),
         unit="SAR", currency="SAR", formula_key="sum", formula_version="1",
-        input_revision_ids=tuple(inputs)), traceability="present")
+        input_revision_ids=tuple(inputs))
+    with pytest.raises(ValueError, match="does not match"):
+        repo.record_claim(replace(calculated, value_numeric=999), traceability="present")
+    derived = repo.record_claim(calculated, traceability="present")
     run = str(uuid4())
     with psycopg.connect(url) as conn, conn.cursor() as cur:
         cur.execute("""insert into strategyos_analysis_snapshots

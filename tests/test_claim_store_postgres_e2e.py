@@ -373,7 +373,10 @@ def test_run_backfill_materializes_kpis_lineage_snapshot_and_reconciliation():
             )
             assert cur.fetchone() == ("passed", 1, 1, Decimal("0"))
             cur.execute(
-                "select count(*) from strategyos_claim_dependencies where input_role = 'input'"
+                """select count(*) from strategyos_claim_dependencies d
+                   join strategyos_claim_revisions r on r.id = d.derived_claim_revision_id
+                   where d.input_role = 'input' and r.tenant_id = %s""",
+                (tenant_id,),
             )
             assert cur.fetchone()[0] == 2
             cur.execute(

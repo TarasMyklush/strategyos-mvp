@@ -123,8 +123,9 @@ def test_postgres_backed_governed_source_pack_flow(tmp_path: Path):
             headers=_auth_header("operator-secret"),
             json={"source_pack_id": source_pack["source_pack_id"], "sync_artifacts": False},
         )
-        assert created.status_code == 200
+        assert created.status_code == 200, created.text
         created_payload = created.json()
+        assert (created_payload.get("state_store") or {}).get("status") != "failed", created_payload.get("state_store")
         run_id = created_payload["run_id"]
         assert created_payload["status"] == "awaiting_review"
         assert created_payload["current_stage"] == "awaiting_review"
