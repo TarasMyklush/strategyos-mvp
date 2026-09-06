@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Source intake — StrategyOS</title><link rel="icon" href="/static/favicon.svg">
+<link rel="stylesheet" href="/static/executive.css"><link rel="stylesheet" href="/static/claims.css">
+<script src="/static/source-intake.js" defer></script></head>
+<body><main class="claim-workspace">
+<a href="/claims">← Governed evidence</a><h1>Add a source</h1>
+<p>Stage files with explicit provenance and permissions. This does not approve claims, replace a briefing, or send data to an external model. Upload sources with different rights separately.</p>
+<form id="source-form" class="card claim-query">
+<label class="claim-query-wide">Files or ZIP archive<input name="files" type="file" multiple></label>
+<label class="claim-query-wide">Or a server folder<input name="folder_path" placeholder="A folder inside the configured workspace" autocomplete="off"></label>
+<label class="claim-check claim-query-wide"><input type="checkbox" name="storage_allowed" required> I am authorized to store this source in this workspace.</label>
+<details class="claim-query-wide"><summary>Source classification and permitted use</summary>
+<p>Complete this contract before analysis. Otherwise, the files remain staged for classification. Rights are not inferred from the source’s origin.</p>
+<div class="claim-query">
+<label>Stable source key<input name="source_key" placeholder="finance-erp" maxlength="160"></label>
+<label>Source name<input name="display_name" maxlength="240"></label>
+<label>Source origin<select name="origin_category"><option value="unknown">Not classified</option><option value="internal_system">Internal system</option><option value="public_web">Public web — untrusted</option><option value="licensed_external">Licensed provider</option><option value="correspondence">Correspondence</option></select></label>
+<label>Accountable data owner<input name="governed_owner" maxlength="240"></label>
+<label class="claim-query-wide">Authorization basis<input name="authorization_basis" placeholder="Policy or approval reference" maxlength="1000"></label>
+<label>Provider, if licensed<input name="provider_name" maxlength="240"></label>
+<label>License reference, if licensed<input name="license_policy_ref" maxlength="240"></label>
+<label>Allowed roles<input name="allowed_roles" placeholder="operator, system, executive" aria-describedby="roles-help"></label>
+<label>Allowed purposes<input name="allowed_purposes" placeholder="operations, analysis, executive_briefing"></label>
+<p id="roles-help" class="claim-query-wide">Comma-separated exact role and purpose keys. Background indexing requires system and operations authority as well as indexing permission. Add only explicitly authorized roles.</p>
+<label class="claim-query-wide">Business-unit scope<input name="allowed_business_units" placeholder="Comma-separated keys; blank only for an authorized group-wide source"></label>
+<label class="claim-check"><input name="index_allowed" type="checkbox"> Local search indexing is permitted</label>
+<label class="claim-check"><input name="export_allowed" type="checkbox"> Export is permitted</label>
+<p class="claim-query-wide">Quotation and external-model use remain denied.</p>
+</div></details>
+<button type="submit">Stage source</button>
+</form>
+<p id="source-status" role="status" aria-live="polite">No files have been staged.</p>
+<section id="source-result" class="card claim-record" hidden><h2>Staged source</h2><dl id="source-summary"></dl>
+<details><summary>File accounting and mapping readiness</summary><pre id="source-detail"></pre></details>
+<button id="source-start" type="button" disabled>Start analysis from this source</button>
+<p>Analysis creates a separate run. Reviewer approval and publication remain separate actions.</p></section>
+<p><a href="/claims/intake">Interpret an already registered workbook →</a></p>
+</main></body></html>

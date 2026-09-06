@@ -260,6 +260,10 @@ def graph_status_for_run(run_id: str | None) -> dict[str, Any]:
         return _status("missing", reason="No run_id is available for Neo4j lookup.")
     if not CONFIG.neo4j_uri:
         return _status("skipped", run_id=run_id, reason="NEO4J_URI is not configured.")
+    from .access_scope import source_index_allowed, principal_scope
+    tenant_id = str((principal_scope.get() or {}).get("tenant_id") or getattr(CONFIG, "tenant_slug", ""))
+    if not source_index_allowed(run_id, tenant_id):
+        return _status("blocked", run_id=run_id, reason="Current source permissions do not permit this graph index.")
     try:
         with _graph_driver() as driver:
             with driver.session() as session:

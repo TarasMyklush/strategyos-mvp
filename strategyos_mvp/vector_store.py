@@ -605,9 +605,12 @@ def _sample_payload(payload: dict[str, Any] | None) -> dict[str, Any] | None:
 
 
 def _run_filter(run_id: str) -> dict[str, Any]:
-    from .access_scope import guard_run, principal_scope
+    from .access_scope import guard_run, principal_scope, source_index_allowed
     guard_run(run_id, require_store=True)
     principal = principal_scope.get()
+    tenant_id = str((principal or {}).get("tenant_id") or getattr(CONFIG, "tenant_slug", ""))
+    if not source_index_allowed(run_id, tenant_id):
+        raise PermissionError("Current source permissions do not permit this search index.")
     clauses = [{"key": "run_id", "match": {"value": run_id}}]
     if principal is not None and not principal.get("auth_disabled"):
         clauses.append({"key": "tenant_slug", "match": {"value": principal.get("tenant_id")}})

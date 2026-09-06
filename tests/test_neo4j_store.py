@@ -216,6 +216,7 @@ def test_sync_knowledge_graph_blocks_when_postgres_source_of_truth_is_missing(
 
 
 def test_graph_status_fails_when_neo4j_outpaces_authoritative_sources(monkeypatch, tmp_path):
+    monkeypatch.setattr("strategyos_mvp.access_scope.source_index_allowed", lambda *args: True)
     graph_path = tmp_path / "StrategyOS Knowledge Graph.json"
     graph_path.write_text(json.dumps({"nodes": [{"id": "n1"}], "edges": []}), encoding="utf-8")
     fake_driver = FakeDriver()
@@ -245,6 +246,7 @@ def test_graph_status_fails_when_neo4j_outpaces_authoritative_sources(monkeypatc
 
 
 def test_graph_status_reports_empty_projection_without_error(monkeypatch, tmp_path):
+    monkeypatch.setattr("strategyos_mvp.access_scope.source_index_allowed", lambda *args: True)
     graph_path = tmp_path / "StrategyOS Knowledge Graph.json"
     graph_path.write_text(json.dumps({"nodes": [], "edges": []}), encoding="utf-8")
     fake_driver = FakeDriver()

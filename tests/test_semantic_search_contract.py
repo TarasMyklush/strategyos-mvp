@@ -56,6 +56,7 @@ def test_write_only_workbook_without_dimension_metadata_is_indexed(tmp_path):
 
 
 def test_reindex_reuses_only_matching_scope_and_hash(monkeypatch):
+    monkeypatch.setattr('strategyos_mvp.access_scope.source_index_allowed',lambda *args:True)
     monkeypatch.setattr(semantic_embeddings,'configured',lambda:True)
     monkeypatch.setattr(source_search,'source_records',lambda evidence:iter([('a.xlsx','hash','Sheet!Excel row 2','A: 0')]))
     monkeypatch.setattr(vector_store,'_run_filter',lambda run:None)

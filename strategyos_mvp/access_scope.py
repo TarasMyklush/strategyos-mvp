@@ -23,7 +23,7 @@ def source_index_allowed(run_id: str, tenant_id: str) -> bool:
             principal_id=str(principal.get("subject") or "system:local-indexer"),
             roles=frozenset({str(principal.get("role") or "system")}),
             business_units=frozenset(principal.get("business_units") or ()),
-            purpose=UsePurpose.OPERATIONS,
+            purpose=UsePurpose.EXECUTIVE_BRIEFING if principal.get("_source_read_request") else UsePurpose.OPERATIONS,
         ), require_index=True)
         return result.get("allowed") is True
     except (ValueError, RuntimeError, KeyError):

@@ -8878,6 +8878,7 @@ def homepage(
 
 @app.get("/app", response_class=HTMLResponse)
 def dashboard(
+    lane: str | None = None,
     persona: str | None = None,
     board: str | None = None,
     driver: str | None = None,
@@ -8890,6 +8891,10 @@ def dashboard(
     login_redirect = _login_or_authorized_html(principal)
     if login_redirect is not None:
         return login_redirect
+    if lane == "operate":
+        if not principal.get("auth_disabled") and not principal_has_any_role(str(principal.get("role")), "operator"):
+            raise HTTPException(403, "Operator authority is required for source intake.")
+        return RedirectResponse("/sources/intake", status_code=303)
     return _executive_html(
         view_state=_requested_executive_view_state(
             persona=persona,
@@ -8971,6 +8976,12 @@ def governed_evidence_page(principal: dict[str, Any] = Depends(authenticate_opti
 @app.get("/claims/intake", response_class=HTMLResponse)
 def governed_intake_page(principal: dict[str, Any] = require_role("operator", "tenant_admin", "system")) -> Any:
     return HTMLResponse((STATIC_DIR / "claim-intake.html").read_text(encoding="utf-8"),
+                        headers={"Cache-Control": "no-store"})
+
+
+@app.get("/sources/intake", response_class=HTMLResponse)
+def governed_source_intake_page(principal: dict[str, Any] = require_role("operator")) -> Any:
+    return HTMLResponse((STATIC_DIR / "source-intake.html").read_text(encoding="utf-8"),
                         headers={"Cache-Control": "no-store"})
 
 

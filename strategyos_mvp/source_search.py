@@ -69,6 +69,9 @@ def sync_sources(*, run_id, tenant_slug, evidence):
         return {'status': 'disabled', 'reason': 'No pinned local embedding model configured.'}
     if evidence is None:
         raise ValueError("Source evidence is unavailable; indexing cannot continue.")
+    from .access_scope import source_index_allowed
+    if not source_index_allowed(run_id, tenant_slug):
+        return {'status': 'blocked', 'reason': 'Source policy does not permit source-text indexing.'}
     vector_store._run_filter(run_id)  # Reject unknown or inaccessible runs before reading source files.
     vector_store._ensure_collection()
     # Preflight the entire bounded manifest before writing any index records.

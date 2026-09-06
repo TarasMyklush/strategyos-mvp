@@ -41,3 +41,18 @@ def test_indexer_cannot_cross_request_tenant():
         assert not access_scope.source_index_allowed("run", "two")
     finally:
         access_scope.principal_scope.reset(token)
+
+
+def test_stale_legacy_vectors_are_not_read_after_revocation(monkeypatch):
+    monkeypatch.setattr(access_scope, "guard_run", lambda *args, **kwargs: None)
+    monkeypatch.setattr(access_scope, "source_index_allowed", lambda *args: False)
+    with pytest.raises(PermissionError, match="Current source permissions"):
+        vector_store._run_filter("stale-run")
+
+
+def test_source_text_index_checks_rights_before_reading_files(monkeypatch):
+    from strategyos_mvp import source_search, semantic_embeddings
+    monkeypatch.setattr(semantic_embeddings, "configured", lambda: True)
+    monkeypatch.setattr(access_scope, "source_index_allowed", lambda *args: False)
+    monkeypatch.setattr(source_search, "source_records", lambda *args: pytest.fail("Denied files read"))
+    assert source_search.sync_sources(run_id="run", tenant_slug="tenant", evidence=object())["status"] == "blocked"

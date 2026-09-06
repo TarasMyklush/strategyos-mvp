@@ -140,3 +140,19 @@ counts alone do not close these boundaries.
 - Read-only audit with explicit normalized-path aliases verified all five
   finance source hashes and identified three historical actual claims for
   correction (cash, cost, revenue). No assessments or snapshots were modified.
+
+### Source-intake and existing-index closure candidate
+
+- Full dedicated service suite: **2,020 passed, zero skipped**, receipt
+  `/tmp/strategyos-intake-proof.xml`, 327.04 seconds.
+- `/app?lane=operate` now resolves to an operator-authorized, noncacheable
+  `/sources/intake` page. The executive route remains unchanged.
+- Browser inspection at desktop width verified expandable classification,
+  storage-only quarantine, explicit classified staging, safe receipt rendering,
+  and disabled analysis for a source without the required dataset mapping.
+  Only isolated synthetic files were staged; no analysis was launched.
+- Existing legacy vector reads and graph previews recheck indexing permission,
+  and source-text indexing checks permission before reading source files.
+- This does not yet make staged files independently registered claim evidence:
+  that path still requires closure without manual database operations. Mobile
+  visual acceptance and online deployment of this candidate remain pending.
