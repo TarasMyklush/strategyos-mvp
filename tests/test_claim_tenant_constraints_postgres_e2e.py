@@ -56,7 +56,7 @@ def test_database_rejects_cross_tenant_links_and_wrong_snapshot_families(ledger)
             ("insert into strategyos_claim_intake_receipts(tenant_id,evidence_occurrence_id,effect_key,mapping_key,mapping_version,mapping_contract,source_hash,recorded_by,result) values (%s,%s,'qa','qa','1','{}','qa','qa','{}')",(foreign,occurrence_id)),
         ]
         for sql,parameters in invalid:
-            with pytest.raises(psycopg.errors.ForeignKeyViolation):
+            with pytest.raises((psycopg.errors.ForeignKeyViolation, psycopg.errors.CheckViolation)):
                 with conn.transaction():
                     conn.execute(sql,parameters)
         conn.execute("insert into strategyos_analysis_snapshot_claims(snapshot_id,claim_family_id,claim_revision_id,selection_reason) values (%s,%s,%s,'qa')",(snapshot,family,first))

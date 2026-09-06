@@ -23,6 +23,13 @@ or the newly scoped twin API. Their default was already off; explicitly writing
 the values prevents stale deployment configuration from enabling an unaudited
 parallel data path. No production flags are changed by this preview workflow.
 
+Migration 0012 adds database rejection of in-place updates/deletes of claim
+revision and assessment rows; corrections and review changes must append records.
+It does not claim to prevent a privileged database owner from altering DDL or
+truncating tables. Runtime role separation/RLS remains required. No administrative
+erasure bypass or retention period is invented by this change; authorized disposal
+needs a separately reviewed, audited procedure. No existing claim is deleted.
+
 Do not use a blank optional saved-activity surface as proof of an empty business
 agenda. It must say unavailable without fabricated zero counts. Business
 priorities remain sourced from the authorized briefing's Decisions for you.
