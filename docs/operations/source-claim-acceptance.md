@@ -430,3 +430,39 @@ counts alone do not close these boundaries.
   Failed checks roll back without a new revision or outbox work.
 - Fourteen focused PostgreSQL intake/recalculation/conflict tests passed for this
   additional guard. Its full gate and deployment remain pending.
+
+### Preview origin acceptance and additional ownership controls
+
+- Release `53fc3a58a29b2e18c5bfe64a764dccb887773f08`, workflow
+  `34060246580`, completed successfully. Live executive/operator probes passed
+  typed retrieval, snapshot access, exact period selection, semantic retrieval,
+  intake-role denial and legacy-attachment denial. Restricted snapshot uses
+  returned 403 without hidden record counts. Production was not targeted.
+- Four synthetic source packs were staged and recorded online through the real
+  intake APIs: internal, public, licensed and correspondence origins, all captured
+  by file upload. Equal bytes retained four distinct occurrences and source rights.
+  Only tenant-admin operational review is allowed; CEO/system, briefing, export,
+  quotation, indexing and external-model uses are not granted. No analysis,
+  approval, publication, message or real connector was triggered.
+- Metric `qa.origin.proof.20260907` and policy receipt
+  `9469fa27-124b-415e-a622-cc41571c67f8` are explicitly synthetic QA. Priority retry
+  was idempotent; copied evidence remained `independent_corroboration=not_assessed`.
+  Browser inspection confirmed all four origin labels and the preference-not-
+  verification qualification. This does not configure business source precedence.
+- Replacement authority commit `06d158b` passed 2,087 tests, zero skips
+  (`/tmp/strategyos-replacement-full.xml`, 304.96 seconds). Workflow `34060816975`
+  is a separate preview rollout; confirm its completion before release sign-off.
+- Migration 0011 adds composite tenant/family constraints. The restored preview
+  data migrated without inconsistent rows. Twenty-five targeted service-backed
+  tests passed, including fifteen rejected cross-tenant/wrong-family SQL writes.
+  Frozen full-suite candidate `4be409b` remains under verification.
+- Technical claim provenance now collapses independently; origin, value, units,
+  period, author and material qualifications remain visible. Local browser opening
+  and closing worked at a measured 462 px without overflow. A requested 390 px
+  override did not change that tab's measured width; do not count it as a 390 px
+  pass. Five focused workspace tests passed.
+- Board-memory candidate reauthorizes frozen reads, questions, lists and exports
+  with current source policy. Thirty-one targeted tests passed including real
+  PostgreSQL read/revoke/export/revision scenarios and meeting-list isolation.
+  Frozen bytes and answers were unchanged. Full and online verification of this
+  candidate remain pending; no real meeting was closed during QA.
