@@ -52,8 +52,9 @@ image, and rejects skipped tests as well as failures.
 
 ## Remaining boundaries — do not claim universal completion
 
-- Public-packet and noncanonical model invocations are separate from the
-  authenticated canonical Hermes gate and still require a call-site audit.
+- Canonical public presentation packets also enforce external-model permission;
+  formatting a packet for display does not grant transmission consent.
+  Noncanonical model invocations still require a separate call-site audit.
 - Arbitrary document extraction is not automatically a typed numerical claim;
   unknown semantics must remain unknown instead of inventing units or kinds.
 - Actual third-party connector authentication, delivery, retries and consent

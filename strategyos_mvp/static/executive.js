@@ -207,6 +207,7 @@
 
   function renderAssistantStructuredAnswer(rawText, payload) {
     var text = String(rawText || "").trim();
+    if (payload && payload.policy_denied) return '<div class="assistant-answer-dashboard"><p>' + escapeHtml(text) + '</p></div>';
     if (!text) return '<div class="assistant-answer-dashboard"><p class="assistant-answer-verdict">No answer was returned.</p></div>';
     var blocks = payload && payload.executive_blocks && typeof payload.executive_blocks === "object" ? payload.executive_blocks : {};
     var plain = text.replace(/^#+\s*/gm, "").replace(/\*\*/g, "").replace(/\s+/g, " ").trim();
@@ -3343,7 +3344,7 @@
           requestId: requestId,
           endpoint: endpoint
         };
-        rememberAssistantAnswer(cleanMessage, successfulResult, entrypointCtx);
+        if (!payload.policy_denied) rememberAssistantAnswer(cleanMessage, successfulResult, entrypointCtx);
         return successfulResult;
       }
       return cachedAssistantFallback(cleanMessage, makeAssistantFailureResult(cleanMessage, {
@@ -7185,9 +7186,10 @@
           }).join('') + '</div>';
         }
         var payload = message.payload && typeof message.payload === 'object' ? message.payload : {};
-        var tier = String(firstDefined(payload.determinism_tier, '')).trim();
+        if (payload.policy_denied) failureMeta = '';
+        var tier = payload.policy_denied ? 'policy' : String(firstDefined(payload.determinism_tier, '')).trim();
         var sections = payload.response_sections && typeof payload.response_sections === 'object' ? payload.response_sections : {};
-        var tierLabel = { governed_fact: 'Verified fact', derived_insight: 'Derived insight', advisory: 'Advisory' }[tier] || '';
+        var tierLabel = { policy: 'Permission required', governed_fact: 'Verified fact', derived_insight: 'Derived insight', advisory: 'Advisory' }[tier] || '';
         var bodyHtml = role === 'assistant'
           ? renderAssistantMarkdownToHtml(firstDefined(message.text, ''))
           : escapeHtml(firstDefined(message.text, ''));

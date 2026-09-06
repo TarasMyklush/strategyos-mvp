@@ -59,7 +59,8 @@ def test_nonactual_claims_never_substitute_for_actuals(kind):
 
 
 @pytest.mark.parametrize("failure", [False, True])
-def test_external_model_denial_happens_before_retrieval_or_network(monkeypatch, failure):
+@pytest.mark.parametrize("public_packet", [None, {"kpis": [{"name": "Revenue", "value": 123}]}])
+def test_external_model_denial_happens_before_retrieval_or_network(monkeypatch, failure, public_packet):
     from strategyos_mvp import claim_store, llm_qa, source_search
     from tests.test_llm_qa import _config
 
@@ -79,8 +80,26 @@ def test_external_model_denial_happens_before_retrieval_or_network(monkeypatch, 
     monkeypatch.setattr(llm_qa, "urlopen", forbidden)
     result = llm_qa.answer_question(
         "Explain revenue", bundle=None, findings=[], config=_config(),
+        public_context_packet=public_packet,
         summary={"run_id": "run-1", "canonical_claim_status": "ready",
                  "_claim_policy_context": {"tenant_id": "tenant-1", "principal_id": "ceo", "roles": ["executive"]}},
     )
     assert result["policy_denied"]
     assert result["citations"] == []
+
+
+def test_policy_refusal_is_not_advice_or_verified_evidence():
+    from strategyos_mvp.api import _assistant_response_payload
+
+    result = _assistant_response_payload(
+        response_mode="llm", question="Compare strategic alternatives",
+        context={"run_id": "run-1", "run_mode": "governed"},
+        requested_mode="auto", persona="ceo", orchestrated=None,
+        base_result={"policy_denied": True, "answer": "Permission required."},
+    )
+    assert result["answer_origin"] == "policy"
+    assert result["determinism_tier"] == "policy"
+    assert not result["matched"]
+    assert not result["citations"]
+    assert not result["response_sections"]
+    assert not result["external_consultation"]["used"]

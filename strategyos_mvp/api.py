@@ -12060,6 +12060,23 @@ def _assistant_response_payload(
     llm_status: dict[str, Any] | None = None,
     assistant_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    if (base_result or {}).get("policy_denied"):
+        # A runtime authorization outcome is neither model advice nor evidence.
+        # Preserve it before orchestration can reclassify an unmatched answer.
+        return {
+            "status": "ok", "run_id": context["run_id"],
+            "run_mode": context["run_mode"], "question": question,
+            "requested_mode": requested_mode, "persona": persona,
+            "policy_denied": True, "matched": False,
+            "mode": "policy", "assistant_mode": "policy",
+            "answer_origin": "policy", "answered_by": "source_policy",
+            "answer_status": "permission_required", "determinism_tier": "policy",
+            "answer": base_result["answer"], "basis": base_result.get("basis", ""),
+            "citations": [], "suggestions": [], "response_sections": {},
+            "executive_blocks": [], "human_review_required": False,
+            "external_consultation": {"requested": bool((assistant_context or {}).get("allow_external_advisory")), "used": False},
+            "llm_status": base_result.get("llm_status") or llm_status,
+        }
     trace = dict(getattr(orchestrated, "trace", {}) or {})
     if assistant_context:
         trace["entrypoint_context"] = dict(assistant_context)

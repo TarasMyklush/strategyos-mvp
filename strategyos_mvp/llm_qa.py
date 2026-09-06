@@ -292,7 +292,8 @@ def answer_question(
 
     public_packet = dict(public_context_packet or {})
     public_mode = bool(public_packet)
-    if not public_mode and (summary.get("canonical_claim_status") or summary.get("tenant_context")):
+    # A presentation-safe packet is not consent to transmit its source data.
+    if summary.get("canonical_claim_status") or summary.get("tenant_context"):
         from .claim_store import ClaimRepository
         from .source_claims import PolicyContext, UsePurpose
 
