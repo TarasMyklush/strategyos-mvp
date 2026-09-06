@@ -805,12 +805,20 @@
     return { "X-API-Key": token };
   }
 
-  function fetchJson(path) {
+  function fetchJson(path, required) {
     return fetch(path, { headers: authHeaders() }).then(function (response) {
       if (response.status === 401 && bootstrap.login_required) {
         clearStoredToken();
         window.location.replace('/login');
         throw new Error('Your session expired. Please sign in again.');
+      }
+      if (!response.ok && required) {
+        return parseJsonResponse(response).then(function (payload) {
+          var error = new Error(typeof (payload && payload.detail) === 'string'
+            ? payload.detail : 'The governed briefing is unavailable. Please retry.');
+          error.status = response.status;
+          throw error;
+        });
       }
       return response.ok ? response.json() : null;
     });
@@ -7348,6 +7356,28 @@
   }
 
   function renderPersonaView() {
+    var unavailablePanel = $("briefing-unavailable-state");
+    if (state.briefingUnavailable) {
+      safeArray(document.querySelectorAll("[data-view-panel]")).forEach(function (panel) {
+        panel.hidden = true;
+        panel.setAttribute("aria-hidden", "true");
+      });
+      if (!unavailablePanel) {
+        unavailablePanel = document.createElement("section");
+        unavailablePanel.id = "briefing-unavailable-state";
+        unavailablePanel.className = "persona-lock-state card";
+        unavailablePanel.setAttribute("role", "alert");
+        $("sheet").prepend(unavailablePanel);
+      }
+      unavailablePanel.hidden = false;
+      unavailablePanel.innerHTML = '<h1>Briefing unavailable</h1><p>'
+        + escapeHtml(state.briefingUnavailable)
+        + '</p><p>No previous financial view is being presented as current.</p><button type="button">Retry</button>';
+      unavailablePanel.querySelector("button").onclick = function () { refresh(false); };
+      if ($("assistant-dock")) $("assistant-dock").hidden = true;
+      return;
+    }
+    if (unavailablePanel) unavailablePanel.hidden = true;
     updateDocumentTitle();
     renderTopbar();
     var activePersona = getPersonaContract(state.activePersona);
@@ -7426,13 +7456,15 @@
       var session = await fetchJson("/ui/session") || {};
       var frozenBoard = params.persona === "board" && params.board === "closed";
       var packetAndNetwork = await Promise.all([
-        fetchJson(latestRunRouteForSession(session) + buildQuery(params)),
+        fetchJson(latestRunRouteForSession(session) + buildQuery(params), true),
         session.authenticated && !frozenBoard ? fetchJson("/api/v1/agent-network") : Promise.resolve(null),
         session.authenticated && !frozenBoard ? fetchJson("/executive/files") : Promise.resolve(null),
         session.authenticated && !frozenBoard ? fetchJson("/executive/decisions") : Promise.resolve(null),
         fetchJson("/authority-matrix")
       ]);
       var latestPacket = packetAndNetwork[0];
+      if (!latestPacket) throw new Error('The governed briefing is unavailable. Please retry.');
+      state.briefingUnavailable = null;
       var agentNetwork = packetAndNetwork[1];
       var reviewFiles = packetAndNetwork[2];
       var decisionRecords = packetAndNetwork[3];
@@ -7503,6 +7535,12 @@
       updateHistory();
       renderPersonaView();
     } catch (error) {
+      state.latestPacket = {};
+      state.agentNetwork = null;
+      state.reviewFiles = null;
+      state.decisionRecords = [];
+      state.briefingUnavailable = error.message || 'The governed briefing is unavailable. Please retry.';
+      renderPersonaView();
       console.warn("executive refresh failed", error);
     }
   }

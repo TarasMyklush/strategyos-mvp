@@ -99,7 +99,27 @@ def test_executive_static_js_switches_latest_run_route_by_session_mode():
     assert 'if (session && session.authenticated) return "/runs/latest";' in js
     assert 'return "/public/runs/latest";' in js
     assert 'var session = await fetchJson("/ui/session") || {};' in js
-    assert 'fetchJson(latestRunRouteForSession(session) + buildQuery(params))' in js
+    assert 'fetchJson(latestRunRouteForSession(session) + buildQuery(params), true)' in js
+
+
+def test_required_briefing_fetch_never_turns_denial_into_empty_success():
+    js = _static_executive_js()
+    fetch_function = "function fetchJson" + js.split("function fetchJson", 1)[1].split("function putJson", 1)[0]
+    program = """
+const assert = require('assert');
+const bootstrap = {login_required:false};
+const authHeaders = () => ({});
+const parseJsonResponse = response => response.json();
+const fetch = async () => ({ok:false,status:403,json:async()=>({detail:'Source access denied'})});
+""" + fetch_function + """
+(async () => {
+  await assert.rejects(fetchJson('/runs/latest', true), /Source access denied/);
+  assert.strictEqual(await fetchJson('/optional'), null);
+})().catch(error => { console.error(error); process.exit(1); });
+"""
+    subprocess.run(["node", "-e", program], check=True, capture_output=True, text=True)
+    assert 'state.latestPacket = {};' in js
+    assert 'No previous financial view is being presented as current.' in js
     assert 'session.authenticated && !frozenBoard ? fetchJson("/api/v1/agent-network")' in js
 
 
