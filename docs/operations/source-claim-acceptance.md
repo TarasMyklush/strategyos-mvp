@@ -511,3 +511,7 @@ counts alone do not close these boundaries.
   by slug. Eight unit checks and two real PostgreSQL checks passed, including
   an adversarial UUID-shaped slug that must not redirect ledger authority.
   Read-only preview inspection found zero UUID-shaped tenant slugs.
+- A shared protected-page session boundary clears rendered private content on
+  cross-tab account change/logout and rechecks back-forward-cache restores.
+  It does not delete saved history or submit drafts. The frontend/evidence
+  subset passed 162 tests; live account-switch acceptance remains pending.
