@@ -1,5 +1,20 @@
 # Next implementation increments from the 7 September direction
 
+## Prioritized backlog
+
+| Priority | Deliverable | Definition of done | Dependency |
+| --- | --- | --- | --- |
+| P0 | History-derived decomposition | One selected prior snapshot produces disclosed weights; adjustments bridge from history to proposal; missing values never become zero | Current explicit-weight decomposition |
+| P0 | Guided Strategic Advisor console | A strategy advisor configures sources, dimensions, owners, tolerances and board labels without JSON or an engineering ticket; readiness and approval are visible | Existing source governance and Intent Vault |
+| P1 | Board template registry and pack history | Tenant template versions and generated pack records are durable, permissioned, downloadable and stale-aware | Deployed composer |
+| P1 | Healthcare/pharma demo pack | Three synthetic stories run from governed evidence through cell drift and board pack, with sector details confined to configuration | History-derived decomposition for the mix story |
+| P1 | Price/volume/mix bridge | Exact, unit-safe bridge reconciles price, volume and mix effects to the observed variance | Explicit price and volume source fields |
+| P2 | Executive adoption loop | One executive request creates an accountable owner task; reply proposes a governed update and closure remains reviewable | Advisor configuration and outreach workflow |
+| Blocked | Minimal email connector | Allowlisted test-domain draft/send/reply/commitment path passes security and retention acceptance | Test domain access and connector credentials |
+
+P0 should be built and deployed in the order shown. The connector can move into P1
+as soon as its dependency is available; the HTML demonstration remains the fallback.
+
 ## 1. Plan decomposition: engine proposes, Vault records
 
 Status: the first explicit-weight slice is implemented and locally verified. It

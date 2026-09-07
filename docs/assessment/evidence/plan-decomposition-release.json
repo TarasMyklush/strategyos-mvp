@@ -1,0 +1,10 @@
+{
+  "application_revision": "0fcc28a24a55c2a2fae82edca921e40d567ca78d",
+  "image": "sha256:c17a25a42914b4d47a59266faf7e5c93c8720944fef72406bbbc2c2776d3fe70",
+  "target": "https://new.strategyos.live/plan",
+  "workflow": "https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34153596625",
+  "status": "deployed_and_hosted_acceptance_passed",
+  "service_tests": {"passed": 2341, "skipped": 0, "warnings": 6, "seconds": 369.39},
+  "hosted_recorded_https_checks": 12,
+  "business_approval": "unchanged; synthetic acceptance only"
+}

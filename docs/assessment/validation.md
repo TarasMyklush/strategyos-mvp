@@ -1,8 +1,8 @@
 # Validation record
 
-## Plan decomposition candidate — 7 September 2026
+## Hosted plan decomposition — 7 September 2026
 
-The next additive release puts deterministic allocation in the engine and stores
+The deployed additive release puts deterministic allocation in the engine and stores
 its output and lineage as an immutable Vault plan proposal. One approved cell can
 be split using evidence-backed positive weights, owners, tolerances and a selected
 dimension. The exact parent total is preserved with a disclosed remainder rule.
@@ -20,11 +20,26 @@ dimension. The exact parent total is preserved with a disclosed remainder rule.
 - Isolated browser proof created version 2 from a ratified target, displayed its
   parent fingerprint, engine/remainder rule, source-backed weights and exact 50/50
   cells. The operator could create but not ratify the proposal.
-- Full service deployment and hosted acceptance are pending for this candidate.
+- Full hosted service gate on application `0fcc28a`: **2,341 passed, zero
+  skips**, six warnings, 369.39 seconds. Image build, guarded backup, rollout,
+  worker health and public HTTPS checks passed in the deployment workflow.
+- Hosted acceptance recorded 12 successful HTTPS checks plus anonymous,
+  restricted-BU and operator-ratification denial. Ratified version 1 produced
+  version 2 with 100 SAR institutional, 75 SAR NUPCO and 25 SAR retail targets.
+  Matching actuals totalled 200 SAR against a 200 SAR target while both regional
+  cells were behind and the institutional cell was ahead. The saved analysis fed
+  a bilingual board preview and PDF.
+- Runtime revision `0fcc28a24a55c2a2fae82edca921e40d567ca78d`, image
+  `sha256:c17a25a42914b4d47a59266faf7e5c93c8720944fef72406bbbc2c2776d3fe70`,
+  is healthy. Schema/runtime-role verification passed. Selected run pointer,
+  source snapshot, release receipt and production image identities were preserved.
 
 Remaining historical-weight, seasonality, multi-level and guided-console work is
 tracked in [the prioritized backlog](../kyvern-next-increments-2026-09-07.md).
 Local details: [acceptance evidence](evidence/plan-decomposition-local-acceptance.json).
+Hosted evidence: [acceptance](evidence/plan-decomposition-hosted-acceptance.json),
+[runtime](evidence/plan-decomposition-runtime.json), and
+[release](evidence/plan-decomposition-release.json).
 
 ## Hosted board pack composer — 7 September 2026
 

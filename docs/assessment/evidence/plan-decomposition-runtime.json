@@ -1,0 +1,31 @@
+{
+  "target": "https://new.strategyos.live/plan",
+  "application_revision": "0fcc28a24a55c2a2fae82edca921e40d567ca78d",
+  "image": "sha256:c17a25a42914b4d47a59266faf7e5c93c8720944fef72406bbbc2c2776d3fe70",
+  "state": "running",
+  "health": "healthy",
+  "public_origin": "https://new.strategyos.live/",
+  "database_schema_verified": true,
+  "database_schema_fingerprint": "291a5081783eab4f159082216ff2aa4df3056aaad0b9d89420251692fa8f00b7",
+  "runtime_role": "strategyos_preview_runtime",
+  "intent_table_count": 5,
+  "intent_table_permissions": {
+    "row_level_security": true,
+    "select": true,
+    "insert": true,
+    "update": false,
+    "delete": false,
+    "truncate": false
+  },
+  "selected_run": {
+    "run_id": "5359b38c-7121-4aaa-a728-31a5dcd1fdab",
+    "status": "awaiting_review",
+    "approval_status": "pending"
+  },
+  "selected_run_pointer_sha256": "e934112cf7f0cc2eea3f485821e881453b2480defc7f8e1dabd7148e6f62b6d1",
+  "release_receipt_sha256": "1f8b85b8a7dc8b41e3b87d33eefbeca8c97acd88605950779f738f62b0ff1c46",
+  "selected_source_snapshot_sha256": "7f4fc074c3b30931bb3c262e1123aa05a7d955078aa842acf6eee97d72697933",
+  "production_revision": "4d58f6d7936952ff35431b304cd8bde9bc108e6a",
+  "production_image": "sha256:10602d23bafd6034d48ef3aff06cd7e5a7a37379f9361aef402283193875c483",
+  "pre_post_identity_comparison": "selected pointer, release receipt, selected source snapshot and production images unchanged"
+}

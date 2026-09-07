@@ -1,0 +1,42 @@
+{
+  "target": "https://new.strategyos.live",
+  "checked_at": "2026-09-07T19:10:21.194287+00:00",
+  "synthetic": true,
+  "plan_id": "SYNTHETIC-Intent-QA-20260907",
+  "parent_version": 1,
+  "proposal_version": 2,
+  "proposal_digest": "9b6f1c180eeb83f34ee2baf60cb70a32918674d19af26eb91a9dce0002af80d5",
+  "analysis_hash": "7e65aa8c72dc1e64510e402756a7d561c6faf0f65ae09cdc13924b63908edd0f",
+  "board_pack_hash": "2389e15e7c2c2c4e4542be6a95b5226212d5bf258dfedff0b44b646151b81d05",
+  "recorded_https_checks": 12,
+  "additional_denials": ["anonymous", "operator_ratification", "restricted_business_unit"],
+  "targets": {
+    "institutional": "100",
+    "regional-nupco": "75.00",
+    "regional-retail": "25.00"
+  },
+  "rollup": {
+    "metric": "revenue",
+    "unit": "SAR",
+    "target": "200",
+    "actual": "200",
+    "variance": "0",
+    "status": "on_plan",
+    "measured_cells": 3,
+    "planned_cells": 3,
+    "offset_detected": true,
+    "behind_cells": ["regional-nupco", "regional-retail"],
+    "ahead_cells": ["institutional"]
+  },
+  "workflow": [
+    "read ratified parent",
+    "create deterministic proposal",
+    "reject operator ratification",
+    "ratify with separately authorized executive",
+    "import matching granular actuals",
+    "save granular drift",
+    "compose bilingual board pack",
+    "download evidence-bound PDF"
+  ],
+  "business_approval": "synthetic acceptance only; no client or board ratification"
+}
