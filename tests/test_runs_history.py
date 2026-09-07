@@ -130,6 +130,36 @@ def test_discover_run_history_authorizes_only_enough_newest_candidates(tmp_path,
         _restore_env(original)
 
 
+def test_discover_run_history_reuses_only_request_local_authorization(tmp_path, monkeypatch):
+    from strategyos_mvp.access_scope import principal_scope
+
+    original = _apply_env({"STRATEGYOS_OUTPUT_ROOT": str(tmp_path)})
+    checked = []
+    token = principal_scope.set({"_request_cache": {}})
+    try:
+        for day in range(1, 5):
+            _write_run(
+                tmp_path,
+                f"Run-202606{day:02d}T100000Z",
+                recoverable=100000 * day,
+                findings=day,
+            )
+        monkeypatch.setattr(
+            "strategyos_mvp.access_scope.guard_summary",
+            lambda summary: checked.append(summary["run_id"]),
+        )
+
+        first = run_registry.discover_run_history(limit=2)
+        second = run_registry.discover_run_history(limit=2)
+
+        assert first == second
+        assert checked == ["Run-20260604T100000Z", "Run-20260603T100000Z"]
+        assert first is not second
+    finally:
+        principal_scope.reset(token)
+        _restore_env(original)
+
+
 def test_runs_history_endpoint_returns_history(tmp_path):
     original = _apply_env(
         {"STRATEGYOS_OUTPUT_ROOT": str(tmp_path), "STRATEGYOS_API_AUTH_ENABLED": "false"}

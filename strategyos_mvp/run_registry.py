@@ -228,6 +228,17 @@ def discover_run_history(limit: int = 12) -> list[dict[str, Any]]:
     if not output_root.exists():
         return []
 
+    # One executive packet composes several views over the same trend. Reuse
+    # that result only inside the authenticated request scope established by
+    # the API middleware; a new request/principal always gets a fresh policy
+    # evaluation.
+    from .access_scope import principal_scope
+    principal = principal_scope.get()
+    request_cache = principal.get("_request_cache") if isinstance(principal, dict) else None
+    cache_key = ("governed_run_history", str(output_root), int(limit or 0))
+    if isinstance(request_cache, dict) and cache_key in request_cache:
+        return [dict(item) for item in request_cache[cache_key]]
+
     # Authorisation of a historical run is deliberately evidence-aware and can
     # require a database policy check. Select newest candidates first and stop
     # once the requested number of authorised points is collected; scanning and
@@ -282,7 +293,10 @@ def discover_run_history(limit: int = 12) -> list[dict[str, Any]]:
             break
 
     entries.sort(key=lambda item: item[0])
-    return [entry for _, entry in entries]
+    history = [entry for _, entry in entries]
+    if isinstance(request_cache, dict):
+        request_cache[cache_key] = [dict(item) for item in history]
+    return history
 
 
 def _safe_float(value: Any) -> float | None:

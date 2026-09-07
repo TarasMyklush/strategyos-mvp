@@ -401,7 +401,12 @@ async def bind_authorized_data_scope(request: Request, call_next: Any) -> Any:
     except HTTPException as exc:
         return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
     token = principal_scope.set({**principal, "_verified_for_request": True,
-                                 "_source_read_request": request.method in {"GET", "HEAD"}})
+                                 "_source_read_request": request.method in {"GET", "HEAD"},
+                                 # Request-local only: repeated presentation
+                                 # builders may ask for the same governed trend.
+                                 # Never share authorization results across
+                                 # principals or requests.
+                                 "_request_cache": {}})
     twin_token = bound_surface.set(None)
     try:
         response = await call_next(request)
