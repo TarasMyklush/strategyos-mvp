@@ -16,11 +16,14 @@
     finally { busy = false; $('board-pack').querySelectorAll('button, input, select, textarea').forEach(function (n) { n.disabled = false; }); }
   }
   async function request(path, body, binary) {
+    var requestedAnalysis = analysis;
     var options = { credentials: 'same-origin', cache: 'no-store' };
     if (body) { options.method = 'POST'; options.headers = { 'Content-Type': 'application/json' }; options.body = JSON.stringify(body); }
     var r = await fetch('/api/intent/dimensional' + path, options);
     if (!r.ok) { var error = await r.json().catch(function () { return {}; }); throw new Error(typeof error.detail === 'string' ? error.detail : 'Check the template format and required fields.'); }
-    return binary ? r.blob() : r.json();
+    var data = await (binary ? r.blob() : r.json());
+    if (requestedAnalysis !== analysis) throw new Error('The selected analysis changed. Compose the selected analysis again.');
+    return data;
   }
   function body() { return { template: JSON.parse($('pack-template').value), language: $('pack-language').value }; }
   window.addEventListener('kyvern-analysis', function (event) {
