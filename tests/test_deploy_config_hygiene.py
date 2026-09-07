@@ -220,6 +220,19 @@ def test_actions_workflows_reuse_dependency_and_image_caches() -> None:
         )
 
 
+def test_runtime_image_builds_embed_the_exact_source_revision() -> None:
+    """The runtime manifest and OCI revision must identify the deployed commit."""
+    for name in (
+        "strategyos-ci.yml",
+        "strategyos-branch-deploy.yml",
+        "strategyos-deploy.yml",
+    ):
+        workflow = (REPO_ROOT / ".github/workflows" / name).read_text(
+            encoding="utf-8"
+        )
+        assert "STRATEGYOS_RELEASE_SHA=${{ github.sha }}" in workflow
+
+
 def test_ci_skips_only_non_runtime_documentation_changes() -> None:
     ci = (REPO_ROOT / ".github/workflows/strategyos-ci.yml").read_text(encoding="utf-8")
     assert ci.count("paths-ignore:") == 2

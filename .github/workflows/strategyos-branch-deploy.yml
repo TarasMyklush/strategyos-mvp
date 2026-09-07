@@ -146,6 +146,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             POPPLER_UTILS_VERSION=25.03.0-5+deb13u4
+            STRATEGYOS_RELEASE_SHA=${{ github.sha }}
 
       - name: Export digest image ref
         id: image-ref

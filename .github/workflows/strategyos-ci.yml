@@ -156,3 +156,4 @@ jobs:
           cache-to: type=gha,mode=max,scope=strategyos-runtime,ignore-error=true
           build-args: |
             POPPLER_UTILS_VERSION=25.03.0-5+deb13u4
+            STRATEGYOS_RELEASE_SHA=${{ github.sha }}
