@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from strategyos_mvp import api as api_module
 from strategyos_mvp import idp as idp_module
 from strategyos_mvp.executive_design import EXECUTIVE_DESIGN
+from strategyos_mvp.executive_display import sanitize_executive_payload
 
 
 STATIC_DIR = Path(api_module.STATIC_DIR)
@@ -109,3 +110,25 @@ def test_runtime_copy_uses_kyvern_while_technical_identifiers_stay_stable() -> N
     assert '"strategyos.ui.token"' in app_js
     assert '"strategyos.ui.token"' in executive_js
     assert "window.STRATEGYOS_X" in executive_js
+
+
+def test_source_backed_visible_copy_is_rebranded_without_mutating_identifiers() -> None:
+    payload = sanitize_executive_payload(
+        {
+            "title": "StrategyOS Monday Brief — group KPI review",
+            "location": "CEO office / StrategyOS",
+            "tenant_name": "StrategyOS Branch Preview",
+            "source_label": "CEO 500 Questions StrategyOS",
+            "route": "/executive?company=strategyos-branch",
+            "artifact_path": "/app/outputs/StrategyOS Citation Audit.json",
+            "approved_by": "https://new.strategyos.live/:reviewer.tester",
+        }
+    )
+
+    assert payload["title"] == "Kyvern Monday Brief — group KPI review"
+    assert payload["location"] == "CEO office / Kyvern"
+    assert payload["tenant_name"] == "Kyvern Branch Preview"
+    assert payload["source_label"] == "CEO 500 Questions Kyvern"
+    assert payload["route"] == "/executive?company=strategyos-branch"
+    assert payload["artifact_path"] == "/app/outputs/StrategyOS Citation Audit.json"
+    assert payload["approved_by"] == "https://new.strategyos.live/:reviewer.tester"

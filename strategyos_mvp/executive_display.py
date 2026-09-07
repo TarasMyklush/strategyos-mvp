@@ -60,6 +60,15 @@ _PATH_TOKEN = re.compile(
     re.IGNORECASE,
 )
 
+
+def _contains_visible_legacy_brand(text: str) -> bool:
+    """Identify legacy product copy without rewriting identifiers or paths."""
+
+    stripped = text.strip()
+    if stripped.startswith(("/", "http://", "https://")):
+        return False
+    return "StrategyOS" in text
+
 _MACHINE_STRING_KEYS = {
     "id",
     "key",
@@ -143,6 +152,8 @@ def executive_display_text(value: Any) -> str:
     """Sanitize and humanize one executive-visible string."""
 
     text = str(value or "")
+    if _contains_visible_legacy_brand(text):
+        text = text.replace("StrategyOS", "Kyvern")
     for pattern in _ANSWER_KEY_PATTERNS:
         text = pattern.sub("", text)
     text = _PATH_TOKEN.sub(lambda match: executive_source_label(match.group(0)), text)
@@ -216,4 +227,5 @@ def executive_text_has_internal_leak(value: Any) -> bool:
         or _PATH_TOKEN.search(text)
         or re.search(rf"\b(?:{token_pattern})\b", text, re.IGNORECASE)
         or re.search(r"\b(?:source pack|governed run|server[- ]resolved)\b", text, re.IGNORECASE)
+        or _contains_visible_legacy_brand(text)
     )
