@@ -297,6 +297,7 @@ def _execute_strategyos_workflow(
         runtime_backend=requested_backend,
         postgres_url=CONFIG.database_url,
         allow_local_fallback=False,
+        database_schema_mode=getattr(CONFIG, "database_schema_mode", "auto"),
     )
     result = workflow.invoke(governance.initial_state())
     requested_object_storage_sync = (

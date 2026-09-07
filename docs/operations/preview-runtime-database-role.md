@@ -13,6 +13,8 @@ The preview deployment uses four database authority levels:
 - Background worker: `strategyos_preview_worker`, marked with worker scope. It
   may process explicitly queued work across tenants and is the only runtime
   identity allowed to create governed source/claim rows without request context.
+  It can read and mutate LangGraph checkpoint data, but cannot alter the
+  checkpoint migration ledger.
 - Claim projector: `strategyos_preview_projector`, marked with projector scope.
   It can read claim lineage/source policy, lease/update the projection outbox and
   maintain projection cache. It cannot read legacy finance tables, delete claims,
@@ -26,6 +28,14 @@ Startup verifies the prepared fingerprint, exact role marker and sole scope
 membership, and refuses DDL. None can
 edit migration history/schema contracts, rewrite immutable claim revisions or
 assessments, or truncate tables.
+
+The deployment migrator also applies the installed LangGraph checkpoint
+migrations before recording the release fingerprint. The checkpoint migration
+SQL participates in that fingerprint. Worker startup verifies the expected
+tables, columns, indexes and migration version read-only; it never calls
+`PostgresSaver.setup()`. Request and projector identities have no access to the
+checkpoint tables. A missing or stale checkpoint contract therefore fails the
+worker closed instead of broadening runtime privileges.
 
 The migration job runs before the new application starts. It writes a private,
 0600 runtime connection file outside the source deployment directory:

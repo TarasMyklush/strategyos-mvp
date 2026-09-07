@@ -6,6 +6,8 @@ from uuid import uuid4
 import pytest
 
 from strategyos_mvp import database_schema, state_store
+from strategyos_mvp.agents.pipeline import AgentStage
+from strategyos_mvp.workflow import LangGraphStrategyOSWorkflow
 from tests.test_cross_source_postgres_e2e import ledger
 
 pytestmark=pytest.mark.integration
@@ -92,6 +94,13 @@ def test_background_roles_are_distinct_and_least_privileged(isolated_roles):
     with psycopg.connect(entries['STRATEGYOS_WORKER_DATABASE_URL']) as conn:
         database_schema.verify_runtime_schema(conn,expected_scope='worker')
         assert conn.execute('SELECT count(*) FROM strategyos_claim_revisions').fetchone()[0]>=2
+        conn.execute("""INSERT INTO checkpoints
+            (thread_id,checkpoint_ns,checkpoint_id,type,checkpoint,metadata)
+            VALUES('role-proof','','checkpoint-proof','json','{}','{}')""")
+        assert conn.execute("SELECT count(*) FROM checkpoints WHERE thread_id='role-proof'").fetchone()[0]==1
+        conn.execute("DELETE FROM checkpoints WHERE thread_id='role-proof'")
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            with conn.transaction(): conn.execute('INSERT INTO checkpoint_migrations(v) VALUES(9999)')
     with psycopg.connect(entries['STRATEGYOS_PROJECTOR_DATABASE_URL']) as conn:
         database_schema.verify_runtime_schema(conn,expected_scope='projector')
         assert conn.execute('SELECT count(*) FROM strategyos_claim_revisions').fetchone()[0]>=2
@@ -100,7 +109,34 @@ def test_background_roles_are_distinct_and_least_privileged(isolated_roles):
             with conn.transaction(): conn.execute('SELECT count(*) FROM strategyos_finance_facts')
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             with conn.transaction(): conn.execute("DELETE FROM strategyos_claim_revisions WHERE false")
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            with conn.transaction(): conn.execute('SELECT count(*) FROM checkpoints')
+    with psycopg.connect(entries['STRATEGYOS_RUNTIME_DATABASE_URL']) as conn:
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            with conn.transaction(): conn.execute('SELECT count(*) FROM checkpoints')
     assert len(set(roles))==3
+
+
+def test_worker_runs_langgraph_with_release_owned_checkpoint_schema(isolated_roles):
+    import psycopg
+    _,entries,_,_,_=isolated_roles
+    run_id='langgraph-role-proof-'+uuid4().hex
+    proof_stage=AgentStage('checkpoint_role_proof_'+uuid4().hex,'Checkpoint role proof',is_terminal=True)
+    workflow=LangGraphStrategyOSWorkflow(
+        postgres_url=entries['STRATEGYOS_WORKER_DATABASE_URL'],
+        database_schema_mode='verify',
+        pipeline=(proof_stage,),
+        stage_handlers={proof_stage.name: lambda state: {**state,'workflow_status':'checkpoint-proved'}},
+    )
+
+    result=workflow.invoke({'run_id':run_id})
+
+    assert result['workflow_status']=='checkpoint-proved'
+    with psycopg.connect(entries['STRATEGYOS_WORKER_DATABASE_URL']) as conn:
+        assert conn.execute('SELECT count(*) FROM checkpoints WHERE thread_id=%s',(run_id,)).fetchone()[0]>=1
+        conn.execute('DELETE FROM checkpoint_writes WHERE thread_id=%s',(run_id,))
+        conn.execute('DELETE FROM checkpoint_blobs WHERE thread_id=%s',(run_id,))
+        conn.execute('DELETE FROM checkpoints WHERE thread_id=%s',(run_id,))
 
 
 def test_runtime_scope_uses_one_constant_time_role_membership(isolated_roles):

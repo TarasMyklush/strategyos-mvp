@@ -1,4 +1,5 @@
 import os
+from contextlib import contextmanager
 from pathlib import Path
 
 import strategyos_mvp.runtime_governance as runtime_governance
@@ -338,3 +339,77 @@ def test_langgraph_wiring_uses_pipeline_metadata():
     }
     assert route({"requires_human_review": True}) == "awaiting_review"
     assert route({"requires_human_review": False}) == "writer"
+
+
+def test_langgraph_verify_mode_never_runs_runtime_ddl(monkeypatch):
+    calls = {"verified": 0, "setup": 0}
+
+    class FakeCheckpointer:
+        conn = object()
+
+        def setup(self):
+            calls["setup"] += 1
+
+    class FakeCompiled:
+        def invoke(self, state, config):
+            return {**state, "thread_id": config["configurable"]["thread_id"]}
+
+    class FakeBuilder:
+        def compile(self, *, checkpointer):
+            return FakeCompiled()
+
+    @contextmanager
+    def fake_checkpointer_cm():
+        yield FakeCheckpointer()
+
+    monkeypatch.setattr(
+        workflow_module,
+        "verify_langgraph_checkpoint_schema",
+        lambda conn: calls.__setitem__("verified", calls["verified"] + 1),
+    )
+    workflow = workflow_module.LangGraphStrategyOSWorkflow(
+        postgres_url="postgresql://example/db",
+        database_schema_mode="verify",
+    )
+    monkeypatch.setattr(
+        workflow, "_prepare_langgraph_runtime", lambda: (FakeBuilder(), fake_checkpointer_cm())
+    )
+
+    result = workflow.invoke({"run_id": "run-verify"})
+
+    assert result["thread_id"] == "run-verify"
+    assert calls == {"verified": 1, "setup": 0}
+
+
+def test_langgraph_auto_mode_keeps_local_schema_bootstrap(monkeypatch):
+    calls = {"setup": 0}
+
+    class FakeCheckpointer:
+        conn = object()
+
+        def setup(self):
+            calls["setup"] += 1
+
+    class FakeCompiled:
+        def invoke(self, state, config):
+            return state
+
+    class FakeBuilder:
+        def compile(self, *, checkpointer):
+            return FakeCompiled()
+
+    @contextmanager
+    def fake_checkpointer_cm():
+        yield FakeCheckpointer()
+
+    workflow = workflow_module.LangGraphStrategyOSWorkflow(
+        postgres_url="postgresql://example/db",
+        database_schema_mode="auto",
+    )
+    monkeypatch.setattr(
+        workflow, "_prepare_langgraph_runtime", lambda: (FakeBuilder(), fake_checkpointer_cm())
+    )
+
+    workflow.invoke({"run_id": "run-auto"})
+
+    assert calls["setup"] == 1

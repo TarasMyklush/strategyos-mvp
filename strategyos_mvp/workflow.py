@@ -18,6 +18,7 @@ from .agents import (
 from .ingestion import DataBundle, load_dataset
 from .models import AuditEvent, Finding
 from .runtime_governance import AWAITING_REVIEW_STAGE, COMPLETED_STATUS
+from .database_schema import verify_langgraph_checkpoint_schema
 
 
 class StrategyOSState(TypedDict, total=False):
@@ -42,6 +43,7 @@ class StrategyOSState(TypedDict, total=False):
 
 
 RuntimeBackend = Literal["auto", "langgraph", "local"]
+DatabaseSchemaMode = Literal["auto", "verify"]
 
 
 class LocalStrategyOSWorkflow:
@@ -241,6 +243,7 @@ class LangGraphStrategyOSWorkflow(LocalStrategyOSWorkflow):
         postgres_url: str | None = None,
         allow_local_fallback: bool = False,
         requested_backend: RuntimeBackend = "langgraph",
+        database_schema_mode: DatabaseSchemaMode = "auto",
         pipeline: Sequence[AgentStage] | None = None,
         stage_handlers: Mapping[
             str, Callable[[StrategyOSState], StrategyOSState]
@@ -256,6 +259,9 @@ class LangGraphStrategyOSWorkflow(LocalStrategyOSWorkflow):
         )
         self.postgres_url = postgres_url
         self.allow_local_fallback = allow_local_fallback
+        if database_schema_mode not in {"auto", "verify"}:
+            raise ValueError("Unknown database schema mode; expected auto or verify.")
+        self.database_schema_mode = database_schema_mode
         self.runtime_metadata = {
             "requested_backend": requested_backend,
             "actual_backend": "langgraph",
@@ -294,9 +300,12 @@ class LangGraphStrategyOSWorkflow(LocalStrategyOSWorkflow):
             "pipeline": [stage.name for stage in self.pipeline],
         }
         with checkpointer_cm as checkpointer:
-            setup = getattr(checkpointer, "setup", None)
-            if callable(setup):
-                setup()
+            if self.database_schema_mode == "verify":
+                verify_langgraph_checkpoint_schema(checkpointer.conn)
+            else:
+                setup = getattr(checkpointer, "setup", None)
+                if callable(setup):
+                    setup()
             compiled = graph_builder.compile(checkpointer=checkpointer)
             return compiled.invoke(
                 state,
@@ -426,6 +435,7 @@ def build_workflow(
     runtime_backend: RuntimeBackend = "auto",
     postgres_url: str | None = None,
     allow_local_fallback: bool = False,
+    database_schema_mode: DatabaseSchemaMode = "auto",
     pipeline: Sequence[AgentStage] | None = None,
     stage_handlers: Mapping[str, Callable[[StrategyOSState], StrategyOSState]]
     | None = None,
@@ -445,6 +455,7 @@ def build_workflow(
         postgres_url=postgres_url,
         allow_local_fallback=allow_local_fallback or runtime_backend == "auto",
         requested_backend=runtime_backend,
+        database_schema_mode=database_schema_mode,
         pipeline=pipeline,
         stage_handlers=stage_handlers,
     )

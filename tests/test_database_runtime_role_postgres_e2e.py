@@ -36,6 +36,7 @@ def test_nonowner_runtime_reads_and_appends_but_cannot_rewrite_schema(ledger,mon
         owner.execute(sql.SQL('GRANT USAGE ON SCHEMA public TO {}').format(sql.Identifier(role)))
         owner.execute(sql.SQL('GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO {}').format(sql.Identifier(role)))
         owner.execute(sql.SQL('GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO {}').format(sql.Identifier(role)))
+        owner.execute(sql.SQL('REVOKE ALL PRIVILEGES ON checkpoint_migrations,checkpoints,checkpoint_blobs,checkpoint_writes FROM {}').format(sql.Identifier(role)))
         owner.execute(sql.SQL('REVOKE INSERT,UPDATE,DELETE ON strategyos_runtime_schema_contract,strategyos_schema_migrations FROM {}').format(sql.Identifier(role)))
         owner.execute(sql.SQL('REVOKE UPDATE,DELETE,TRUNCATE ON strategyos_claim_revisions,strategyos_claim_assessments,strategyos_board_snapshots FROM {}').format(sql.Identifier(role)))
     runtime_url=make_conninfo(ledger[1],user=role,password=password)

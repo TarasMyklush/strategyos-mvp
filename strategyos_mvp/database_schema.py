@@ -20,14 +20,94 @@ def auxiliary_scripts():
             decision_lifecycle.SCHEMA, inference_audit.SCHEMA]
 
 
+_LANGGRAPH_CHECKPOINT_TABLES = (
+    'checkpoint_migrations',
+    'checkpoints',
+    'checkpoint_blobs',
+    'checkpoint_writes',
+)
+
+_LANGGRAPH_CHECKPOINT_DATA_TABLES = _LANGGRAPH_CHECKPOINT_TABLES[1:]
+
+
+def _langgraph_checkpoint_migrations():
+    from langgraph.checkpoint.postgres import PostgresSaver
+    return tuple(PostgresSaver.MIGRATIONS)
+
+
 def schema_fingerprint():
     digest = hashlib.sha256()
     for payload in [state_store.schema_path().read_bytes(),
                     *[p.read_bytes() for p in sorted(state_store.migration_path().glob('[0-9][0-9][0-9][0-9]_*.sql'))],
-                    *[script.encode() for script in auxiliary_scripts()]]:
+                    *[script.encode() for script in auxiliary_scripts()],
+                    *[script.encode() for script in _langgraph_checkpoint_migrations()]]:
         digest.update(len(payload).to_bytes(8,'big'))
         digest.update(payload)
     return digest.hexdigest()
+
+
+def verify_langgraph_checkpoint_schema(conn):
+    """Read-only proof that the release-owned LangGraph schema is current."""
+    from psycopg.rows import tuple_row
+    expected_version = len(_langgraph_checkpoint_migrations()) - 1
+    with conn.cursor(row_factory=tuple_row) as cur:
+        cur.execute(
+            "SELECT array_agg(name ORDER BY name) FROM unnest(%s::text[]) name "
+            "WHERE to_regclass('public.' || name) IS NULL",
+            (list(_LANGGRAPH_CHECKPOINT_TABLES),),
+        )
+        missing = cur.fetchone()[0]
+        if missing:
+            raise RuntimeError(
+                'LangGraph checkpoint schema is missing release-owned tables: '
+                + ', '.join(missing)
+            )
+        cur.execute('SELECT max(v) FROM public.checkpoint_migrations')
+        row = cur.fetchone()
+        if not row or row[0] != expected_version:
+            raise RuntimeError(
+                'LangGraph checkpoint schema does not match this release; runtime DDL is disabled.'
+            )
+        cur.execute("""SELECT
+            EXISTS(SELECT 1 FROM information_schema.columns
+                   WHERE table_schema='public' AND table_name='checkpoint_writes'
+                     AND column_name='task_path' AND is_nullable='NO'),
+            (SELECT is_nullable='YES' FROM information_schema.columns
+             WHERE table_schema='public' AND table_name='checkpoint_blobs'
+               AND column_name='blob'),
+            (SELECT count(*)=3 FROM pg_indexes
+             WHERE schemaname='public' AND indexname IN (
+               'checkpoints_thread_id_idx','checkpoint_blobs_thread_id_idx',
+               'checkpoint_writes_thread_id_idx'))""")
+        contract = cur.fetchone()
+        if not contract or not all(contract):
+            raise RuntimeError(
+                'LangGraph checkpoint schema is incomplete; runtime DDL is disabled.'
+            )
+
+
+def prepare_langgraph_checkpoint_schema(conn):
+    """Install LangGraph checkpoint migrations using deployment-owner authority."""
+    expected_version = len(_langgraph_checkpoint_migrations()) - 1
+    with conn.cursor() as cur:
+        cur.execute("SELECT to_regclass('public.checkpoint_migrations')")
+        exists = cur.fetchone()[0] is not None
+        current_version = None
+        if exists:
+            cur.execute('SELECT max(v) FROM public.checkpoint_migrations')
+            current_version = cur.fetchone()[0]
+    conn.commit()
+    if current_version != expected_version:
+        from langgraph.checkpoint.postgres import PostgresSaver
+        previous_autocommit = conn.autocommit
+        conn.autocommit = True
+        try:
+            conn.execute('SET search_path TO public,pg_catalog')
+            PostgresSaver(conn).setup()
+        finally:
+            conn.autocommit = previous_autocommit
+    verify_langgraph_checkpoint_schema(conn)
+    conn.commit()
 
 
 def prepare_schema(conn):
@@ -38,6 +118,9 @@ def prepare_schema(conn):
         state_store.apply_schema_migrations(cur)
         for script in auxiliary_scripts():
             state_store._execute_sql_statements(cur, script)
+    conn.commit()
+    prepare_langgraph_checkpoint_schema(conn)
+    with conn.cursor() as cur:
         cur.execute('''INSERT INTO strategyos_runtime_schema_contract(singleton,fingerprint)
             VALUES(true,%s) ON CONFLICT(singleton) DO UPDATE SET fingerprint=excluded.fingerprint,
             prepared_at=now(),prepared_by=current_user''',(schema_fingerprint(),))
@@ -113,6 +196,38 @@ def verify_runtime_schema(conn, *, expected_scope=None):
                 AND NOT has_table_privilege(current_user,'public.strategyos_finance_facts','SELECT')""")
             if not cur.fetchone()[0]:
                 raise RuntimeError('Projector role exceeds or lacks its projection-only database authority.')
+        checkpoint_tables = list(_LANGGRAPH_CHECKPOINT_TABLES)
+        checkpoint_data_tables = list(_LANGGRAPH_CHECKPOINT_DATA_TABLES)
+        if scope == 'worker':
+            cur.execute("""SELECT
+                bool_and(has_table_privilege(current_user,'public.' || table_name,'SELECT')),
+                (SELECT bool_and(has_table_privilege(current_user,'public.' || data_table,'INSERT'))
+                 FROM unnest(%s::text[]) data_table),
+                (SELECT bool_and(has_table_privilege(current_user,'public.' || data_table,'UPDATE'))
+                 FROM unnest(%s::text[]) data_table),
+                (SELECT bool_and(has_table_privilege(current_user,'public.' || data_table,'DELETE'))
+                 FROM unnest(%s::text[]) data_table),
+                NOT has_table_privilege(current_user,'public.checkpoint_migrations','INSERT'),
+                NOT has_table_privilege(current_user,'public.checkpoint_migrations','UPDATE'),
+                NOT has_table_privilege(current_user,'public.checkpoint_migrations','DELETE'),
+                NOT has_table_privilege(current_user,'public.checkpoint_migrations','TRUNCATE')
+                FROM unnest(%s::text[]) table_name""",
+                (checkpoint_data_tables, checkpoint_data_tables,
+                 checkpoint_data_tables, checkpoint_tables))
+            privileges = cur.fetchone()
+            if not privileges or not all(privileges):
+                raise RuntimeError('Worker role lacks or exceeds its checkpoint data authority.')
+            verify_langgraph_checkpoint_schema(conn)
+        else:
+            cur.execute("""SELECT bool_and(
+                NOT has_table_privilege(current_user,'public.' || table_name,'SELECT')
+                AND NOT has_table_privilege(current_user,'public.' || table_name,'INSERT')
+                AND NOT has_table_privilege(current_user,'public.' || table_name,'UPDATE')
+                AND NOT has_table_privilege(current_user,'public.' || table_name,'DELETE')
+                AND NOT has_table_privilege(current_user,'public.' || table_name,'TRUNCATE'))
+                FROM unnest(%s::text[]) table_name""", (checkpoint_tables,))
+            if not cur.fetchone()[0]:
+                raise RuntimeError('Request and projector roles must not access workflow checkpoints.')
         cur.execute('SELECT fingerprint FROM public.strategyos_runtime_schema_contract WHERE singleton=true')
         row=cur.fetchone()
         if not row or row[0] != schema_fingerprint():
@@ -193,6 +308,13 @@ def provision_preview_runtime(conn, destination: Path, *, role='strategyos_previ
         cur.execute(sql.SQL('GRANT SELECT ON '+projector_read_tables+' TO {}').format(sql.Identifier(projector_role)))
         cur.execute(sql.SQL('GRANT UPDATE ON strategyos_claim_projection_outbox TO {}').format(sql.Identifier(projector_role)))
         cur.execute(sql.SQL('GRANT INSERT,UPDATE,DELETE ON strategyos_claim_projection_cache TO {}').format(sql.Identifier(projector_role)))
+        checkpoint_tables=','.join(_LANGGRAPH_CHECKPOINT_TABLES)
+        checkpoint_data_tables=','.join(_LANGGRAPH_CHECKPOINT_DATA_TABLES)
+        for login in (request_role,projector_role):
+            cur.execute(sql.SQL('REVOKE ALL PRIVILEGES ON '+checkpoint_tables+' FROM {}').format(sql.Identifier(login)))
+        cur.execute(sql.SQL('REVOKE ALL PRIVILEGES ON '+checkpoint_tables+' FROM {}').format(sql.Identifier(worker_role)))
+        cur.execute(sql.SQL('GRANT SELECT ON '+checkpoint_tables+' TO {}').format(sql.Identifier(worker_role)))
+        cur.execute(sql.SQL('GRANT INSERT,UPDATE,DELETE ON '+checkpoint_data_tables+' TO {}').format(sql.Identifier(worker_role)))
         for login in (request_role,worker_role,projector_role):
             cur.execute(sql.SQL('REVOKE INSERT,UPDATE,DELETE,TRUNCATE ON strategyos_runtime_schema_contract,strategyos_schema_migrations FROM {}').format(sql.Identifier(login)))
             cur.execute(sql.SQL('REVOKE UPDATE,DELETE,TRUNCATE ON strategyos_claim_revisions,strategyos_claim_assessments,strategyos_board_snapshots FROM {}').format(sql.Identifier(login)))
