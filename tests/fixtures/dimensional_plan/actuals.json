@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "company_id": "synthetic-company",
+  "period": {
+    "start": "2026-06-01",
+    "end": "2026-06-30"
+  },
+  "kind": "actual",
+  "revision": "synthetic-1",
+  "recorded_on": "2026-06-30",
+  "observations": [
+    {
+      "metric": "revenue",
+      "dimensions": {
+        "product": "item-a",
+        "region": "north",
+        "client": "retail"
+      },
+      "unit": "SAR",
+      "value": "40",
+      "source": {
+        "path": "evidence.csv",
+        "locator": "row 2, actual",
+        "sha256": "79bae1d5cac3a9c9cf6454ea6922b99d4051eca3f4ce70c7d401bae62569ee62"
+      }
+    },
+    {
+      "metric": "revenue",
+      "dimensions": {
+        "product": "item-a",
+        "region": "south",
+        "client": "institution"
+      },
+      "unit": "SAR",
+      "value": "160",
+      "source": {
+        "path": "evidence.csv",
+        "locator": "row 3, actual",
+        "sha256": "79bae1d5cac3a9c9cf6454ea6922b99d4051eca3f4ce70c7d401bae62569ee62"
+      }
+    }
+  ]
+}

@@ -61,9 +61,9 @@ def test_phase14_public_copy_stays_consistent_with_oracle_pilot_state() -> None:
     plan_html = _read("strategyos_mvp", "static", "plan.html")
     executive_html = _read("strategyos_mvp", "static", "executive.html")
 
-    assert "Live tracker" in plan_html
-    assert "Loading governed execution tracker truth" in plan_html
-    assert "fetch('/api/plan/latest')" in plan_html
+    assert "Versioned intent" in plan_html
+    assert "Loading your plans" in plan_html
+    assert "/static/intent_vault.js" in plan_html
     assert "/static/plan_data.js" not in plan_html
     assert "Group CEO Briefing" in executive_html
     assert "window payload as execution truth" in _plan_data()
@@ -76,20 +76,14 @@ def test_phase14_public_copy_stays_consistent_with_oracle_pilot_state() -> None:
     assert "Think and model on your data" in executive_html
 
 
-def test_phase14_plan_data_marks_phase14_complete_after_phase15_closes() -> None:
+def test_retired_plan_fixture_has_no_execution_truth() -> None:
     text = _plan_data()
-    payload = api_module._plan_tracker_payload()
-
     assert "window.STRATEGYOS_PLAN" not in text
-    assert "window payload as execution truth" in text
-    assert payload["backlog"]["summary"] == "Only real remaining work belongs here; static narrative is not used as tracker truth."
-    assert payload["completedHistory"] == []
+    assert "No business data is defined here" in text
 
 
-def test_phase14_no_regressions_on_prior_oracle_phases() -> None:
-    text = _plan_data()
-    payload = api_module._plan_tracker_payload()
-
-    assert "window payload as execution truth" in text
-    assert payload["hostedVerificationState"]["checks"][0]["label"] == "Database-backed run store availability"
-    assert payload["hostedVerificationState"]["checks"][1]["label"] == "Latest governed run visibility"
+def test_plan_route_has_been_reused_for_intent_vault() -> None:
+    from fastapi.testclient import TestClient
+    response = TestClient(api_module.app).get("/api/plan/latest", follow_redirects=False)
+    assert response.status_code == 307
+    assert response.headers['location'] == '/api/intent/dimensional/catalog'

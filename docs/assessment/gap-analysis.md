@@ -250,7 +250,7 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 <a id="g12"></a>
 ## G12 · P1 · A reusable strategy-to-KPI compiler is missing
 
-**Current position:** Structured strategy compilation, formula binding, invalid-input handling and recompile diffs are tested on two company configurations. Unstructured extraction and a completed client owner-review workflow remain unverified.
+**Current position:** Structured strategy compilation, formula binding, invalid-input handling and recompile diffs are tested on two company configurations. Unstructured extraction and a completed client owner-review workflow remain unverified. Local increment 2026-09-07: a standalone read-only dimensional import/evaluation tool validates configurable tuples, reconciled additive targets, decimal amounts and source hashes, and exposes per-cell/offset drift. Imported approval metadata is not authorization-verified. This does not complete authenticated onboarding, persisted plan revisions, owner ratification or the UI.
 
 **Impact:** Onboarding another client remains a custom data-and-code exercise instead of the product’s defining self-composition capability.
 
@@ -262,12 +262,12 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
-**Evidence:** [Workbook discovery](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/source_strategy_enrichment.py#L21>); [Enrichment entry point](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/source_strategy_enrichment.py#L545>).
+**Evidence:** [Workbook discovery](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/source_strategy_enrichment.py#L21>); [Enrichment entry point](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/source_strategy_enrichment.py#L545>); [Dimensional import acceptance tests](<../../tests/test_dimensional_plan.py>).
 
 <a id="g13"></a>
 ## G13 · P1 · Intent Vault and governed amendments are missing
 
-**Current position:** Versioned Intent and amendment APIs exist. Existing navigation and real owner-ratified amendment records do not meet the full acceptance contract; no amendments were fabricated.
+**Current position:** Versioned Intent and amendment APIs exist. Existing navigation and real owner-ratified amendment records do not meet the full acceptance contract; no amendments were fabricated. Local increment 2026-09-07 adds an authenticated dimensional Intent API with append-only PostgreSQL plan/actual revisions, plan-scoped ratifier grants and revocations, importer/ratifier separation, server-attributed ratifications, source-policy checks and saved drift analyses. The redundant /plan tracker is repurposed as an authenticated Intent Vault with version/evidence review, ratification, operator imports, administrator grants and saved granular drift. It is not deployed; visual Authority Matrix integration, finer scope and real client approval evidence remain outstanding.
 
 **Impact:** Users can inspect performance but cannot inspect and govern the intent against which it is measured.
 
@@ -279,7 +279,7 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Evidence classification:** Remediation evidence, 2026-09-05; see validation.md and release receipt
 
-**Evidence:** [R4 feature order](<../requirements.md>); [Executive shell](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/static/executive.html#L1>).
+**Evidence:** [R4 feature order](<../requirements.md>); [Executive shell](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/static/executive.html#L1>); [Durable dimensional workflow proof](<../../tests/test_dimensional_intent.py>).
 
 <a id="g14"></a>
 ## G14 · P1 · Production connectors and incremental ingestion are missing

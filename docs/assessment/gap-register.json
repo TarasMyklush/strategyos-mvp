@@ -329,7 +329,7 @@
       "domain": "Product foundation",
       "title": "A reusable strategy-to-KPI compiler is missing",
       "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
-      "observation": "Structured strategy compilation, formula binding, invalid-input handling and recompile diffs are tested on two company configurations. Unstructured extraction and a completed client owner-review workflow remain unverified.",
+      "observation": "Structured strategy compilation, formula binding, invalid-input handling and recompile diffs are tested on two company configurations. Unstructured extraction and a completed client owner-review workflow remain unverified. Local increment 2026-09-07: a standalone read-only dimensional import/evaluation tool validates configurable tuples, reconciled additive targets, decimal amounts and source hashes, and exposes per-cell/offset drift. Imported approval metadata is not authorization-verified. This does not complete authenticated onboarding, persisted plan revisions, owner ratification or the UI.",
       "impact": "Onboarding another client remains a custom data-and-code exercise instead of the product’s defining self-composition capability.",
       "action": "Build a versioned intent schema and human-reviewed compiler from strategy text to objectives, targets, measures, leading indicators, ownership, cadence and source bindings.",
       "acceptance": "Onboard a second anonymized company without code changes; prove target extraction, owner review, formula binding, recompile diffs and unsupported-input handling.",
@@ -344,6 +344,11 @@
           "label": "Enrichment entry point",
           "path": "https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/source_strategy_enrichment.py#L545",
           "line": 545
+        },
+        {
+          "label": "Dimensional import acceptance tests",
+          "path": "tests/test_dimensional_plan.py",
+          "line": 1
         }
       ],
       "closure_status": "partial",
@@ -355,7 +360,7 @@
       "domain": "Product foundation",
       "title": "Intent Vault and governed amendments are missing",
       "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
-      "observation": "Versioned Intent and amendment APIs exist. Existing navigation and real owner-ratified amendment records do not meet the full acceptance contract; no amendments were fabricated.",
+      "observation": "Versioned Intent and amendment APIs exist. Existing navigation and real owner-ratified amendment records do not meet the full acceptance contract; no amendments were fabricated. Local increment 2026-09-07 adds an authenticated dimensional Intent API with append-only PostgreSQL plan/actual revisions, plan-scoped ratifier grants and revocations, importer/ratifier separation, server-attributed ratifications, source-policy checks and saved drift analyses. The redundant /plan tracker is repurposed as an authenticated Intent Vault with version/evidence review, ratification, operator imports, administrator grants and saved granular drift. It is not deployed; visual Authority Matrix integration, finer scope and real client approval evidence remain outstanding.",
       "impact": "Users can inspect performance but cannot inspect and govern the intent against which it is measured.",
       "action": "Implement R4 F1 read-only first: versioned plan, commitments, initiatives, owners, ratification and amendment provenance. Reuse one schema for any future workshop-capture flow.",
       "acceptance": "Intent is reachable from navigation; every commitment exposes approval and last amendment; at least three real amendments resolve; every diagnostics KPI links to its plan version.",
@@ -369,6 +374,11 @@
         {
           "label": "Executive shell",
           "path": "https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/static/executive.html#L1",
+          "line": 1
+        },
+        {
+          "label": "Durable dimensional workflow proof",
+          "path": "tests/test_dimensional_intent.py",
           "line": 1
         }
       ],

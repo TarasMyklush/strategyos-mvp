@@ -124,3 +124,54 @@ Analyst and Auditor iterate up to ten rounds; each finding requires at least thr
 | Agent/invoice/graph/search/scenario technical plans | REQ-04–10, REQ-16, REQ-21–24, REQ-28 |
 
 Gate 1 establishes release/data truth and closes trust defects: G01–G10, including quantitative validation, authorization and board freeze. Gate 2 proves a controlled client pilot: connectors/data readiness, governance, actual workflow outcomes and service tests. Gate 3 expands the reusable enterprise platform, four personas, Intent Vault, continuous operation and tier guarantees. The current gap register is the sole backlog for these gaps; preserve stable Gxx IDs and attach closure evidence instead of declaring entire waves complete.
+
+## Dimensional intent increment (7 September 2026)
+
+**REQ-29 — Dimensional import and evaluation foundation.** An operator can validate
+one explicitly selected versioned dimensional plan and completed-period actual
+snapshot using `strategyos_mvp.dimensional_plan`. Configured dimensions remain
+sector-neutral. Additive metric cell targets reconcile exactly to their parent
+total; duplicate tuples, unknown mappings, company/period/unit mismatches and
+changed or escaping evidence files fail. Decimal amounts remain exact strings in
+output. Missing observations and unplanned known tuples prevent complete rollups;
+zero values remain measurements. Per-cell arithmetic respects metric direction and
+absolute tolerance; an on/ahead aggregate with both behind and ahead cells exposes
+an offset finding with contributing cell IDs and evidence references. Input and
+analysis hashes preserve evaluated identity, not durable storage.
+
+This first increment is an operator preview, not the deployed Intent Vault. Imported
+ratification metadata does not establish authenticated approval authority. Source
+hash validation does not prove semantic correctness or source-role eligibility.
+Authenticated ingestion, stored immutable revisions, ratification workflow, live
+selection, executive drill UI, allocation proposals, price/volume/mix analysis and
+concentration scoring remain outstanding under G12/G13/G15. Existing application
+routes and UI remain unchanged. Acceptance fixtures and operator command are in
+`tests/fixtures/dimensional_plan` and `docs/operations.md`.
+
+**REQ-30 — Durable dimensional Intent workflow.** The authenticated dimensional API
+stores immutable plan/actual revisions, scoped ratifier grants/revocations,
+ratifications and analyses in PostgreSQL. New imports are proposals, never approved
+because of document metadata. A tenant admin must explicitly authorize a subject
+for a plan; self-grants and importer self-ratification fail. Approval binds the
+reviewed digest and records server identity/time and the grant revision. Concurrent
+retries cannot duplicate a version or approval. Permission changes use optimistic
+revisions. Company scope equals the deployment tenant for this increment; restricted
+BU views and the system/demo/auth-disabled identities are not supported.
+
+References must resolve through an owned registered pack and eligible disposition;
+no caller-supplied filesystem root is accepted. Source integrity and semantic value
+verification remain separate. Explicit analysis versions must be ratified as of the
+requested UTC day, with actuals already imported; newer applicable ratifications
+block obsolete comparisons. Analyses preserve immutable numbers across later
+changes, while current source-policy revocation still blocks access. Protected
+source downloads verify current bytes. UPDATE/DELETE/TRUNCATE are rejected on the
+new history tables. Schema installation is an explicit additive deployment step.
+
+The existing `/plan` execution tracker is repurposed as the Intent Vault. It now
+provides authenticated version selection, target/evidence review, scoped ratification,
+operator JSON imports, administrator ratifier grants and saved granular drift results.
+The old tracker payload is retired; `/api/plan/latest` redirects to the authenticated
+catalog. This is local implementation, not automatic deployment. Visual Authority
+Matrix integration, exact cell-to-source semantic verification, BU-level policy,
+graph projection, retention operations and first-client acceptance remain outstanding.
+G12/G13/G15 remain partial.

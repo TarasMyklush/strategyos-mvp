@@ -363,23 +363,14 @@ def test_plan_page_is_not_bootstrapped_from_static_plan_fixture():
 
     assert "/static/plan_data.js" not in html
     assert "window.STRATEGYOS_PLAN" not in html
-    assert "/api/plan/latest" in html
+    assert "/static/intent_vault.js" in html
 
 
-def test_plan_api_reports_unavailable_when_database_is_not_configured(monkeypatch):
-    monkeypatch.setattr(api_module, "_latest_summary", lambda: None)
-    monkeypatch.setattr(
-        api_module,
-        "data_management_status",
-        lambda run_id=None: {"status": "skipped", "reason": "DATABASE_URL is not configured."},
-    )
-
-    payload = TestClient(api_module.app).get("/api/plan/latest").json()
-
-    assert payload["criticalBlockers"][0]["id"] == "DB-UNAVAILABLE"
-    assert payload["criticalBlockers"][0]["detail"] == "Database backing is not configured for this environment."
-    assert "DATABASE_URL" not in payload["criticalBlockers"][0]["detail"]
-    assert payload["hostedVerificationState"]["checks"][0]["result"] == "fail"
+def test_retired_tracker_route_does_not_expose_run_or_backlog_truth():
+    response = TestClient(api_module.app).get("/api/plan/latest", follow_redirects=False)
+    assert response.status_code == 307
+    assert response.headers['location'] == '/api/intent/dimensional/catalog'
+    assert 'criticalBlockers' not in response.text
 
 
 def test_authenticated_latest_run_uses_actual_current_run_payload_without_demo_markers(monkeypatch):

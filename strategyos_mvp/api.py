@@ -9103,7 +9103,7 @@ def guide_page(
 def plan_page(
     principal: dict[str, Any] = Depends(authenticate_optional_request),
 ) -> Any:
-    """Serve the Digital Twin execution plan page."""
+    """Serve the governed business Intent Vault in the reused Plan surface."""
     login_redirect = _login_or_authorized_html(principal)
     if login_redirect is not None:
         return login_redirect
@@ -9111,112 +9111,10 @@ def plan_page(
     return HTMLResponse(template_path.read_text(encoding="utf-8"))
 
 
-def _plan_tracker_payload() -> dict[str, Any]:
-    summary = _latest_summary()
-    rows = _finding_rows_from_summary(summary) if summary else []
-    audit_summary = _latest_run_audit_summary_payload(summary) if summary else None
-    plan_health = _bounded_plan_health_payload(summary, rows, audit_summary)
-    publication = _summary_publication_payload(summary, principal_role="operator") if summary else {}
-    db_status = _data_management_status_for_run(str((summary or {}).get("run_id") or "") or None)
-    updated = str(
-        (summary or {}).get("created_at")
-        or ((summary or {}).get("latest_pointer") or {}).get("updated_at")
-        or datetime.now(UTC).date().isoformat()
-    )
-    challenged_count = sum(1 for row in rows if row.get("challenged"))
-    report_count = int(publication.get("report_count") or 0)
-    approval_status = str((summary or {}).get("approval_status") or "missing").replace("_", " ")
-    blocker_detail = db_status.get("reason") or "State store is unavailable."
-    critical_blockers = []
-    if db_status.get("status") != "ready":
-        critical_blockers.append(
-            {
-                "id": "DB-UNAVAILABLE",
-                "title": "Database-backed tracker truth is unavailable",
-                "detail": blocker_detail,
-                "status": "open",
-            }
-        )
-    active_action_items = []
-    if summary and challenged_count:
-        active_action_items.append(
-            {
-                "id": "REVIEW-GATE",
-                "description": f"Close {challenged_count} challenged case(s) before widening the executive surface.",
-                "assignee": "Reviewer",
-                "status": "in_progress",
-                "percentDone": 0,
-            }
-        )
-    if summary and approval_status not in {"approved", "not required"}:
-        active_action_items.append(
-            {
-                "id": "APPROVAL",
-                "description": "Capture the next governed reviewer/operator decision for the latest run.",
-                "assignee": "Operator",
-                "status": "pending",
-                "percentDone": 0,
-            }
-        )
-    check_result = "pass" if db_status.get("status") == "ready" else "fail"
-    return {
-        "updated": updated,
-        "liveStatus": {
-            "state": (
-                f"Current governed run: {plan_health.get('label') or 'Unavailable'}"
-                if summary
-                else "No governed run is available for /plan."
-            ),
-            "lastVerified": updated,
-            "note": plan_health.get("summary") or blocker_detail,
-        },
-        "criticalBlockers": critical_blockers,
-        "activeActionItems": active_action_items,
-        "hostedVerificationState": {
-            "summary": (
-                "Pass — tracker is backed by current governed data sources."
-                if check_result == "pass"
-                else "Unavailable — tracker cannot claim DB-backed execution truth in this environment."
-            ),
-            "lastChecked": updated,
-            "checks": [
-                {
-                    "label": "Database-backed run store availability",
-                    "result": check_result,
-                    "note": (
-                        blocker_detail
-                        if check_result == "fail"
-                        else f"Run {summary.get('run_id')} is backed by persisted governed data."
-                        if summary
-                        else "Database is ready, but no governed run has been persisted yet."
-                    ),
-                },
-                {
-                    "label": "Latest governed run visibility",
-                    "result": "pass" if summary else "fail",
-                    "note": (
-                        f"Run {summary.get('run_id')} with {report_count} surfaced {'report' if report_count == 1 else 'reports'} and approval posture {approval_status}."
-                        if summary
-                        else "No governed run is available yet."
-                    ),
-                },
-            ],
-        },
-        "backlog": {
-            "title": "Later hardening / backlog",
-            "summary": "Only real remaining work belongs here; static narrative is not used as tracker truth.",
-            "rows": [],
-        },
-        "completedHistory": [],
-    }
-
-
-@app.get("/api/plan/latest")
-def latest_plan_tracker(
-    principal: dict[str, Any] = Depends(authenticate_optional_request),
-) -> dict[str, Any]:
-    _require_login_if_enabled(principal)
-    return _plan_tracker_payload()
+@app.get("/api/plan/latest", include_in_schema=False)
+def retired_plan_tracker() -> RedirectResponse:
+    """Legacy route now leads to the authenticated Intent catalog."""
+    return RedirectResponse(url="/api/intent/dimensional/catalog", status_code=307)
 
 
 @app.get("/twin/ceo", response_class=HTMLResponse)
@@ -17222,6 +17120,8 @@ from .board_api import router as board_router
 app.include_router(board_router)
 from .intent_api import router as intent_router
 app.include_router(intent_router)
+from .dimensional_intent_api import router as dimensional_intent_router
+app.include_router(dimensional_intent_router)
 from .decision_api import router as decision_router
 app.include_router(decision_router)
 

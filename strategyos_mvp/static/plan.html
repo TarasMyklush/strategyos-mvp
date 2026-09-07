@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Execution Tracker · Kyvern Oracle EBS Pilot</title>
-  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+<title>Intent Vault · Kyvern</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <style>
 :root {
   --bg: #f4f2ed;
@@ -805,234 +805,101 @@ p:last-child { margin-bottom: 0; }
 .mb-0 { margin-bottom: 0; }
 .mt-0 { margin-top: 0; }
 .text-center { text-align: center; }
+
+[hidden] { display: none !important; }
+.vault-controls { display: flex; align-items: end; flex-wrap: wrap; gap: 16px; }
+.vault-field { display: grid; gap: 6px; min-width: 0; flex: 1 1 220px; font-size: 13px; color: var(--muted); }
+input, select, textarea, button { font: inherit; }
+input, select, textarea { width: 100%; min-width: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: 10px 12px; background: var(--surface); color: var(--ink); }
+button { border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--accent); color: white; padding: 10px 16px; cursor: pointer; }
+button.secondary { background: var(--surface); color: var(--accent); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+.vault-check { display: flex; gap: 10px; align-items: start; margin: 16px 0; }
+.vault-check input { width: auto; margin-top: 5px; }
+.vault-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; }
+.vault-panel + .vault-panel { margin-top: 20px; }
+.vault-panel h3 { margin-bottom: 18px; }
+.vault-message { margin: 16px 0; overflow-wrap: anywhere; }
+.vault-error { color: var(--red); }
+.vault-table { overflow: auto; max-height: 460px; margin-top: 20px; }
+.vault-table table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.vault-table th, .vault-table td { padding: 12px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+.vault-table th { background: var(--surface-alt); position: sticky; top: 0; }
+.vault-table a { color: var(--accent); }
+.vault-metadata { display: flex; gap: 12px 24px; flex-wrap: wrap; margin-bottom: 20px; }
+.vault-metadata p { font-size: 13px; margin: 0; overflow-wrap: anywhere; }
+.vault-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+.vault-note { font-size: 13px; margin-top: 14px; }
+.vault-panel summary { cursor: pointer; font-weight: 600; }
+.vault-panel details[open] summary { margin-bottom: 20px; }
+@media(max-width:600px) { .vault-panel { padding: 18px 14px; } .topbar { flex-wrap: wrap; } }
 </style>
 </head>
 <body>
-
-<!-- ═══════════ Topbar ═══════════ -->
 <header class="topbar">
-  <a href="/" class="topbar__brand">
-    <span class="brand-mark"></span>
-    <span class="brand-name">Kyvern</span>
-  </a>
-  <nav class="topbar__nav">
-    <a href="/guide">How it works</a>
-    <a href="/architecture">Architecture</a>
-    <a href="/plan" class="current">Plan</a>
-  </nav>
+  <a href="/app" class="topbar__brand"><span class="brand-mark"></span><span class="brand-name">Kyvern</span></a>
+  <nav class="topbar__nav" aria-label="Primary"><a href="/app">Executive view</a><a href="/guide">How it works</a><a href="/plan" class="current" aria-current="page">Intent Vault</a></nav>
 </header>
-
-<!-- ═══════════ Hero ═══════════ -->
-<section class="hero container">
-  <div class="hero__badge-row">
-    <span class="hero__badge">Live tracker</span>
-    <span class="hero__badge">Six required sections</span>
-  </div>
-  <h1>Execution tracker</h1>
-  <p id="plan-hero-copy">Loading governed execution tracker truth…</p>
-  <div class="hero__caption">Kyvern · execution plan</div>
+<main class="container">
+<section class="hero">
+  <div class="hero__badge-row"><span class="hero__badge">Versioned intent</span><span class="hero__badge">Evidence-linked drift</span></div>
+  <h1>Intent Vault</h1>
+  <p>Review the plan, ratify its targets and see where performance differs.</p>
 </section>
-
-<!-- ═══════════ Content ═══════════ -->
-<section class="container">
-  <div class="tracker-shell">
-    <div id="plan-live-status"></div>
-    <div id="plan-blockers"></div>
-    <div id="plan-active"></div>
-    <div id="plan-verify"></div>
-    <div id="plan-backlog"></div>
-    <div id="plan-history"></div>
+<div id="vault-message" class="vault-message" role="status" aria-live="polite">Loading your plans…</div>
+<div id="vault-error" class="vault-message vault-error" role="alert" hidden></div>
+<p id="vault-login" hidden><a href="/login">Sign in to Kyvern</a></p>
+<div id="vault-content" hidden>
+  <div class="vault-panel">
+    <div class="section-head"><div><div class="section-eyebrow">Plan of record</div><h2>Plans and versions</h2></div><button id="refresh" class="secondary" type="button">Refresh</button></div>
+    <div class="vault-controls"><label class="vault-field">Select a plan version<select id="plan-select"><option value="">Choose a version</option></select></label><button id="more" class="secondary" type="button" hidden>Load older records</button></div>
+    <p id="empty-plans" class="vault-note" hidden>No dimensional plans are available to this identity. An authorized operator can import a proposal.</p>
   </div>
-
-</section>
-
-<script>
-(function () {
-  var PLAN = null;
-
-  function planUnavailable(reason) {
-    return {
-      updated: 'Unavailable',
-      liveStatus: {
-        state: 'Tracker truth unavailable',
-        lastVerified: 'Unavailable',
-        note: reason || 'No governed plan payload was returned.'
-      },
-      criticalBlockers: [
-        {
-          id: 'PLAN-UNAVAILABLE',
-          title: 'Plan truth is unavailable',
-          detail: reason || 'No governed plan payload was returned.',
-          status: 'open'
-        }
-      ],
-      activeActionItems: [],
-      hostedVerificationState: {
-        summary: 'Unavailable — /plan did not receive a governed payload.',
-        lastChecked: 'Unavailable',
-        checks: [{ label: 'Plan API payload', result: 'fail', note: reason || 'No governed plan payload was returned.' }]
-      },
-      backlog: {
-        title: 'Later hardening / backlog',
-        summary: 'Only real remaining work belongs here.',
-        rows: []
-      },
-      completedHistory: []
-    };
-  }
-
-  function renderHero() {
-    var hero = document.getElementById('plan-hero-copy');
-    if (!hero) return;
-    var liveStatus = (PLAN && PLAN.liveStatus) || {};
-    hero.textContent = liveStatus.note || liveStatus.state || 'Governed plan tracker loaded.';
-  }
-
-  function renderLiveStatus() {
-    var el = document.getElementById("plan-live-status");
-    var liveStatus = PLAN.liveStatus || {};
-    el.innerHTML = '<section class="tracker-section"><div class="section-head"><div><div class="section-eyebrow">Section 1</div><h2>LIVE STATUS NOW</h2></div><p>Single-line deployment truth with the latest recorded verification date.</p></div><div class="truth-card"><p class="status-line"><strong>' + escapeHtml(liveStatus.state || 'Status not recorded.') + '</strong> Last verified: ' + escapeHtml(liveStatus.lastVerified || 'Not recorded') + '.</p><p>' + escapeHtml(liveStatus.note || '') + '</p></div></section>';
-  }
-
-  function renderCriticalBlockers() {
-    var el = document.getElementById("plan-blockers");
-    var blockers = (PLAN.criticalBlockers || []).slice(0, 3);
-    var content = blockers.length
-      ? blockers.map(function (blocker) {
-        return '<article class="blocker-item"><div class="phase-card__meta"><span>' + escapeHtml(blocker.id || 'BLK') + '</span><span class="backlog-status ' + escapeHtml(statusClass(blocker.status)) + '">' + escapeHtml(statusLabel(blocker.status)) + '</span></div><h3>' + escapeHtml(blocker.title || 'Critical blocker') + '</h3><p>' + escapeHtml(blocker.detail || '') + '</p></article>';
-      }).join('')
-      : '<article class="blocker-item"><div class="phase-card__meta"><span>CLEAR</span><span class="backlog-status is-completed">Closed</span></div><h3>No critical blockers remain</h3><p>The final copy-polish row is closed; hosted closure is no longer blocked by the plan scope.</p></article>';
-    el.innerHTML = '<section class="tracker-section"><div class="section-head"><div><div class="section-eyebrow">Section 2</div><h2>CRITICAL BLOCKERS</h2></div><p>Blockers that currently prevent hosted closure.</p></div><div class="blocker-list"><div class="blocker-items">' + content + '</div></div></section>';
-  }
-
-  function renderActiveActionItems() {
-    var el = document.getElementById("plan-active");
-    var rows = PLAN.activeActionItems || [];
-    var body = rows.length
-      ? '<div class="backlog-card"><div class="backlog-table-wrap"><table class="backlog-table"><thead><tr><th scope="col">ID</th><th scope="col">Description</th><th scope="col">Assignee</th><th scope="col">Status</th><th scope="col">%done</th></tr></thead><tbody>' + rows.map(function (row) {
-        return '<tr><td><span class="backlog-code">' + escapeHtml(row.id || '') + '</span></td><td><div class="row-title">' + escapeHtml(row.description || 'Active work') + '</div></td><td>' + escapeHtml(row.assignee || 'Unassigned') + '</td><td><span class="backlog-status ' + escapeHtml(statusClass(row.status)) + '">' + escapeHtml(statusLabel(row.status)) + '</span></td><td>' + escapeHtml(percentLabel(row.percentDone)) + '</td></tr>';
-      }).join('') + '</tbody></table></div></div>'
-      : '<div class="backlog-card"><p><strong>No active action items remain.</strong> COPY-001 is complete and has moved to shipped history.</p></div>';
-    el.innerHTML = '<section class="tracker-section"><div class="section-head"><div><div class="section-eyebrow">Section 3</div><h2>ACTIVE ACTION ITEMS THIS TRANCHE</h2></div><p>Every currently active bug or finding stays visible here with owner, active status, and %done.</p></div>' + body + '</section>';
-  }
-
-  function renderVerificationState() {
-    var el = document.getElementById("plan-verify");
-    var verify = PLAN.hostedVerificationState || {};
-    var checks = verify.checks || [];
-    el.innerHTML = '<section class="tracker-section"><div class="section-head"><div><div class="section-eyebrow">Section 4</div><h2>HOSTED VERIFICATION STATE</h2></div><p>Latest pass/fail truth only. No source completion is treated as hosted acceptance.</p></div><div class="section-stack"><article class="verify-card"><div class="phase-card__meta"><span>Last checked</span><span>' + escapeHtml(verify.lastChecked || 'Not recorded') + '</span></div><h3>' + escapeHtml(verify.summary || 'Verification state not recorded.') + '</h3></article><div class="verify-grid">' + checks.map(function (check) {
-      return '<article class="verify-card"><div class="phase-card__meta"><span class="backlog-status ' + escapeHtml(statusClass(check.result)) + '">' + escapeHtml(resultLabel(check.result)) + '</span></div><h3>' + escapeHtml(check.label || 'Verification check') + '</h3><p>' + escapeHtml(check.note || '') + '</p></article>';
-    }).join('') + '</div></div></section>';
-  }
-
-  function renderBacklog() {
-    var el = document.getElementById("plan-backlog");
-    var rows = (((PLAN || {}).backlog || {}).rows || []);
-    el.innerHTML = '<section class="tracker-section">'
-      + '<div class="section-head"><div><div class="section-eyebrow">Section 5</div><h2>LATER HARDENING / BACKLOG</h2></div><p>' + escapeHtml((PLAN.backlog && PLAN.backlog.summary) || 'Open items not active in this tranche stay here.') + '</p></div>'
-      + '<div class="backlog-card"><div class="backlog-table-wrap"><table class="backlog-table"><thead><tr><th scope="col">ID</th><th scope="col">Priority</th><th scope="col">Status</th><th scope="col">Remaining work</th></tr></thead><tbody>' + rows.map(function (row) {
-        return '<tr class="' + escapeHtml(priorityClass(row.priority)) + '"><td><span class="backlog-code">' + escapeHtml(row.id) + '</span></td><td>' + escapeHtml(priorityLabel(row.priority)) + '</td><td><span class="backlog-status ' + escapeHtml(statusClass(row.status)) + '">' + escapeHtml(statusLabel(row.status)) + '</span></td><td><div class="row-title">' + escapeHtml(row.title || 'Open work') + '</div><div class="row-detail">' + renderDetail(row) + '</div></td></tr>';
-      }).join('') + '</tbody></table></div></div>'
-      + '</section>';
-  }
-
-  function renderHistory() {
-    var history = PLAN.completedHistory || [];
-    var el = document.getElementById("plan-history");
-    el.innerHTML = '<section class="tracker-section"><div class="section-head"><div><div class="section-eyebrow">Section 6</div><h2>HISTORY OF WHAT WAS DONE</h2></div><p>Reverse-chronological completed history with dates only. Open work never belongs here.</p></div><div class="history-grid">'
-      + history.map(function (entry) {
-        var items = entry.items || [];
-        return '<article class="history-card"><div class="phase-card__meta"><span>' + escapeHtml(entry.date || 'Date not recorded') + '</span><span>' + escapeHtml(entry.id || 'DONE') + '</span></div><h3>' + escapeHtml(entry.label || 'Completed work') + '</h3><p>' + escapeHtml(entry.summary || '') + '</p><ul class="history-list">' + items.map(function (item) {
-          return '<li>' + escapeHtml(item) + '</li>';
-        }).join('') + '</ul></article>';
-      }).join('')
-      + '</div></section>';
-  }
-
-  function renderDetail(row) {
-    var detail = row.detail ? escapeHtml(row.detail) : '';
-    var list = (row.detailList || []).length
-      ? '<ul>' + row.detailList.map(function (item) { return '<li>' + escapeHtml(item) + '</li>'; }).join('') + '</ul>'
-      : '';
-    return detail + list;
-  }
-
-  function priorityClass(priority) {
-    return priority === 'high' ? 'priority-high' : 'priority-medium';
-  }
-
-  function priorityLabel(priority) {
-    return priority === 'high' ? 'High' : 'Medium';
-  }
-
-  function normalizeStatus(status) {
-    return String(status || 'open').trim().toLowerCase().replace(/\s+/g, '_');
-  }
-
-  function statusClass(status) {
-    return 'is-' + normalizeStatus(status);
-  }
-
-  function statusLabel(status) {
-    var normalized = normalizeStatus(status);
-    if (normalized === 'in_progress') return 'In Progress';
-    if (normalized === 'completed') return 'Completed';
-    if (normalized === 'pending') return 'Pending';
-    if (normalized === 'pass') return 'Pass';
-    if (normalized === 'fail') return 'Fail';
-    return 'Open';
-  }
-
-  function resultLabel(result) {
-    var normalized = normalizeStatus(result);
-    if (normalized === 'pass') return 'Pass';
-    if (normalized === 'fail') return 'Fail';
-    return 'Pending';
-  }
-
-  function percentLabel(percent) {
-    if (typeof percent !== 'number' || !isFinite(percent)) return '0%';
-    return Math.max(0, Math.min(100, percent)) + '%';
-  }
-
-  function escapeHtml(str) {
-    var div = document.createElement("div");
-    div.appendChild(document.createTextNode(str));
-    return div.innerHTML;
-  }
-
-  function renderAll() {
-    renderHero();
-    renderLiveStatus();
-    renderCriticalBlockers();
-    renderActiveActionItems();
-    renderVerificationState();
-    renderBacklog();
-    renderHistory();
-  }
-
-  fetch('/api/plan/latest')
-    .then(function (response) {
-      if (!response.ok) throw new Error('Plan API returned ' + response.status);
-      return response.json();
-    })
-    .then(function (payload) {
-      PLAN = payload || planUnavailable('Plan API returned an empty payload.');
-      renderAll();
-    })
-    .catch(function (error) {
-      PLAN = planUnavailable(error && error.message ? error.message : 'Failed to load governed plan payload.');
-      renderAll();
-    });
-
-})();
-</script>
-
-<!-- ═══════════ FOOTER ═══════════ -->
-<footer class="footer container">
-  <p>Kyvern · Oracle EBS Pilot Execution Tracker</p>
-  <p style="font-size:11px;">Six sections only. Hosted tracker reflects the active tranche and direct verification.</p>
-</footer>
-
+  <div id="selected-plan" class="vault-panel" hidden>
+    <h2 id="plan-title">Selected plan</h2><div id="plan-metadata" class="vault-metadata"></div>
+    <p id="approval-note"></p><div id="plan-cells" class="vault-table" tabindex="0" role="region" aria-label="Plan targets and evidence"></div>
+    <form id="ratify-form" hidden>
+      <h3>Ratify this version</h3>
+      <label class="vault-field">Review note<textarea id="review-note" required minlength="20" maxlength="2000" rows="3" placeholder="Record the basis for approving these targets and owners."></textarea></label>
+      <label class="vault-check"><input id="reviewed" type="checkbox" required><span>I have reviewed this version’s targets, owners and supporting evidence.</span></label>
+      <button id="ratify-button" type="submit">Ratify reviewed version</button>
+    </form>
+  </div>
+  <div id="drift-panel" class="vault-panel" hidden>
+    <h2>Compare with actuals</h2>
+    <p class="vault-note">Only a ratified version can be compared. The dates and units must match; missing actuals remain visible.</p>
+    <form id="analysis-form" class="vault-controls">
+      <label class="vault-field">Actual snapshot<select id="actual-select" required><option value="">Choose actuals</option></select></label>
+      <label class="vault-field">As of (UTC)<input id="as-of" type="date" required></label>
+      <button id="analyse-button" type="submit">Calculate drift</button>
+    </form>
+  </div>
+  <div id="analysis-panel" class="vault-panel" hidden>
+    <h2>Saved drift analysis</h2><p id="analysis-context"></p><div id="analysis-findings"></div>
+    <div id="analysis-rollups" class="vault-table" tabindex="0" role="region" aria-label="Metric totals and coverage"></div>
+    <div id="analysis-cells" class="vault-table" tabindex="0" role="region" aria-label="Cell drift and evidence"></div>
+    <p class="vault-note">These figures are preserved with their approved plan and actual revision. Source hashes verify file integrity; they do not independently certify each reported value.</p>
+    <a id="saved-link">Reopen this saved analysis</a>
+  </div>
+  <div id="ratifier-panel" class="vault-panel" hidden>
+    <details><summary>Manage ratification permissions</summary>
+      <p>A tenant administrator designates a separate reviewer for this plan. The importer cannot ratify their own version.</p>
+      <form id="grant-read-form" class="vault-controls"><label class="vault-field">Authenticated reviewer identity<input id="ratifier-subject" required maxlength="160" autocomplete="off"></label><button type="submit" class="secondary">Load permission</button></form>
+      <p id="grant-status" class="vault-note"></p>
+      <form id="grant-form" hidden><label class="vault-check"><input id="grant-enabled" type="checkbox"><span>Permit this identity to ratify this plan</span></label><button type="submit">Save permission</button></form>
+    </details>
+  </div>
+  <div id="import-panel" class="vault-panel" hidden>
+    <details><summary>Import plan and actual snapshots</summary>
+      <p>Use validated JSON extracts and an existing registered evidence pack. A plan import always creates a proposal.</p>
+      <form id="plan-import-form"><h3>Plan proposal</h3><div class="vault-controls"><label class="vault-field">Plan evidence pack<input id="plan-pack" required maxlength="160"></label><label class="vault-field">Plan JSON<input id="plan-file" type="file" accept=".json,application/json" required></label><button type="submit">Import proposal</button></div></form>
+      <form id="actual-import-form" style="margin-top:24px"><h3>Actual snapshot</h3><div class="vault-controls"><label class="vault-field">Actual evidence pack<input id="actual-pack" required maxlength="160"></label><label class="vault-field">Actuals JSON<input id="actual-file" type="file" accept=".json,application/json" required></label><button type="submit">Import actuals</button></div></form>
+    </details>
+  </div>
+</div>
+</main>
+<footer class="footer container"><p>Kyvern · Intent, accountability and evidence</p></footer>
+<script src="/static/intent_vault.js" defer></script>
 </body>
 </html>

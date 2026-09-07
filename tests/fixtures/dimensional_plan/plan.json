@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "plan_id": "synthetic-plan",
+  "company_id": "synthetic-company",
+  "version": 1,
+  "period": {
+    "start": "2026-06-01",
+    "end": "2026-06-30"
+  },
+  "effective_from": "2026-01-01",
+  "effective_to": "2026-12-31",
+  "status": "proposed",
+  "dimensions": {
+    "product": [
+      "item-a"
+    ],
+    "region": [
+      "north",
+      "south"
+    ],
+    "client": [
+      "retail",
+      "institution"
+    ]
+  },
+  "metrics": {
+    "revenue": {
+      "unit": "SAR",
+      "aggregation": "sum",
+      "direction": "higher_is_better",
+      "planned_total": "200",
+      "tolerance": "0"
+    }
+  },
+  "cells": [
+    {
+      "id": "regional",
+      "metric": "revenue",
+      "dimensions": {
+        "product": "item-a",
+        "region": "north",
+        "client": "retail"
+      },
+      "owner": "synthetic-owner",
+      "target": "100",
+      "tolerance": "0",
+      "source": {
+        "path": "evidence.csv",
+        "locator": "row 2, target",
+        "sha256": "79bae1d5cac3a9c9cf6454ea6922b99d4051eca3f4ce70c7d401bae62569ee62"
+      }
+    },
+    {
+      "id": "institutional",
+      "metric": "revenue",
+      "dimensions": {
+        "product": "item-a",
+        "region": "south",
+        "client": "institution"
+      },
+      "owner": "synthetic-owner",
+      "target": "100",
+      "tolerance": "0",
+      "source": {
+        "path": "evidence.csv",
+        "locator": "row 3, target",
+        "sha256": "79bae1d5cac3a9c9cf6454ea6922b99d4051eca3f4ce70c7d401bae62569ee62"
+      }
+    }
+  ]
+}

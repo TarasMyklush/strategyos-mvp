@@ -1,5 +1,53 @@
 # Validation record
 
+## Local governed Intent Vault — 7 September 2026
+
+The next local increment adds durable dimensional APIs and repurposes the existing
+`/plan` execution tracker as the Intent Vault. It includes version/evidence review,
+separate authorized ratification, operator imports, administrator permission controls
+and saved granular drift. The retired tracker API redirects to the authenticated
+catalog. No hosted deployment, business database migration or active-run change was made.
+
+- Broader isolated portable suite: **1,744 passed, 81 skipped, no failures**,
+  149.77 seconds, six warnings. Command: `.venv/bin/python scripts/test.py -q
+  --ignore=tests/test_codex_gateway.py`. Skips are not passing service integration
+  proof; the new dimensional PostgreSQL tests ran against their own disposable
+  cluster. The separately maintained Codex gateway suite was excluded.
+- Focused regression suite: **114 passed**, no skips. This includes the dimensional
+  evaluator, isolated real-PostgreSQL service proof, authentication boundaries and
+  affected Plan-page contracts. One Starlette/httpx deprecation warning remains.
+- Browser verification used a disposable local server, synthetic company/evidence,
+  named test principals and a private socket-only PostgreSQL cluster. A separately
+  authorized executive ratified the operator's proposal, then calculated 200 SAR
+  actual against 200 SAR target while exposing +60/-60 SAR cell offsets. The saved
+  analysis reopened with the same results. Operator/admin controls were role-gated;
+  a restricted BU identity was denied with no plan data displayed.
+- The temporary browser proof server and database were stopped and removed.
+  This is local synthetic proof, not real client approval or deployed acceptance.
+- JavaScript syntax and `git diff --check` passed. Source hashes establish artifact
+  integrity; exact semantic value verification remains outstanding. Full Authority
+  Matrix integration, finer scope and the broader G12/G13/G15 acceptance remain open.
+
+## Local dimensional foundation — 7 September 2026
+
+The read-only operator module `strategyos_mvp.dimensional_plan` and portable
+synthetic fixture were added locally. No deployment, active-run change, database
+migration, email integration or executive UI change was performed.
+
+- **75 tests passed**, no skips, in 1.50 seconds using the isolated runner:
+  `tests/test_dimensional_plan.py`, `tests/test_strategy_compiler.py`,
+  `tests/test_metric_claim_contracts.py`, `tests/test_platform_foundation.py`,
+  `tests/test_source_governance.py`. One Starlette/httpx deprecation warning remains.
+- The documented CLI example returned 200 SAR actual against 200 SAR plan,
+  exposing the 60 SAR regional miss offset by institutional overperformance.
+- New tests cover exact decimal values, missing versus zero, signed variance,
+  reconciliation, duplicate/unknown tuples, unplanned actuals, units and periods,
+  scope mismatch, future metadata, evidence integrity/path escapes, revision
+  identity, row-order invariance, a second sector and read-only CLI success/failure.
+- Source hashes validate bytes, not semantic correctness or approval authority.
+  Approval status is imported metadata, explicitly labelled unverified. This
+  foundation does not close G12/G13/G15 or replace the deployed factual QA gate.
+
 ## Preview remediation — 5 September 2026
 
 Release **44c9c31** is deployed to **https://new.strategyos.live**. The [receipt](evidence/preview-release.json) binds the immutable image, schema, approved synthetic run and 169-file source digest. [Deployment health](evidence/final-deployment-health.json) records authenticated checks and confirms production images were not changed. The worker process is running; no Docker healthcheck is configured for it.

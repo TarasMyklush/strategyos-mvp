@@ -149,9 +149,9 @@ class TestNoRegression:
     def test_plan_still_works(self):
         resp = client.get("/plan")
         assert resp.status_code == 200
-        assert "Execution tracker" in resp.text
-        assert "Loading governed execution tracker truth" in resp.text
-        assert "/api/plan/latest" in resp.text
+        assert "Intent Vault" in resp.text
+        assert "Loading your plans" in resp.text
+        assert "/static/intent_vault.js" in resp.text
         assert "/static/plan_data.js" not in resp.text
 
     def test_twin_api_router_is_registered(self):

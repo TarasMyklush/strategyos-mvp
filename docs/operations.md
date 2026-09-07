@@ -63,3 +63,161 @@ collection with exact workbook-row, PDF-page and Office/text citations. Indexing
 apply before search. Source indexing rejects changed files and oversized packs;
 its readiness is recorded in the run. The English/Arabic synthetic retrieval gate
 is separate from factual answer quality and business approval.
+
+### Dimensional plan import preview
+
+The first dimensional increment is a read-only operator tool, separate from live
+run selection and the executive UI. It evaluates one explicitly supplied plan
+version and one completed-period actual snapshot. It does not persist/ratify plans,
+verify the authority of an imported approver, or publish findings to the application.
+Run the portable synthetic example from the repository root:
+
+```sh
+.venv/bin/python -m strategyos_mvp.dimensional_plan \
+  --plan tests/fixtures/dimensional_plan/plan.json \
+  --actuals tests/fixtures/dimensional_plan/actuals.json \
+  --source-root tests/fixtures/dimensional_plan \
+  --company-id synthetic-company \
+  --as-of 2026-06-30
+```
+
+Output is JSON on stdout; invalid input exits 2 without a partial result. The
+fixture is explicitly proposed synthetic intent, not a real ratification. Its
+regional cell misses by 60 SAR while an institutional cell exceeds by 60 SAR;
+the aggregate remains on plan and `offset_detected` is true.
+
+The example files specify the import schema. Dimensions and member vocabularies
+are configured; every tuple must contain the exact configured dimension keys.
+Each additive metric declares its unit, direction, parent planned total and absolute
+rollup tolerance. Each cell declares its owner, target, absolute tolerance and
+source path/locator/hash. Cell targets must exactly reconcile to the metric total.
+Use decimal strings or integers, not floating-point amounts. Currency is part of
+the explicit unit; no FX conversion or non-additive aggregation is inferred.
+
+Actuals carry company, period, revision, recorded date and `kind: actual`. Pre-aggregate
+source detail to one observation per tuple; duplicates fail. Missing or null actuals
+remain missing; known dimension tuples without plan cells are disclosed and block
+complete rollups. Unknown members, units, companies and periods fail validation.
+Periods must be complete at `as_of`, with no future actual or ratification dates.
+Plan effective dates cover the reporting period; historical evaluation is allowed.
+A zero target has no percentage variance; signed differences remain available.
+
+Evidence must be a hash-matching local file within `--source-root`; absolute paths,
+escaping symlinks and changed bytes fail. A matching hash verifies artifact integrity,
+not that a locator's value is semantically correct or that its author could ratify.
+Run only on authorized operator inputs: this CLI is not an authenticated multi-tenant
+API and must not be exposed directly as a service. It does not apply the application's
+source-role classification or retrieval policy. All outputs retain the imported
+approval status and explicitly mark authorization as unverified. Plan, actual and
+analysis hashes identify the evaluated payloads; durable immutable storage remains
+future work. The operator must preserve the source snapshots for reproducibility.
+
+The module performs no network calls or writes. Targeted acceptance:
+
+```sh
+.venv/bin/python scripts/test.py -q tests/test_dimensional_plan.py tests/test_strategy_compiler.py tests/test_metric_claim_contracts.py
+```
+
+### Authenticated dimensional Intent workflow
+
+The next local increment adds `/api/intent/dimensional` to the application. It uses
+PostgreSQL exclusively; no file or in-memory fallback is used when persistence is
+unavailable. Install its additive schema as an explicit release/migration step in
+the configured application environment:
+
+```sh
+.venv/bin/python -m strategyos_mvp.dimensional_intent_store --initialize
+```
+
+This command is idempotent and does not alter existing run or board tables. It has
+not been executed against a business database as part of this implementation.
+The packaged SQL is `strategyos_mvp/sql/dimensional_intent.sql`. New plan versions,
+actual revisions, permission events, ratifications and analyses are append-only;
+triggers reject UPDATE, DELETE and TRUNCATE. Normal database backup/recovery and
+least-privilege database administration remain necessary.
+
+The initial API is whole-company scoped: `company_id` must equal the authenticated
+tenant/deployment identifier. BU users, anonymous/auth-disabled callers, generic
+system identities and demonstration-role credentials are denied. Real operator,
+reviewer, executive and tenant-administrator identities have the explicitly listed
+rights below; being an executive alone does not confer ratification permission.
+
+| Method and path after `/api/intent/dimensional` | Actor | Body / result |
+|---|---|---|
+| `GET /catalog?offset=0&limit=25` | Allowed whole-company reader | Eligible plan/actual summaries, pagination and caller capabilities |
+| `GET /plans/{plan_id}/versions/{version}/evidence?cell_id=...` | Allowed whole-company reader | Hash-checked source attachment for pre-ratification review |
+| `POST /plans` | Operator, tenant operator or tenant admin | `{source_pack_id, plan}`; returns immutable proposal, digest and importer |
+| `GET /plans/{plan_id}/versions/{version}` | Allowed whole-company reader | Original payload plus separate `governance_status` and ratification receipt |
+| `GET /plans/{plan_id}/ratifier?subject=...` | Tenant admin | Current grant revision, or disabled/revision 0 |
+| `PUT /plans/{plan_id}/ratifier` | Tenant admin | `{subject, enabled, expected_revision}`; appends grant/revocation event |
+| `POST /plans/{plan_id}/versions/{version}/ratify` | Granted executive, reviewer or tenant admin | `{expected_digest, note}`; note is 20–2,000 characters |
+| `POST /actuals` | Operator, tenant operator or tenant admin | `{source_pack_id, actuals}`; returns immutable actual revision |
+| `GET /actuals/{revision}` | Allowed whole-company reader | Original actual payload and importer |
+| `POST /analyses` | Allowed whole-company reader | `{plan_id, plan_version, actual_revision, as_of}`; calculates and persists a snapshot |
+| `GET /analyses/{analysis_hash}` | Allowed whole-company reader | Exact saved analysis; does not recalculate |
+| `GET /analyses/{analysis_hash}/evidence?cell_id=...&side=plan` | Allowed whole-company reader | Hash-checked source attachment; use `side=actuals` for actual evidence |
+
+Allowed whole-company readers are operator, tenant operator, reviewer, auditor,
+executive and tenant admin. They see eligible tenant-wide evidence, so this API
+must not be used to serve restricted BU/persona slices. Cell owners are business
+metadata, not access grants. The plan-specific ratifier register is an explicit
+backend approval policy; integration into the existing visual Authority Matrix
+and finer permissions are still outstanding.
+
+Workflow:
+
+1. Stage evidence using the existing source-pack intake. The API reads that pack's
+   registered server metadata and `raw` directory; no request can supply a root.
+   Use relative raw-pack source paths in plan/actual references. Eligible registered
+   current/historical sources are hash checked. Restricted, evaluator, control,
+   quarantined, unsupported and symlinked references fail. A historical disposition
+   stays historical; classification is not a finance correctness certificate.
+2. Import the plan with `status: proposed` and no ratification fields. Imports start
+   at version 1 and advance consecutively. Identical retries return the original
+   record; changed content under the same version conflicts. Partially overlapping
+   reporting periods within a plan family are rejected; exact-period amendments
+   and disjoint periods are supported. Plan IDs and actual revision IDs use at most
+   160 letters/digits/dots/underscores/hyphens and begin with a letter or digit.
+3. A tenant administrator grants the exact authenticated `subject` permission to
+   ratify that plan. Administrators cannot grant themselves permission; an importer
+   cannot ratify their own version, even if another administrator grants them rights.
+   Grant edits use optimistic revisions; revoked grants prevent future approvals.
+4. The designated ratifier reads the proposed version and its evidence, then submits
+   its digest and review note. The server records the identity, UTC approval time,
+   grant revision and exact plan digest. Submitted fields cannot spoof these values.
+   Imported files never establish these rights. A newer ratification prevents later
+   ratification of an older version; identical approval retries do not duplicate it.
+5. Import completed-period actuals (same schema as the operator CLI). They may come
+   from another owned source pack. Actual imports are immutable by revision and
+   duplicate tuples fail; plan-specific dimension/unit matching happens at analysis.
+6. Create an analysis with an explicit version/revision and UTC calendar `as_of`.
+   The plan must have been ratified, and actuals imported, by that day. Future dates
+   fail. A newer ratified version for the same period blocks obsolete comparisons.
+   Analysis and ratification share a transaction lock to avoid a comparator race.
+   Missing/unplanned actuals remain visibly incomplete rather than fabricated totals.
+7. Read the saved hash to recover the same figures after later source/plan changes.
+   Source eligibility is rechecked; revocation blocks access. Saved figures do not
+   require unchanged live bytes, but downloading their evidence does. Retain the
+   original source pack and metadata; missing pack metadata blocks access.
+
+All amounts remain decimal strings. Requests and stored snapshots have a 2 MB
+limit. Cookie-authenticated writes require a matching Origin. Responses are private
+and non-cacheable. An approved analysis distinguishes authenticated ratification
+from artifact hash assurance: cited values are not automatically semantically
+verified. The existing `/plan` page is now the Intent Vault: choose a version,
+review its target/evidence table, ratify with a review note when authorized, choose
+an actual snapshot and calculate drift. Saved results have private reopen links.
+Operators can expand the JSON import controls; tenant administrators can manage
+plan-specific ratifier permissions. The retired `/api/plan/latest` route redirects
+to the authenticated catalog. No current-run pointer, graph projection, board
+snapshot or external mailbox is changed by this workflow.
+
+Run the isolated service proof (requires local `initdb` and `pg_ctl`):
+
+```sh
+.venv/bin/python scripts/test.py -q tests/test_dimensional_intent.py tests/test_dimensional_plan.py
+```
+
+The tests create and destroy their own socket-only PostgreSQL cluster and databases;
+they never use an existing database or inherited credentials. On machines without
+those binaries this proof is explicitly skipped, not counted as passing.

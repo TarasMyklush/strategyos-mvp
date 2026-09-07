@@ -511,6 +511,6 @@ def test_phase15_plan_and_public_copy_mark_final_oracle_completion() -> None:
 
     assert "window.STRATEGYOS_PLAN" not in plan_data
     assert "window payload as execution truth" in plan_data
-    assert "fetch('/api/plan/latest')" in plan_html
+    assert "/static/intent_vault.js" in plan_html
     assert "/static/plan_data.js" not in plan_html
-    assert "Hosted tracker reflects the active tranche and direct verification" in plan_html
+    assert "Intent, accountability and evidence" in plan_html

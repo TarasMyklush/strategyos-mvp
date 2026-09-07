@@ -1,0 +1,417 @@
+"""Real PostgreSQL proof in a disposable, socket-only cluster; never business DBs."""
+from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
+from dataclasses import replace
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+from uuid import uuid4
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+import psycopg
+from psycopg import sql
+import pytest
+
+from strategyos_mvp import auth, dimensional_intent_sources as sources
+from strategyos_mvp import dimensional_intent_store as store
+from strategyos_mvp.dimensional_intent_api import router
+from strategyos_mvp.dimensional_plan import Actuals, Plan
+
+FIXTURE = Path(__file__).parent / 'fixtures' / 'dimensional_plan'
+TODAY = datetime.now(timezone.utc).date()
+
+
+@pytest.fixture(scope='module')
+def postgres():
+    initdb, pg_ctl = shutil.which('initdb'), shutil.which('pg_ctl')
+    if not initdb or not pg_ctl:
+        pytest.skip('Local PostgreSQL initdb/pg_ctl required for isolated dimensional proof.')
+    with tempfile.TemporaryDirectory(prefix='ki-') as directory:
+        root = Path(directory)
+        data, socket, log = root / 'db', root / 's', root / 'postgres.log'
+        socket.mkdir()
+        subprocess.run([initdb, '-D', str(data), '-U', 'intent_proof', '-A', 'trust', '--no-locale', '-E', 'UTF8'],
+                       check=True, capture_output=True, timeout=30)
+        # No TCP listener; no environment credentials or existing service are used.
+        subprocess.run([pg_ctl, '-D', str(data), '-l', str(log), '-o',
+                        f"-F -k {socket} -p 55439 -h ''", '-w', 'start'],
+                       check=True, capture_output=True, timeout=30)
+        try:
+            yield {'host': str(socket), 'port': 55439, 'user': 'intent_proof'}
+        finally:
+            subprocess.run([pg_ctl, '-D', str(data), '-m', 'immediate', '-w', 'stop'],
+                           check=True, capture_output=True, timeout=30)
+
+
+@pytest.fixture
+def setup(postgres, monkeypatch, tmp_path):
+    database = 'intent_' + uuid4().hex
+    with psycopg.connect(**postgres, dbname='postgres', autocommit=True) as conn:
+        conn.execute(sql.SQL('CREATE DATABASE {}').format(sql.Identifier(database)))
+    connect = lambda: psycopg.connect(**postgres, dbname=database)
+    monkeypatch.setattr(store.state_store, 'database_connection', lambda: (connect(), None))
+    config = replace(store.CONFIG, tenant_slug='intent-tenant', output_root=tmp_path / 'outputs')
+    monkeypatch.setattr(store, 'CONFIG', config)
+    monkeypatch.setattr(sources, 'CONFIG', config)
+    store.initialize()
+    pack = 'owned-pack'
+    root = config.output_root / 'source_packs' / pack
+    (root / 'raw').mkdir(parents=True)
+    shutil.copy(FIXTURE / 'evidence.csv', root / 'raw')
+    p, a = (json.loads((FIXTURE / f'{name}.json').read_text()) for name in ['plan', 'actuals'])
+    p['company_id'] = a['company_id'] = config.tenant_slug
+    period = {'start': f'{TODAY.year-1}-01-01', 'end': f'{TODAY.year-1}-01-31'}
+    p['period'], a['period'] = deepcopy(period), deepcopy(period)
+    p['effective_from'], p['effective_to'] = period['start'], f'{TODAY.year-1}-12-31'
+    a['recorded_on'] = period['end']
+    manifest = {'source_pack_id': pack, 'tenant_context': {'tenant_id': config.tenant_slug},
+                'manifest': [{'relative_path': 'evidence.csv', 'supported': True,
+                              'sha256': p['cells'][0]['source']['sha256'], 'source_disposition': 'current_evidence'}]}
+    (root / 'summary.json').write_text(json.dumps(manifest))
+    principal = lambda role, subject: {'tenant_id': config.tenant_slug, 'role': role, 'subject': subject}
+    admin = principal('tenant_admin', 'admin')
+    operator = principal('operator', 'operator')
+    executive = principal('executive', 'executive')
+    app = FastAPI()
+    app.include_router(router)
+    current = {'principal': operator}
+    app.dependency_overrides[auth.authenticate_request] = lambda: current['principal']
+    with TestClient(app) as client:
+        yield dict(p=p, a=a, pack=pack, root=root, manifest=manifest, admin=admin, operator=operator,
+                   executive=executive, connect=connect, client=client, current=current, app=app)
+    with psycopg.connect(**postgres, dbname='postgres', autocommit=True) as conn:
+        conn.execute(sql.SQL('DROP DATABASE {}').format(sql.Identifier(database)))
+
+
+def import_pair(s):
+    plan = store.import_plan(s['operator'], Plan.model_validate(s['p']), s['pack'])
+    store.import_actuals(s['operator'], Actuals.model_validate(s['a']), s['pack'])
+    return plan
+
+
+def approve(s, plan):
+    store.set_ratifier(s['admin'], s['p']['plan_id'], s['executive']['subject'], True, 0)
+    return store.ratify(s['executive'], s['p']['plan_id'], s['p']['version'], plan['digest'],
+                        'Reviewed the targets, owners and source evidence.')
+
+
+def analyse(s):
+    return store.create_analysis(s['executive'], s['p']['plan_id'], s['p']['version'], s['a']['revision'], TODAY)
+
+
+def test_durable_roundtrip_and_immutable_history(setup):
+    s = setup
+    imported = import_pair(s)
+    assert store.read_plan(s['executive'], s['p']['plan_id'], 1)['governance_status'] == 'proposed'
+    with pytest.raises(store.Conflict, match='not ratified'): analyse(s)
+    approval = approve(s, imported)
+    result = analyse(s)
+    assert result['rollups'][0]['offset_detected']
+    assert result['approval_status'] == 'ratified'
+    assert result['ratification']['approved_by'] == 'executive'
+    assert store.read_plan(s['executive'], s['p']['plan_id'], 1)['ratification']['plan_digest'] == imported['digest']
+    assert store.ratify(s['executive'], s['p']['plan_id'], 1, imported['digest'], approval['note']) == approval
+    assert analyse(s) == result
+    assert store.read_analysis(s['executive'], result['analysis_hash']) == result
+    # Every read uses a fresh connection; there is no process-memory store.
+    (s['root'] / 'raw' / 'evidence.csv').write_text('later source change')
+    assert store.read_analysis(s['executive'], result['analysis_hash']) == result
+    with pytest.raises(sources.SourceUnavailable): analyse(s)
+    with s['connect']() as conn:
+        for table in ['strategyos_intent_plan_versions', 'strategyos_intent_actual_versions',
+                      'strategyos_intent_ratifier_events', 'strategyos_intent_ratifications', 'strategyos_intent_analyses']:
+            for action in ['DELETE FROM {}', 'UPDATE {} SET tenant_key=tenant_key', 'TRUNCATE {} CASCADE']:
+                with pytest.raises(psycopg.Error, match='immutable'):
+                    conn.execute(sql.SQL(action).format(sql.Identifier(table)))
+                conn.rollback()
+
+
+def test_concurrent_import_and_ratification_retries(setup):
+    s = setup
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        plans = list(pool.map(lambda _: store.import_plan(s['operator'], Plan.model_validate(s['p']), s['pack']), range(4)))
+    assert all(p == plans[0] for p in plans)
+    store.set_ratifier(s['admin'], s['p']['plan_id'], 'executive', True, 0)
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        approvals = list(pool.map(lambda _: store.ratify(s['executive'], s['p']['plan_id'], 1, plans[0]['digest'],
+                                                        'Reviewed targets and sources.'), range(4)))
+    assert all(a == approvals[0] for a in approvals)
+    with s['connect']() as conn:
+        assert conn.execute('SELECT count(*) FROM strategyos_intent_ratifications').fetchone()[0] == 1
+
+
+def test_versions_conflicts_supersession_and_historical_results(setup):
+    s = setup
+    plan = import_pair(s)
+    approve(s, plan)
+    old = analyse(s)
+    s['p']['cells'][0]['owner'] = 'changed-owner'
+    with pytest.raises(store.Conflict): store.import_plan(s['operator'], Plan.model_validate(s['p']), s['pack'])
+    s['p']['version'] = 3
+    with pytest.raises(store.Conflict): store.import_plan(s['operator'], Plan.model_validate(s['p']), s['pack'])
+    s['p']['version'] = 2
+    second = store.import_plan(s['operator'], Plan.model_validate(s['p']), s['pack'])
+    assert second['digest'] != plan['digest']
+    store.ratify(s['executive'], s['p']['plan_id'], 2, second['digest'], 'Reviewed the changed owner and targets.')
+    with pytest.raises(store.Conflict, match='newer ratified'):
+        store.create_analysis(s['executive'], s['p']['plan_id'], 1, s['a']['revision'], TODAY)
+    assert store.read_analysis(s['executive'], old['analysis_hash']) == old
+    assert analyse(s)['plan_version'] == 2
+    s['a']['observations'][0]['value'] = '41'
+    with pytest.raises(store.Conflict): store.import_actuals(s['operator'], Actuals.model_validate(s['a']), s['pack'])
+    s['a']['revision'] = 'revision-2'
+    store.import_actuals(s['operator'], Actuals.model_validate(s['a']), s['pack'])
+    assert analyse(s)['rollups'][0]['actual'] == '201'
+
+
+def test_grant_required_separation_of_duties_and_revocation(setup):
+    s = setup
+    plan = store.import_plan(s['admin'], Plan.model_validate(s['p']), s['pack'])
+    with pytest.raises(PermissionError): store.ratify(s['executive'], s['p']['plan_id'], 1, plan['digest'], 'Reviewed all source targets.')
+    with pytest.raises(PermissionError): store.set_ratifier(s['admin'], s['p']['plan_id'], 'admin', True, 0)
+    other_admin = {**s['admin'], 'subject': 'other-admin'}
+    store.set_ratifier(other_admin, s['p']['plan_id'], 'admin', True, 0)
+    with pytest.raises(PermissionError): store.ratify(s['admin'], s['p']['plan_id'], 1, plan['digest'], 'Reviewed all source targets.')
+    store.set_ratifier(s['admin'], s['p']['plan_id'], 'executive', True, 0)
+    with pytest.raises(store.Conflict): store.set_ratifier(s['admin'], s['p']['plan_id'], 'executive', False, 0)
+    assert store.read_ratifier(s['admin'], s['p']['plan_id'], 'executive')['revision'] == 1
+    store.set_ratifier(s['admin'], s['p']['plan_id'], 'executive', False, 1)
+    with pytest.raises(PermissionError): store.ratify(s['executive'], s['p']['plan_id'], 1, plan['digest'], 'Reviewed all source targets.')
+    with s['connect']() as conn:
+        assert conn.execute('SELECT count(*) FROM strategyos_intent_ratifications').fetchone()[0] == 0
+
+
+@pytest.mark.parametrize('principal_change', [{'tenant_id': 'other'}, {'role': 'bu'}, {'role': 'anonymous'},
+                                             {'auth_disabled': True}, {'demo_role_login': True}])
+def test_scope_denial_before_storage_or_sources(setup, principal_change, monkeypatch):
+    s = setup
+    principal = {**s['executive'], **principal_change}
+    monkeypatch.setattr(store.state_store, 'database_connection', lambda: pytest.fail('Accessed store before authorization'))
+    with pytest.raises(PermissionError): store.read_plan(principal, s['p']['plan_id'], 1)
+    with pytest.raises(PermissionError): store.read_analysis(principal, 'a' * 64)
+
+
+@pytest.mark.parametrize('disposition', ['restricted_context', 'evaluator_only', 'control_plane', 'quarantined_context'])
+def test_nonbusiness_sources_cannot_be_imported_or_read(setup, disposition):
+    s = setup
+    imported = import_pair(s)
+    approve(s, imported)
+    result = analyse(s)
+    s['manifest']['manifest'][0]['source_disposition'] = disposition
+    (s['root'] / 'summary.json').write_text(json.dumps(s['manifest']))
+    with pytest.raises(sources.SourceUnavailable): store.read_analysis(s['executive'], result['analysis_hash'])
+    with pytest.raises(sources.SourceUnavailable): store.read_plan(s['executive'], s['p']['plan_id'], 1)
+    with pytest.raises(sources.SourceUnavailable): store.import_actuals(s['operator'], Actuals.model_validate(s['a']), s['pack'])
+
+
+def test_foreign_pack_and_spoofed_approval_rejected(setup):
+    s = setup
+    s['p'].update(status='ratified', ratified_by='executive', ratified_on=s['p']['period']['start'],
+                  ratification=s['p']['cells'][0]['source'])
+    with pytest.raises(ValueError, match='proposals'): store.import_plan(s['operator'], Plan.model_validate(s['p']), s['pack'])
+    s['manifest']['tenant_context']['tenant_id'] = 'foreign'
+    (s['root'] / 'summary.json').write_text(json.dumps(s['manifest']))
+    with pytest.raises(PermissionError): store.import_actuals(s['operator'], Actuals.model_validate(s['a']), s['pack'])
+
+
+def test_missing_database_does_not_fall_back_to_files(setup, monkeypatch):
+    s = setup
+    monkeypatch.setattr(store.state_store, 'database_connection', lambda: (None, 'not configured'))
+    with pytest.raises(store.Unavailable): store.read_plan(s['executive'], 'missing', 1)
+
+
+def test_two_source_packs_with_same_filename_are_verified_independently(setup):
+    s = setup
+    other = s['root'].parent / 'actual-pack'
+    shutil.copytree(s['root'], other)
+    import hashlib
+    (other / 'raw' / 'evidence.csv').write_text('separate actual evidence')
+    sha = hashlib.sha256((other / 'raw' / 'evidence.csv').read_bytes()).hexdigest()
+    manifest = deepcopy(s['manifest'])
+    manifest['source_pack_id'] = 'actual-pack'
+    manifest['manifest'][0]['sha256'] = sha
+    (other / 'summary.json').write_text(json.dumps(manifest))
+    for obs in s['a']['observations']: obs['source']['sha256'] = sha
+    plan = store.import_plan(s['operator'], Plan.model_validate(s['p']), s['pack'])
+    store.import_actuals(s['operator'], Actuals.model_validate(s['a']), 'actual-pack')
+    approve(s, plan)
+    result = analyse(s)
+    assert result['source_receipts']['actuals']['source_pack_id'] == 'actual-pack'
+    assert result['rollups'][0]['actual'] == '200'
+    (other / 'raw' / 'evidence.csv').write_text('changed')
+    with pytest.raises(sources.SourceUnavailable): analyse(s)
+
+
+def test_api_real_workflow_and_no_cache(setup):
+    s = setup
+    client = s['client']
+    prefix = '/api/intent/dimensional'
+    response = client.post(prefix + '/plans', json={'source_pack_id': s['pack'], 'plan': s['p']})
+    assert response.status_code == 200, response.text
+    assert response.headers['cache-control'] == 'private, no-store'
+    digest = response.json()['digest']
+    response = client.post(prefix + '/actuals', json={'source_pack_id': s['pack'], 'actuals': s['a']})
+    assert response.status_code == 200, response.text
+    path = prefix + '/plans/' + s['p']['plan_id']
+    s['current']['principal'] = s['admin']
+    response = client.put(path + '/ratifier', json={'subject': 'executive', 'enabled': True, 'expected_revision': 0})
+    assert response.status_code == 200, response.text
+    s['current']['principal'] = s['executive']
+    assert client.post(path + '/versions/1/ratify', json={'expected_digest': 'a'*64, 'note': 'Reviewed targets and owners.'}).status_code == 409
+    response = client.post(path + '/versions/1/ratify', json={'expected_digest': digest, 'note': 'Reviewed targets and owners.'})
+    assert response.status_code == 200, response.text
+    response = client.post(prefix + '/analyses', json={'plan_id': s['p']['plan_id'], 'plan_version': 1,
+                                                       'actual_revision': s['a']['revision'], 'as_of': TODAY.isoformat()})
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert client.get(prefix + '/analyses/' + result['analysis_hash']).json() == result
+    assert client.get(path + '/versions/1').json()['governance_status'] == 'ratified'
+    assert client.get(prefix + '/actuals/' + s['a']['revision']).status_code == 200
+    assert client.get(path + '/versions/99').status_code == 404
+
+
+def test_api_permission_payload_and_csrf_boundaries(setup, monkeypatch):
+    s, prefix = setup, '/api/intent/dimensional'
+    client = s['client']
+    s['current']['principal'] = s['executive']
+    assert client.post(prefix + '/plans', json={'source_pack_id': s['pack'], 'plan': s['p']}).status_code == 403
+    s['current']['principal'] = s['operator']
+    assert client.post(prefix + '/plans', json={'source_pack_id': s['pack'], 'plan': s['p'], 'role': 'tenant_admin'}).status_code == 422
+    assert client.post(prefix + '/plans', content=b'x' * (store.MAX_BYTES + 1)).status_code == 413
+    client.cookies.set('strategyos_session', 'test-cookie')
+    assert client.post(prefix + '/plans', headers={'Origin': 'https://foreign.invalid'},
+                       json={'source_pack_id': s['pack'], 'plan': s['p']}).status_code == 403
+    assert client.post(prefix + '/plans', headers={'Origin': 'http://testserver'},
+                       json={'source_pack_id': s['pack'], 'plan': s['p']}).status_code == 200
+    client.cookies.clear()
+    monkeypatch.setattr(store.state_store, 'database_connection', lambda: (None, 'offline'))
+    assert client.get(prefix + '/plans/anything/versions/1').status_code == 503
+
+
+def test_api_uses_real_authentication_and_registered_app_routes(setup, monkeypatch):
+    s = setup
+    from strategyos_mvp import api
+    config = replace(auth.CONFIG, api_auth_enabled=True, auth_mode='api_key', idp_enabled=False,
+                     demo_role_login_enabled=False, tenant_slug='intent-tenant',
+                     operator_api_keys=('local-intent-test-key',))
+    monkeypatch.setattr(auth, 'CONFIG', config)
+    # Exercise the real app's identity middleware and registered router, with no dependency overrides.
+    client = TestClient(api.app)
+    prefix = '/api/intent/dimensional'
+    assert client.get(prefix + '/plans/unknown/versions/1').status_code == 401
+    assert client.post(prefix + '/plans', json={'source_pack_id': s['pack'], 'plan': s['p']}).status_code == 401
+    response = client.post(prefix + '/plans', headers={'X-API-Key': 'local-intent-test-key'},
+                           json={'source_pack_id': s['pack'], 'plan': s['p']})
+    assert response.status_code == 200, response.text
+    assert response.json()['imported_by'].startswith('api-key:operator:')
+    assert response.headers['cache-control'] == 'private, no-store'
+
+
+def test_period_overlap_and_unaddressable_identifiers_rejected(setup):
+    s = setup
+    import_pair(s)
+    s['p']['version'] = 2
+    s['p']['period']['start'] = f'{TODAY.year-1}-01-15'
+    with pytest.raises(store.Conflict, match='Overlapping'):
+        store.import_plan(s['operator'], Plan.model_validate(s['p']), s['pack'])
+    s['p']['plan_id'] = 'path/segment'
+    with pytest.raises(ValueError, match='identifier'):
+        store.import_plan(s['operator'], Plan.model_validate(s['p']), s['pack'])
+
+
+def test_protected_evidence_download_checks_bytes_and_never_accepts_paths(setup):
+    s = setup
+    approve(s, import_pair(s))
+    result = analyse(s)
+    path = '/api/intent/dimensional/analyses/' + result['analysis_hash'] + '/evidence'
+    response = s['client'].get(path, params={'cell_id': 'regional', 'side': 'actuals'})
+    assert response.status_code == 200, response.text
+    assert response.content == (s['root'] / 'raw' / 'evidence.csv').read_bytes()
+    assert response.headers['x-content-type-options'] == 'nosniff'
+    assert s['client'].get(path, params={'cell_id': '../evidence.csv', 'side': 'plan'}).status_code == 404
+    (s['root'] / 'raw' / 'evidence.csv').write_text('new bytes')
+    assert s['client'].get(path, params={'cell_id': 'regional', 'side': 'actuals'}).status_code == 409
+
+
+def test_symlink_and_forged_evaluator_manifest_rejected(setup):
+    s = setup
+    raw = s['root'] / 'raw'
+    (raw / 'hidden.csv').write_bytes((raw / 'evidence.csv').read_bytes())
+    (raw / 'evidence.csv').unlink()
+    (raw / 'evidence.csv').symlink_to(raw / 'hidden.csv')
+    with pytest.raises(sources.SourceUnavailable, match='symbolic'):
+        store.import_plan(s['operator'], Plan.model_validate(s['p']), s['pack'])
+    (raw / 'evidence.csv').unlink()
+    shutil.copy(raw / 'hidden.csv', raw / 'answer_key.csv')
+    for cell in s['p']['cells']: cell['source']['path'] = 'answer_key.csv'
+    s['manifest']['manifest'][0]['relative_path'] = 'answer_key.csv'
+    (s['root'] / 'summary.json').write_text(json.dumps(s['manifest']))
+    with pytest.raises(sources.SourceUnavailable):
+        store.import_plan(s['operator'], Plan.model_validate(s['p']), s['pack'])
+
+
+def test_shared_database_cannot_reveal_another_tenants_records(setup, monkeypatch):
+    s = setup
+    approve(s, import_pair(s))
+    saved = analyse(s)
+    monkeypatch.setattr(store, 'CONFIG', replace(store.CONFIG, tenant_slug='second-tenant'))
+    other = {**s['executive'], 'tenant_id': 'second-tenant'}
+    with pytest.raises(store.NotFound): store.read_plan(other, s['p']['plan_id'], 1)
+    with pytest.raises(store.NotFound): store.read_actuals(other, s['a']['revision'])
+    with pytest.raises(store.NotFound): store.read_analysis(other, saved['analysis_hash'])
+
+
+def test_migration_is_idempotent_and_not_run_implicitly(setup):
+    s = setup
+    import_pair(s)
+    store.initialize()
+    assert store.read_plan(s['executive'], s['p']['plan_id'], 1)['governance_status'] == 'proposed'
+    with s['connect']() as conn:
+        conn.execute('DROP TABLE strategyos_intent_analyses')
+    with pytest.raises(store.Unavailable, match='migration'):
+        store.read_plan(s['executive'], s['p']['plan_id'], 1)
+
+
+def test_as_of_cannot_precede_the_server_import_or_ratification(setup):
+    s = setup
+    approve(s, import_pair(s))
+    from datetime import timedelta
+    with pytest.raises(store.Conflict, match='imported after'):
+        store.create_analysis(s['executive'], s['p']['plan_id'], 1, s['a']['revision'], TODAY - timedelta(days=1))
+    with pytest.raises(ValueError, match='future'):
+        store.create_analysis(s['executive'], s['p']['plan_id'], 1, s['a']['revision'], TODAY + timedelta(days=1))
+
+
+def test_catalog_permissions_pagination_and_source_revocation(setup):
+    s = setup
+    assert store.catalog(s['executive'])['plans'] == []
+    imported = import_pair(s)
+    approve(s, imported)
+    s['p']['version'] = 2
+    store.import_plan(s['operator'], Plan.model_validate(s['p']), s['pack'])
+    page = store.catalog(s['executive'], limit=1)
+    assert page['plans'][0]['version'] == 2
+    assert page['permissions'] == {'can_import': False, 'can_manage_ratifiers': False}
+    assert page['next_offset'] == 1
+    assert store.catalog(s['executive'], offset=1, limit=1)['plans'][0]['version'] == 1
+    assert store.catalog(s['admin'])['permissions'] == {'can_import': True, 'can_manage_ratifiers': True}
+    assert store.read_plan(s['executive'], s['p']['plan_id'], 2)['permissions']['can_ratify'] is True
+    assert store.read_plan(s['operator'], s['p']['plan_id'], 2)['permissions']['can_ratify'] is False
+    s['manifest']['manifest'][0]['source_disposition'] = 'restricted_context'
+    (s['root'] / 'summary.json').write_text(json.dumps(s['manifest']))
+    catalog = store.catalog(s['executive'])
+    assert catalog['plans'] == catalog['actuals'] == []
+
+
+def test_reviewer_can_open_proposal_evidence_before_ratification(setup):
+    s = setup
+    import_pair(s)
+    path = '/api/intent/dimensional/plans/' + s['p']['plan_id'] + '/versions/1/evidence'
+    s['current']['principal'] = s['executive']
+    result = s['client'].get(path, params={'cell_id': 'regional'})
+    assert result.status_code == 200
+    assert result.content == (s['root'] / 'raw' / 'evidence.csv').read_bytes()

@@ -30,7 +30,7 @@ build-backend = "setuptools.build_meta"
 include = ["strategyos_mvp*"]
 
 [tool.setuptools.package-data]
-strategyos_mvp = ["tools/*.swift", "static/*.html", "static/*.css", "static/*.js", "static/*.svg", "static/*.woff2", "static/vendor/*.js", "twins/static/*.html"]
+strategyos_mvp = ["tools/*.swift", "sql/*.sql", "static/*.html", "static/*.css", "static/*.js", "static/*.svg", "static/*.woff2", "static/vendor/*.js", "twins/static/*.html"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

@@ -19,11 +19,11 @@ def test_plan_static_fixture_module_is_not_a_truth_source() -> None:
 def test_plan_page_fetches_governed_api_payload_instead_of_static_truth() -> None:
     html = _read(PLAN_HTML)
 
-    assert '<h1>Execution tracker</h1>' in html
+    assert '<h1>Intent Vault</h1>' in html
     assert 'href="/guide"' in html
     assert '>How it works</a>' in html
-    assert "Loading governed execution tracker truth" in html
-    assert "fetch('/api/plan/latest')" in html
+    assert "Loading your plans" in html
+    assert "/static/intent_vault.js" in html
     assert "/static/plan_data.js" not in html
     assert "window.STRATEGYOS_PLAN" not in html
     assert 'font-size: clamp(30px, 4vw, 40px);' in html
