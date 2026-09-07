@@ -11,6 +11,30 @@ import strategyos_mvp.storage as storage
 from strategyos_mvp.config import load_config
 
 
+def test_authenticated_startup_never_invents_tenant_scope_for_legacy_twin_reconciliation(monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        api_module,
+        "CONFIG",
+        SimpleNamespace(database_url=None, api_auth_enabled=True),
+    )
+    monkeypatch.setattr(
+        api_module,
+        "reconcile_message_routing_audit",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("authenticated startup must not read root legacy files")
+        ),
+    )
+
+    async def exercise():
+        async with api_module._app_lifespan(None):
+            pass
+
+    asyncio.run(exercise())
+
+
 def _apply_env(env_updates: dict[str, str | None]):
     original = {key: os.environ.get(key) for key in env_updates}
     for key, value in env_updates.items():

@@ -335,17 +335,21 @@ async def _app_lifespan(_: FastAPI):
                 conn.commit()
         await asyncio.to_thread(migrate)
 
-    try:
-        result = reconcile_message_routing_audit()
-        if result["created"]:
-            logger.info(
-                "Reconciled %s legacy Digital Twin routing audit event(s)",
-                result["created"],
-            )
-    except Exception:
-        # Audit reconciliation must fail closed in the UI contract without
-        # preventing the rest of the governed application from starting.
-        logger.exception("Digital Twin routing audit reconciliation failed")
+    # Root-level legacy Twin files are valid only in an explicitly isolated,
+    # auth-disabled runtime. An authenticated service has no request principal
+    # at startup and must not invent a tenant/source scope to inherit them.
+    if not CONFIG.api_auth_enabled:
+        try:
+            result = reconcile_message_routing_audit()
+            if result["created"]:
+                logger.info(
+                    "Reconciled %s legacy Digital Twin routing audit event(s)",
+                    result["created"],
+                )
+        except Exception:
+            # Audit reconciliation must fail closed in the UI contract without
+            # preventing the rest of the governed application from starting.
+            logger.exception("Digital Twin routing audit reconciliation failed")
     yield
 
 

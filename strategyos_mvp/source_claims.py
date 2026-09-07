@@ -563,8 +563,11 @@ def claim_is_eligible(
     for assessment in assessments:
         if assessment.claim_revision_id != claim.revision_id:
             continue
-        if (assessment.assessment_type == 'validation' and assessment.result in {'failed', 'invalid'}
-                and assessment.assessed_at <= datetime.now(UTC)):
+        # A recorded failed validation is immediately fail-closed. The source
+        # validator's clock may be slightly ahead of the database/request
+        # clock; delaying invalidation would briefly expose rejected evidence.
+        if (assessment.assessment_type == 'validation'
+                and assessment.result in {'failed', 'invalid'}):
             reasons.append('validation_failed')
         if assessment.assessment_type == "lifecycle" and assessment.result in {
             ReviewAction.RETRACTED,

@@ -1,5 +1,5 @@
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
@@ -32,7 +32,10 @@ def test_invalid_input_blocks_direct_derived_snapshot_and_whole_run(ledger, monk
     assert repo.run_source_access(run,context=context)['allowed']
     assessment = ClaimAssessment(claim_revision_id=first,assessment_type='validation',
         result='failed',rule_version='semantic-v2',assessed_by='system:semantic-validator',
-        assessed_at=datetime.now(UTC),reasons=('Mixed Actual/Est cannot be certified as actual.',))
+        # A recorded invalidation is fail-closed immediately even if the
+        # validator and database clocks differ.
+        assessed_at=datetime.now(UTC)+timedelta(minutes=5),
+        reasons=('Mixed Actual/Est cannot be certified as actual.',))
     receipt = repo.assess_claim(assessment,effect_key='qa-invalidity:'+first)
     assert receipt['created']
     assert not repo.assess_claim(assessment,effect_key='qa-invalidity:'+first)['created']

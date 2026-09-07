@@ -209,6 +209,21 @@ def execute_strategyos_run_job(
     ctx: Any | None = None,
 ) -> StrategyOSRunOutput:
     job_id = task_input.job_id
+    existing = state_store.get_run_job(job_id)
+    existing_status = str(existing.get("status") or "")
+    if existing_status == "succeeded":
+        return StrategyOSRunOutput(
+            job_id=str(existing.get("job_id") or job_id),
+            status="succeeded",
+            strategyos_run_id=(
+                str(existing.get("strategyos_run_id"))
+                if existing.get("strategyos_run_id")
+                else None
+            ),
+            run_dir=str(task_input.run_dir),
+        )
+    if existing_status in {"cancelled", "canceled"}:
+        raise RuntimeError("Run job was cancelled by a guarded application shutdown.")
     retry_count = getattr(ctx, "retry_count", None)
     state_store.update_run_job(
         job_id,

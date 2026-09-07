@@ -1,6 +1,8 @@
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 import strategyos_mvp.hatchet_runtime as hatchet_runtime
 import strategyos_mvp.run_executor as run_executor
 import strategyos_mvp.state_store as state_store
@@ -187,6 +189,11 @@ def test_hatchet_worker_task_updates_job_lifecycle(monkeypatch, tmp_path: Path):
         updates.append((job_id, kwargs))
         return {"job_id": job_id, **kwargs}
 
+    monkeypatch.setattr(
+        hatchet_runtime.state_store,
+        "get_run_job",
+        lambda job_id: {"job_id": job_id, "status": "queued"},
+    )
     monkeypatch.setattr(hatchet_runtime.state_store, "update_run_job", fake_update_run_job)
     monkeypatch.setattr(
         hatchet_runtime,
@@ -226,6 +233,72 @@ def test_hatchet_worker_task_updates_job_lifecycle(monkeypatch, tmp_path: Path):
         "locked_finding_count": None,
         "total_recoverable_sar": None,
     }
+
+
+def test_hatchet_worker_never_resurrects_cancelled_job(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(
+        hatchet_runtime.state_store,
+        "get_run_job",
+        lambda job_id: {"job_id": job_id, "status": "cancelled"},
+    )
+    monkeypatch.setattr(
+        hatchet_runtime.state_store,
+        "update_run_job",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("cancelled job must remain terminal")
+        ),
+    )
+    monkeypatch.setattr(
+        hatchet_runtime,
+        "run_strategyos_workflow",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("cancelled job must not execute")
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="cancelled by a guarded application shutdown"):
+        hatchet_runtime.execute_strategyos_run_job(
+            hatchet_runtime.StrategyOSRunInput(
+                job_id="job-cancelled",
+                dataset=str(tmp_path / "dataset"),
+                run_dir=str(tmp_path / "runs"),
+                skip_prepare=True,
+                sync_artifacts=False,
+            )
+        )
+
+
+def test_hatchet_worker_retry_of_succeeded_job_is_idempotent(monkeypatch, tmp_path: Path):
+    run_id = "11111111-1111-1111-1111-111111111111"
+    monkeypatch.setattr(
+        hatchet_runtime.state_store,
+        "get_run_job",
+        lambda job_id: {
+            "job_id": job_id,
+            "status": "succeeded",
+            "strategyos_run_id": run_id,
+        },
+    )
+    monkeypatch.setattr(
+        hatchet_runtime,
+        "run_strategyos_workflow",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("succeeded job must not execute twice")
+        ),
+    )
+
+    output = hatchet_runtime.execute_strategyos_run_job(
+        hatchet_runtime.StrategyOSRunInput(
+            job_id="job-succeeded",
+            dataset=str(tmp_path / "dataset"),
+            run_dir=str(tmp_path / "runs"),
+            skip_prepare=True,
+            sync_artifacts=False,
+        )
+    )
+
+    assert output.status == "succeeded"
+    assert output.strategyos_run_id == run_id
 
 
 def test_legacy_job_summary_is_redacted_to_bounded_receipt():

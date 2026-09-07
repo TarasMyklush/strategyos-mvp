@@ -42,27 +42,41 @@ case "$1" in
   *service=strategyos-api*) echo aaaaaaaaaaaa;;
   *service=strategyos-worker*) echo bbbbbbbbbbbb;;
   *service=strategyos-claim-projector*) printf 'cccccccccccc\\ndddddddddddd\\n';;
+  *service=postgres*) echo eeeeeeeeeeee;;
  esac;;
  inspect) case "$3" in
   *project*) echo "${PROOF_PROJECT}";;
   *service*) case "$4" in
    aaaaaaaaaaaa) echo strategyos-api;;
    bbbbbbbbbbbb) echo strategyos-worker;;
+   eeeeeeeeeeee) echo postgres;;
    *) echo strategyos-claim-projector;;
   esac;;
  esac;;
  stop) echo "$4" >> "$PROOF_LOG";;
+ exec) echo "$2" >> "$PROOF_EXEC_LOG";;
  *) exit 92;;
 esac
 ''')
     docker.chmod(0o700)
     log=tmp_path/'stopped'
+    exec_log=tmp_path/'executed'
     result=subprocess.run(['bash','-c',remote],env={**os.environ,'PATH':str(tmp_path)+os.pathsep+os.environ['PATH'],
-        'PROOF_LOG':str(log),'PROOF_PROJECT':'production' if wrong_owner else 'strategyos-branch'},capture_output=True,text=True)
+        'PROOF_LOG':str(log),'PROOF_EXEC_LOG':str(exec_log),
+        'PROOF_PROJECT':'production' if wrong_owner else 'strategyos-branch'},capture_output=True,text=True)
     if wrong_owner:
         assert result.returncode!=0 and not log.exists()
         assert 'ownership mismatch' in result.stderr
     else:
         assert result.returncode==0, result.stderr
         assert log.read_text().splitlines()==['aaaaaaaaaaaa','bbbbbbbbbbbb','cccccccccccc','dddddddddddd']
+        assert exec_log.read_text().splitlines()==['eeeeeeeeeeee']
         assert 'audit history' in result.stdout
+
+
+def test_recovery_terminalizes_interrupted_jobs_before_roll_forward():
+    script=SCRIPT.read_text()
+    assert "status = 'cancelled'" in script
+    assert "where status in ('queued', 'running')" in script
+    assert 'shutdown_reason' in script
+    assert "metadata_json = coalesce(metadata_json" in script
