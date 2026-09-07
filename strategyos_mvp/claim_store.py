@@ -605,7 +605,7 @@ class ClaimRepository:
                         raise ValueError("A revised or expired forecast cannot receive new acceptance.")
                     cur.execute("""select exists(select 1 from strategyos_claim_assessments
                         where claim_revision_id=%s and assessment_type='lifecycle'
-                          and result in ('retracted','rejected','superseded') and assessed_at<=now())""",
+                          and result in ('retracted','rejected','superseded'))""",
                         (claim.revision_id,))
                     if cur.fetchone()[0]:
                         raise ValueError("Withdrawn evidence cannot receive forecast acceptance.")
@@ -751,7 +751,6 @@ class ClaimRepository:
                                join strategyos_claim_assessments a on a.claim_revision_id = l.id
                                where a.assessment_type = 'lifecycle'
                                  and a.result in ('retracted', 'rejected', 'superseded')
-                                 and a.assessed_at <= now()
                            ) as withdrawn_evidence,
                            exists (
                                select 1 from run_lineage l
@@ -1540,7 +1539,7 @@ class ClaimRepository:
                       (f.business_unit is null or not f.business_unit = any(%s::text[])))
                   or exists (select 1 from strategyos_claim_assessments a
                       where a.claim_revision_id = r.id and a.assessment_type = 'lifecycle'
-                        and a.result in ('retracted','rejected','superseded') and a.assessed_at <= now())
+                        and a.result in ('retracted','rejected','superseded'))
                   or exists (select 1 from strategyos_claim_assessments a
                       where a.claim_revision_id = r.id and a.assessment_type = 'validation'
                         and a.result in ('failed','invalid') and a.assessed_at <= now())
@@ -1589,7 +1588,7 @@ class ClaimRepository:
             from strategyos_claim_assessments
             where claim_revision_id = %s
               and (%s::timestamptz is null or assessed_at <= %s
-                   or (assessment_type = 'lifecycle' and assessed_at <= now())
+                   or assessment_type = 'lifecycle'
                    or (assessment_type = 'validation' and result in ('failed','invalid') and assessed_at <= now()))
             order by assessed_at
             """,

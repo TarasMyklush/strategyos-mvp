@@ -294,6 +294,27 @@ def test_retracted_claim_is_ineligible_and_assessment_is_not_self_reported_confi
     assert assessment.fingerprint.startswith("claim-assessment:")
 
 
+def test_recorded_lifecycle_withdrawal_is_immediate_despite_clock_skew():
+    assessment = ClaimAssessment(
+        claim_revision_id="revision-1",
+        assessment_type="lifecycle",
+        result="retracted",
+        rule_version="review-policy-v1",
+        assessed_by="reviewer:42",
+        assessed_at=NOW + timedelta(seconds=5),
+        reasons=("Recorded withdrawal must fail closed immediately.",),
+    )
+    result = claim_is_eligible(
+        revision(),
+        query=query(),
+        context=context(),
+        source_policies=[policy()],
+        assessments=[assessment],
+    )
+    assert result.eligible is False
+    assert "lifecycle:retracted" in result.reasons
+
+
 def test_forecast_ui_view_preserves_author_period_scale_and_traceability():
     claim = revision(
         actual_draft(

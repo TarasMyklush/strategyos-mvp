@@ -592,7 +592,7 @@ def forecast_use_status(claim: ClaimRevision, *, assessments: Iterable[ClaimAsse
     assessments = list(assessments)
     if any(a.claim_revision_id == claim.revision_id and a.assessment_type == "lifecycle"
            and a.result in {"retracted", "rejected", "superseded"}
-           and a.assessed_at <= datetime.now(UTC) for a in assessments):
+           for a in assessments):
         return {**base, "status": "forecast_withdrawn"}
     if claim.draft.valid_until and claim.draft.valid_until <= at:
         return {**base, "status": "forecast_expired"}
