@@ -1,6 +1,6 @@
-# StrategyOS
+# Kyvern
 
-StrategyOS provides governed finance analysis, executive diagnostics, contextual question answering and a specialist agent runtime. This repository on `main` is the canonical implementation. It includes the enriched synthetic demonstration dataset and portable regression fixtures.
+Kyvern (pronounced **KY-vurn**) provides governed finance analysis, executive diagnostics, contextual question answering and a specialist agent runtime. This repository on `main` is the canonical implementation. It includes the enriched synthetic demonstration dataset and portable regression fixtures.
 
 The broader enterprise System of Intent is still under development. Requirements, implementation and readiness are separated explicitly:
 

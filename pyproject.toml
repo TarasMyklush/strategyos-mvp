@@ -1,7 +1,7 @@
 [project]
 name = "strategyos-mvp"
 version = "0.1.0"
-description = "StrategyOS governed finance analysis and executive strategy workspace."
+description = "Kyvern governed finance analysis and executive strategy workspace."
 requires-python = ">=3.11"
 dependencies = [
   "boto3",

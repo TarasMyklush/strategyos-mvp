@@ -265,7 +265,7 @@ def build_final_gate_report(
 
 def render_final_gate_report(report: dict[str, Any]) -> str:
     lines = [
-        "# StrategyOS Final Gate Report",
+        "# Kyvern Final Gate Report",
         "",
         f"- Passed: {report['passed']}",
         f"- Decision: {report['decision']}",
@@ -334,7 +334,7 @@ def promote_active_evidence(run_dir: Path, report: dict[str, Any]) -> Path:
             shutil.copy2(artifact, active_dir / artifact.name)
 
     readme_lines = [
-        "# StrategyOS Active Run Evidence",
+        "# Kyvern Active Run Evidence",
         "",
         "Date: 2026-06-10",
         "Status: Canonical current local-only evidence set",
@@ -384,7 +384,7 @@ def refresh_canonical_set_readme(active_dir: Path, run_dir: Path) -> Path:
     readme_path.write_text(
         "\n".join(
             [
-                "# StrategyOS Canonical Set README",
+                "# Kyvern Canonical Set README",
                 "",
                 "Date: 2026-06-10",
                 "Status: Canonical outputs index after local final-gate refresh",
@@ -462,7 +462,7 @@ def run_local_final_gate(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the local StrategyOS final gate.")
+    parser = argparse.ArgumentParser(description="Run the local Kyvern final gate.")
     parser.add_argument("--dataset", type=Path, default=None)
     parser.add_argument("--run-dir", type=Path, default=None)
     parser.add_argument(

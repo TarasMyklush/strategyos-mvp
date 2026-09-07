@@ -111,7 +111,7 @@ def submit_hatchet_run(
             failure_reason=str(exc),
             metadata={"enqueue_error": str(exc)},
         )
-        raise RunExecutionUnavailable(f"Unable to enqueue StrategyOS Hatchet run: {exc}") from exc
+        raise RunExecutionUnavailable(f"Unable to enqueue Kyvern Hatchet run: {exc}") from exc
 
     hatchet_run_id = str(hatchet_ref.get("hatchet_run_id") or "")
     updated = state_store.update_run_job(
@@ -127,5 +127,5 @@ def submit_hatchet_run(
         "hatchet_run_id": updated.get("hatchet_run_id") or hatchet_run_id or None,
         "strategyos_run_id": updated.get("strategyos_run_id"),
         "request_hash": updated.get("request_hash") or job.get("request_hash"),
-        "detail": "StrategyOS run queued for Hatchet worker execution.",
+        "detail": "Kyvern run queued for Hatchet worker execution.",
     }

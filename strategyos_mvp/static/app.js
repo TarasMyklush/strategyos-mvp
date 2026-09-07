@@ -1231,7 +1231,7 @@
     }
 
     els.workspaceSubtitle.textContent = "Role-aware governed diagnostics workspace";
-    els.workspaceHeadline.textContent = "Choose the truthful StrategyOS lane";
+    els.workspaceHeadline.textContent = "Choose the truthful Kyvern lane";
     els.workspaceNote.textContent = "Executive sees board-safe narrative on /executive. BU leaders get a bounded read-only governed lane here, reviewers handle sign-off, operators handle intake and resume, and tenant admin / system governs health and connector truth.";
     els.roleLanePill.textContent = "Sign in for role lanes";
     els.sessionHelp.textContent = "Paste a BU, reviewer, operator, or tenant-admin access token. Executive readout lives at /executive; governed approvals, run controls, and system inspection stay here.";
@@ -1274,7 +1274,7 @@
     const shellByLane = {
       shared: {
         title: "Review and operate the latest governed case",
-        body: "This environment exposes reviewer and operator controls together. StrategyOS stays one governed product shell, but decisions, runtime, and publication remain explicit.",
+        body: "This environment exposes reviewer and operator controls together. Kyvern stays one governed product shell, but decisions, runtime, and publication remain explicit.",
         assistantName: "Shared lane copilot",
         assistantDetail: "Stage the packet, inspect evidence, then release only through explicit reviewer and operator steps.",
         surface: "Shared governed lane",
@@ -1319,9 +1319,9 @@
         status: "Narrative stays separate from execution so leadership never sees raw operator clutter.",
       },
       public: {
-        title: "Choose the truthful StrategyOS lane",
+        title: "Choose the truthful Kyvern lane",
         body: "Anonymous viewers can understand the shell and its role boundaries, but governed actions stay behind explicit role routes.",
-        assistantName: "StrategyOS copilot",
+        assistantName: "Kyvern copilot",
         assistantDetail: "Sign in to reveal the next valid move for BU, reviewer, operator, or tenant-admin work.",
         surface: "Public shell map",
         status: "The product shows posture honestly before it shows controls.",
@@ -1427,7 +1427,7 @@
         { title: "Delegate execution here", detail: "Reviewer, operator, and tenant-system work stays in this workspace so the executive surface remains clean." },
       ];
     } else {
-      title = "Choose the right StrategyOS lane";
+      title = "Choose the right Kyvern lane";
       note = "Anonymous viewers see the lane map only. Sign in for governed review, operator control, or tenant-system inspection.";
       pill = "Public posture";
       tasks = [
@@ -1989,7 +1989,7 @@
   }
 
   function renderSession() {
-    els.appName.textContent = bootstrap.product_name || "StrategyOS";
+    els.appName.textContent = bootstrap.product_name || "Kyvern";
     els.environmentBadge.textContent = bootstrap.environment || "environment";
     els.sessionToken.value = state.token;
     const session = state.session || {};
@@ -2066,7 +2066,7 @@
         els.kpiChallenged.textContent = "--";
         els.stageStepper.textContent = String(job.status || "").toLowerCase() === "failed"
           ? `Worker failed${job.failure_reason ? `: ${job.failure_reason}` : "."}`
-          : "Queued analysis - waiting for StrategyOS worker.";
+          : "Queued analysis - waiting for Kyvern worker.";
         els.storeBadges.innerHTML = "";
         els.partialRunChips.classList.add("hidden");
         renderReviewMessage();
@@ -2731,7 +2731,7 @@
       {
         id: "board-secretary-relay",
         name: "Board secretary relay",
-        source: "StrategyOS native",
+        source: "Kyvern native",
         detail: "Turns current publication, approval, and board-pack posture into room-safe prompts and follow-through.",
         target: "publication-panel",
         lane: "reports",
@@ -2739,7 +2739,7 @@
       {
         id: "domain-pulse-brief",
         name: "Domain pulse brief",
-        source: "StrategyOS native",
+        source: "Kyvern native",
         detail: "Summarises KPI branches, value drivers, and the next bounded decision from the current strategy substrate.",
         target: "system-workflow-panel",
         lane: "overview",
@@ -3652,7 +3652,7 @@
     } else if (readiness.ready_for_run) {
       setSourcePackStatus("ok", "Ready to analyze", "Start analysis when you are ready.");
     } else if (sourcePackNeedsPartialRun(payload) && els.startRunAllowPartialSourcePack.checked) {
-      setSourcePackStatus("warn", "Partial analysis selected", "StrategyOS will analyze the readable files and clearly report missing roles.");
+      setSourcePackStatus("warn", "Partial analysis selected", "Kyvern will analyze the readable files and clearly report missing roles.");
     } else {
       setSourcePackStatus("warn", "More finance files needed", reasons.join(" ") || "Some required finance files are missing.");
     }
@@ -3872,7 +3872,7 @@
     };
     if (!payload.dataset && !payload.source_pack_id) payload.skip_prepare = true;
     state.runSubmitting = true;
-    setStartRunStatus("warn", "Starting analysis", "StrategyOS is analyzing the selected files.");
+    setStartRunStatus("warn", "Starting analysis", "Kyvern is analyzing the selected files.");
     renderSourcePackPanel();
     try {
       const result = await requestJson("/runs", {
@@ -3881,7 +3881,7 @@
       });
       if (result.execution_mode === "hatchet" && result.job_id) {
         state.latestJob = result;
-        setStartRunStatus("ok", "Analysis queued", `${displayRunId(result)} is waiting for a StrategyOS worker.`);
+        setStartRunStatus("ok", "Analysis queued", `${displayRunId(result)} is waiting for a Kyvern worker.`);
       } else {
         state.latestJob = null;
         setStartRunStatus("ok", "Analysis started", `Current run ${displayRunId(result)} is now running.`);

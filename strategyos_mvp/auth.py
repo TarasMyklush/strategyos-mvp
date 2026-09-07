@@ -10,7 +10,7 @@ try:
     from fastapi import Cookie, Depends, Header, HTTPException, status
 except Exception as exc:  # pragma: no cover - optional cloud dependency
     raise RuntimeError(
-        "FastAPI is required to run the StrategyOS auth boundary."
+        "FastAPI is required to run the Kyvern auth boundary."
     ) from exc
 
 from .config import CONFIG

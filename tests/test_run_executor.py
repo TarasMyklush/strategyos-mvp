@@ -129,7 +129,7 @@ def test_hatchet_execution_mode_creates_job_and_enqueues(monkeypatch, tmp_path: 
         "hatchet_run_id": "hatchet-1",
         "strategyos_run_id": None,
         "request_hash": "hash-1",
-        "detail": "StrategyOS run queued for Hatchet worker execution.",
+        "detail": "Kyvern run queued for Hatchet worker execution.",
     }
     assert created_payloads[0][0]["dataset"] == str(tmp_path / "dataset")
     assert created_payloads[0][1]["submitted_by"] == "operator"

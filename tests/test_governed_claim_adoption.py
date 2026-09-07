@@ -101,6 +101,45 @@ def test_authenticated_summary_uses_policy_filtered_snapshot_without_legacy_leak
     assert result["finance_kpi"]["claim_snapshot"]["denied_count"] == 0
 
 
+def test_quarantined_inputs_do_not_hide_eligible_governed_briefing(monkeypatch):
+    class Repository:
+        def run_source_access(self, *args, **kwargs):
+            return {"allowed": True}
+
+        def snapshot(self, *args, **kwargs):
+            return {
+                "records": [{
+                    "claim_revision_id": "plan-1",
+                    "family_key": "revenue-plan",
+                    "label": "Plan",
+                    "claim_kind": "plan",
+                    "metric_key": "ceo.revenue",
+                    "value": "95",
+                    "scale": "1",
+                    "unit": "SAR",
+                    "currency": "SAR",
+                    "dimensions": {"component_key": "revenue_plan"},
+                    "traceability": "present",
+                    "sources": [],
+                }],
+                "denied_count": 1,
+                "quarantined_count": 1,
+                "policy_denied_count": 0,
+                "lineage_denied_count": 0,
+            }
+
+        def reconciliation(self, *args, **kwargs):
+            return {"status": "passed"}
+
+    monkeypatch.setattr(api, "ClaimRepository", Repository)
+    result = api._summary_with_governed_claim_snapshot(
+        {"run_id": "run-1", "finance_kpi": {"components": {"revenue_actual": "999"}}},
+        principal={"tenant_id": "tenant-1", "role": "executive"},
+    )
+    assert result["canonical_claim_status"] == "ready_with_quarantined_inputs"
+    assert result["finance_kpi"]["components"] == {"revenue_plan": "95"}
+
+
 def test_missing_snapshot_never_returns_pre_cutover_payload(monkeypatch):
     class MissingRepository:
         def run_source_access(self, *args, **kwargs):

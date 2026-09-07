@@ -386,12 +386,12 @@ def load_config() -> StrategyOSConfig:
         llm_api_key = env("OPENAI_API_KEY")
     return StrategyOSConfig(
         tenant_slug=env("STRATEGYOS_TENANT_SLUG", "local-poc") or "local-poc",
-        tenant_name=env("STRATEGYOS_TENANT_NAME", "StrategyOS Local POC")
-        or "StrategyOS Local POC",
+        tenant_name=env("STRATEGYOS_TENANT_NAME", "Kyvern Local POC")
+        or "Kyvern Local POC",
         company_slug=env("STRATEGYOS_COMPANY_SLUG", env("STRATEGYOS_TENANT_SLUG", "local-poc"))
         or "local-poc",
-        company_name=env("STRATEGYOS_COMPANY_NAME", env("STRATEGYOS_TENANT_NAME", "StrategyOS Local POC"))
-        or "StrategyOS Local POC",
+        company_name=env("STRATEGYOS_COMPANY_NAME", env("STRATEGYOS_TENANT_NAME", "Kyvern Local POC"))
+        or "Kyvern Local POC",
         portfolio_slug=env("STRATEGYOS_PORTFOLIO_SLUG", "finance-diagnostics")
         or "finance-diagnostics",
         portfolio_name=env("STRATEGYOS_PORTFOLIO_NAME", "Finance diagnostics")
@@ -402,9 +402,9 @@ def load_config() -> StrategyOSConfig:
                 env("STRATEGYOS_COMPANY_SLUG", env("STRATEGYOS_TENANT_SLUG", "local-poc"))
                 or "local-poc": env(
                     "STRATEGYOS_COMPANY_NAME",
-                    env("STRATEGYOS_TENANT_NAME", "StrategyOS Local POC"),
+                    env("STRATEGYOS_TENANT_NAME", "Kyvern Local POC"),
                 )
-                or "StrategyOS Local POC",
+                or "Kyvern Local POC",
             },
         ),
         portfolio_options=env_key_value_map(

@@ -169,7 +169,7 @@ def run_hero_workflow(dataset: Path, *, operator_api_key: str, reviewer_api_key:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run the repeatable StrategyOS hero workflow through the API boundary."
+        description="Run the repeatable Kyvern hero workflow through the API boundary."
     )
     parser.add_argument(
         "--dataset",

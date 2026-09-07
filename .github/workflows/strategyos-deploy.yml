@@ -167,7 +167,7 @@ jobs:
       # render hosted tenant + identity labels instead of local/dev defaults.
       STRATEGYOS_IDP_ISSUER: ${{ vars.STRATEGYOS_IDP_ISSUER || vars.STRATEGYOS_PUBLIC_URL }}
       STRATEGYOS_TENANT_SLUG: ${{ vars.STRATEGYOS_TENANT_SLUG || 'strategyos-live' }}
-      STRATEGYOS_TENANT_NAME: ${{ vars.STRATEGYOS_TENANT_NAME || 'StrategyOS Live' }}
+      STRATEGYOS_TENANT_NAME: ${{ vars.STRATEGYOS_TENANT_NAME || 'Kyvern Live' }}
       STRATEGYOS_IDP_OPERATOR_USERNAME: ${{ vars.STRATEGYOS_IDP_OPERATOR_USERNAME || 'operator.hosted' }}
       STRATEGYOS_IDP_REVIEWER_USERNAME: ${{ vars.STRATEGYOS_IDP_REVIEWER_USERNAME || 'reviewer.hosted' }}
       STRATEGYOS_DEMO_ROLE_LOGIN_ENABLED: 'false'

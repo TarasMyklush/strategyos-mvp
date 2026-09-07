@@ -33,7 +33,7 @@ def prepare_agent_input(
         shutil.copy2(readme, evaluation_dir / "HUMAN_ONLY_validation_readme.md")
 
     (agent_input_dir / "README_AGENT_INPUT.md").write_text(
-        "StrategyOS runtime input pack for deterministic analysis. Validation answer keys and human-only notes are intentionally excluded.\n",
+        "Kyvern runtime input pack for deterministic analysis. Validation answer keys and human-only notes are intentionally excluded.\n",
         encoding="utf-8",
     )
     (evaluation_dir / "README_HUMAN_ONLY.md").write_text(

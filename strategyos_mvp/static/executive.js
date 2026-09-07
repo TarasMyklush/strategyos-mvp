@@ -1384,7 +1384,7 @@
       sessionTenant.tenant_name,
       packetTenant.tenant_name,
       modes.company_label,
-      "StrategyOS"
+      "Kyvern"
     )).trim();
   }
 
@@ -1956,7 +1956,7 @@
       : "";
     var nextTitle = todaysEvent
       ? String(firstDefined(todaysEvent.title, todaysEvent.label, "Calendar review"))
-        .replace(/^StrategyOS\s+/i, "")
+        .replace(/^(?:StrategyOS|Kyvern)\s+/i, "")
         .replace(/\s+[—-]\s+/, " · ")
       : "No governed commitment recorded";
     var nextWhen = todaysEvent ? firstDefined(todaysEvent.when, "") : "";
@@ -3792,7 +3792,7 @@
       brandEl.style.cursor = 'pointer';
       brandEl.setAttribute('role', 'link');
       brandEl.setAttribute('tabindex', '0');
-      brandEl.title = 'StrategyOS home';
+      brandEl.title = 'Kyvern home';
       brandEl.onclick = function () {
         state.activeView = 'home';
         state.activePersona = 'ceo';
@@ -6533,7 +6533,7 @@
         var eventDay = firstDefined(item.day, '');
         var eventWhen = firstDefined(item.when, item.detail, 'soon');
         return '<button class="event-chip' + (index === openIndex ? ' is-open' : '') + (item.urgent ? ' urgent' : '') + '" type="button" data-week-index="' + index + '" title="' + escapeHtml(eventTitle) + '" aria-label="' + escapeHtml([eventDay, eventTitle, eventWhen].filter(Boolean).join(' · ')) + '"><span class="event-day">' + escapeHtml(eventDay) + '</span><span class="event-title">' + escapeHtml(eventTitle) + '</span><span class="event-when">' + escapeHtml(eventWhen) + '</span></button>';
-      }).join('') + (allWeekAhead.length > 4 ? '<button class="week-show-more" type="button" data-week-show-all="true">' + (state.showAllWeekEvents ? 'Show less' : 'See ' + (allWeekAhead.length - 4) + ' more') + '</button>' : '') + '</div>' + (activeEvent ? '<div class="prep"><div class="prep-head"><span class="prep-flag">⚑ prep</span> ' + escapeHtml(firstDefined(activeEvent.title, 'Event')) + ' · ' + escapeHtml(firstDefined(activeEvent.when, 'soon')) + '</div><p class="prep-body">' + escapeHtml(firstDefined(activeEvent.prep, activeEvent.foot, '')) + '</p><div class="prep-actions"><button class="timeline-chip" type="button" data-calendar-quick-action="brief"><strong>◇ Open in thinking mode</strong></button><button class="timeline-chip" type="button" data-calendar-quick-action="input_request"><strong>⤓ Request missing data</strong></button></div><div class="prep-ask-label">Ask StrategyOS to prepare something for this event</div><form class="chips-own chips-own--rail" id="week-composer"><label class="sr-only" for="week-input">Ask StrategyOS to prepare something for this event</label><input id="week-input" class="driver-input" type="text" placeholder="e.g. draft my opening line…" /><button type="submit" aria-label="Ask StrategyOS">↑</button></form></div>' : '') : '<div class="fidelity-empty"><strong>No executive calendar connected</strong><p>No calendar is available for this reporting period. No meetings or deadlines have been inferred.</p></div>';
+      }).join('') + (allWeekAhead.length > 4 ? '<button class="week-show-more" type="button" data-week-show-all="true">' + (state.showAllWeekEvents ? 'Show less' : 'See ' + (allWeekAhead.length - 4) + ' more') + '</button>' : '') + '</div>' + (activeEvent ? '<div class="prep"><div class="prep-head"><span class="prep-flag">⚑ prep</span> ' + escapeHtml(firstDefined(activeEvent.title, 'Event')) + ' · ' + escapeHtml(firstDefined(activeEvent.when, 'soon')) + '</div><p class="prep-body">' + escapeHtml(firstDefined(activeEvent.prep, activeEvent.foot, '')) + '</p><div class="prep-actions"><button class="timeline-chip" type="button" data-calendar-quick-action="brief"><strong>◇ Open in thinking mode</strong></button><button class="timeline-chip" type="button" data-calendar-quick-action="input_request"><strong>⤓ Request missing data</strong></button></div><div class="prep-ask-label">Ask Kyvern to prepare something for this event</div><form class="chips-own chips-own--rail" id="week-composer"><label class="sr-only" for="week-input">Ask Kyvern to prepare something for this event</label><input id="week-input" class="driver-input" type="text" placeholder="e.g. draft my opening line…" /><button type="submit" aria-label="Ask Kyvern">↑</button></form></div>' : '') : '<div class="fidelity-empty"><strong>No executive calendar connected</strong><p>No calendar is available for this reporting period. No meetings or deadlines have been inferred.</p></div>';
       safeArray(weekPanel.querySelectorAll('[data-week-index]')).forEach(function (button) {
         button.onclick = function () {
           var idx = Number(button.getAttribute('data-week-index') || 0) || 0;
@@ -7276,7 +7276,7 @@
       authority: "Authority Matrix",
       reports: "Reports"
     };
-    document.title = "StrategyOS — " + personaLabel + " " + firstDefined(viewLabels[state.activeView], "Workspace");
+    document.title = "Kyvern — " + personaLabel + " " + firstDefined(viewLabels[state.activeView], "Workspace");
   }
 
   function renderDemoClock() {
@@ -7359,7 +7359,7 @@
       lockPanel.hidden = false;
       lockPanel.innerHTML = '<span class="eyebrow">Coming soon</span><h1>'
         + escapeHtml(firstDefined(activePersona.label, "This persona"))
-        + ' workspace</h1><p>This workspace is not yet differentiated enough to show safely. StrategyOS will not substitute the Group CEO briefing.</p>'
+        + ' workspace</h1><p>This workspace is not yet differentiated enough to show safely. Kyvern will not substitute the Group CEO briefing.</p>'
         + '<button type="button" data-return-ceo>Return to Group CEO</button>';
       var returnButton = lockPanel.querySelector("[data-return-ceo]");
       if (returnButton) returnButton.onclick = function () {

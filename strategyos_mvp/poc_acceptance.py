@@ -257,7 +257,7 @@ def save_acceptance_report(report: dict[str, Any], run_dir: Path) -> dict[str, P
 
 def render_acceptance_report(report: dict[str, Any]) -> str:
     lines = [
-        "# StrategyOS POC Acceptance Report",
+        "# Kyvern POC Acceptance Report",
         "",
         f"- Passed: {report['passed']}",
         f"- Run ID: {report.get('run_id')}",
@@ -332,7 +332,7 @@ def run_poc_acceptance(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run the canonical StrategyOS POC acceptance harness."
+        description="Run the canonical Kyvern POC acceptance harness."
     )
     parser.add_argument("--dataset", type=Path, default=SOURCE_DATASET)
     parser.add_argument(

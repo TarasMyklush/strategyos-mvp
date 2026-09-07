@@ -87,7 +87,7 @@ def _load_plugin_module(module_name: str, *, failure_mode: str) -> PluginLoadRec
         _LOAD_RECORDS[module_name] = record
         if failure_mode != "permissive":
             raise RuntimeError(
-                f"StrategyOS plugin module '{module_name}' failed to load: {record.error}"
+                f"Kyvern plugin module '{module_name}' failed to load: {record.error}"
             ) from exc
         return record
 

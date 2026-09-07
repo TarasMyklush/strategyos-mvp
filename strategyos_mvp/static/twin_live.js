@@ -169,7 +169,7 @@
     function run() {
       var query = String(input.value || "").trim();
       if (!query) return;
-      responseBox.innerHTML = '<span class="text-muted">The assistant is checking live StrategyOS data…</span>';
+      responseBox.innerHTML = '<span class="text-muted">The assistant is checking live Kyvern data…</span>';
       submitInvestigation(query).then(function (data) {
         renderStructuredResponse(responseBox, data);
         input.value = "";
@@ -202,7 +202,7 @@
     function run() {
       var query = String(input.value || "").trim();
       if (!query) return;
-      panel.innerHTML = '<p>Investigating live StrategyOS data…</p>';
+      panel.innerHTML = '<p>Investigating live Kyvern data…</p>';
       submitInvestigation(query).then(function (data) {
         renderStructuredResponse(panel, data);
         input.value = "";

@@ -956,7 +956,7 @@ def test_authenticated_executive_latest_run_uses_governed_current_summary(monkey
         assert payload["drilldown"]["gravity"]["quote"]
         assert payload["drilldown"]["lower_rail"]["week_ahead"][0]["detail"]
         assert payload["drilldown"]["lower_rail"]["cash_pulse"]["basis"] == "governed_findings"
-        assert payload["executive_diagnostics"]["persona_blueprint"]["assistant"] == "StrategyOS"
+        assert payload["executive_diagnostics"]["persona_blueprint"]["assistant"] == "Kyvern"
         assert payload["executive_diagnostics"]["hero"]["persona_id"] == "cfo"
         assert payload["executive_diagnostics"]["composition"]["board_portal"]["presentation_state"] == "closed"
         assert payload["run_id"] == _FAKE_SUMMARY["run_id"]

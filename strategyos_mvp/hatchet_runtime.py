@@ -135,7 +135,7 @@ def hatchet_dependency_status(
             **payload,
             "status": "failed",
             "reason": (
-                "Hatchet engine is reachable, but the configured StrategyOS worker "
+                "Hatchet engine is reachable, but the configured Kyvern worker "
                 "is not registered."
             ),
             "registered_worker_count": len(workers),
@@ -340,7 +340,7 @@ else:
 def run_worker() -> None:
     if hatchet is None or _HATCHET_IMPORT_ERROR is not None:
         raise RuntimeError(
-            f"hatchet-sdk is required to start StrategyOS worker: {_HATCHET_IMPORT_ERROR}"
+            f"hatchet-sdk is required to start Kyvern worker: {_HATCHET_IMPORT_ERROR}"
         )
     from .agent_runtime.workflows import execute_agent_task
 

@@ -1046,11 +1046,15 @@ class ClaimRepository:
                     rows = rows[:limit]
                 records: list[dict[str, Any]] = []
                 denied_count = 0
+                quarantined_count = 0
+                policy_denied_count = 0
+                lineage_denied_count = 0
                 for row in rows:
                     # Unknown is a durable quarantine lane, never an eligible
                     # read kind. A mixed source must not crash snapshot reads.
                     if str(row.get("claim_kind")) == str(ClaimKind.UNKNOWN):
                         denied_count += 1
+                        quarantined_count += 1
                         continue
                     row["source_occurrence_keys"] = self._occurrence_keys(cur, row["id"])
                     row["input_revision_ids"] = self._input_revision_ids(cur, row["id"])
@@ -1078,9 +1082,12 @@ class ClaimRepository:
                         source_policies=policies,
                         assessments=assessments,
                     )
-                    if (missing_policy_sources or not eligibility.eligible
-                            or not self._lineage_eligible(cur, claim, query, context)):
+                    policy_denied = bool(missing_policy_sources or not eligibility.eligible)
+                    lineage_denied = not self._lineage_eligible(cur, claim, query, context)
+                    if policy_denied or lineage_denied:
                         denied_count += 1
+                        policy_denied_count += int(policy_denied)
+                        lineage_denied_count += int(lineage_denied)
                         continue
                     record = provenance_view(
                         claim,
@@ -1127,6 +1134,9 @@ class ClaimRepository:
             "metadata": snapshot.get("metadata") or {},
             "records": records,
             "denied_count": denied_count,
+            "quarantined_count": quarantined_count,
+            "policy_denied_count": policy_denied_count,
+            "lineage_denied_count": lineage_denied_count,
             "requires_recompute": any(record["superseded_since_analysis"] for record in records),
             "requires_resolution": any(record['comparison']['requires_resolution']
                 or record['comparison'].get('selected_by_priority') is False for record in records),

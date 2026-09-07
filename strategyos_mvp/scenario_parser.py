@@ -3189,14 +3189,14 @@ def _parse_governed_public_exec_surface(
     elif any(token in norm for token in ("hedge", "currency", "eur", "fx")) and not related:
         answer = (
             "The current governed run does not expose a quantified currency or hedge scenario, "
-            "so StrategyOS cannot calculate hedge impact from this packet. No illustrative hedge "
+            "so Kyvern cannot calculate hedge impact from this packet. No illustrative hedge "
             "assumptions have been substituted."
         )
         basis = "Governed packet contains no matching currency or hedge driver/finding."
     elif wants_jv_funding and not related:
         answer = (
             "The current governed run does not expose a quantified JV funding or liquidity scenario, "
-            "so StrategyOS cannot determine how the JV is funded from this packet. No illustrative "
+            "so Kyvern cannot determine how the JV is funded from this packet. No illustrative "
             "funding assumptions have been substituted."
         )
         basis = "Governed packet contains no matching JV funding or liquidity driver/finding."

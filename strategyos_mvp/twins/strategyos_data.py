@@ -1,4 +1,4 @@
-"""StrategyOS-backed twin data bindings for KPI, evidence, board, and run context."""
+"""Kyvern-backed twin data bindings for KPI, evidence, board, and run context."""
 
 from __future__ import annotations
 
@@ -83,7 +83,7 @@ def _status_from_metric(card_id: str, value: Any) -> tuple[str, str, list[dict[s
         resolved = _safe_int((value or {}).get("resolved") if isinstance(value, dict) else None)
         total = _safe_int((value or {}).get("total") if isinstance(value, dict) else None)
         if total <= 0:
-            return "missing", "critical", [{"type": "missing_evidence", "detail": "No StrategyOS citation records are available yet.", "owner": "reviewer"}]
+            return "missing", "critical", [{"type": "missing_evidence", "detail": "No Kyvern citation records are available yet.", "owner": "reviewer"}]
         if resolved < total:
             return "stale", "warning", [{"type": "evidence_gap", "detail": f"{total - resolved} citations remain unresolved.", "owner": "reviewer"}]
         return "current", "healthy", []
@@ -104,7 +104,7 @@ def _status_from_metric(card_id: str, value: Any) -> tuple[str, str, list[dict[s
             return "stale", "warning", [{"type": "plan_health_attention", "detail": label or "Plan health requires attention.", "owner": "ceo"}]
         return "current", "healthy", []
     if value in (None, "", "--"):
-        return "missing", "critical", [{"type": "missing_metric", "detail": f"StrategyOS metric '{card_id}' is not populated.", "owner": "operator"}]
+        return "missing", "critical", [{"type": "missing_metric", "detail": f"Kyvern metric '{card_id}' is not populated.", "owner": "operator"}]
     return "current", "healthy", []
 
 
@@ -340,7 +340,7 @@ def build_board_context(surface: dict[str, Any] | None) -> dict[str, Any]:
 
 def build_consistency_payload(surface: dict[str, Any] | None) -> dict[str, Any]:
     if surface is None:
-        return {"aligned": False, "issues": ["No StrategyOS run is available yet."]}
+        return {"aligned": False, "issues": ["No Kyvern run is available yet."]}
     summary = surface["summary"]
     payload = surface["findings_payload"]
     publication = payload.get("publication") or {}
@@ -351,9 +351,9 @@ def build_consistency_payload(surface: dict[str, Any] | None) -> dict[str, Any]:
     publication_run_id = str(publication.get("run_id") or "")
     board_run_id = str(((board_portal.get("meeting") or {}).get("run_id")) or "")
     if publication_run_id and summary_run_id and publication_run_id != summary_run_id:
-        issues.append("Publication run_id does not match the latest StrategyOS run.")
+        issues.append("Publication run_id does not match the latest Kyvern run.")
     if board_run_id and summary_run_id and board_run_id != summary_run_id:
-        issues.append("Board packet run_id does not match the latest StrategyOS run.")
+        issues.append("Board packet run_id does not match the latest Kyvern run.")
     if _safe_int(publication.get("report_count")) != len(list(report_contracts.get("reports") or [])):
         issues.append("Publication report_count does not match surfaced report contracts.")
     if _safe_int(publication.get("evidence_count")) != len(list(report_contracts.get("evidence") or [])):
@@ -403,7 +403,7 @@ def compose_investigation_payload(role: str, query: str) -> dict[str, Any]:
             "source_status": "missing",
             "bounded_fallback": True,
             "response": {
-                "summary": "No governed StrategyOS run is available yet. The twin remains bounded to persisted local state until a real run lands.",
+                "summary": "No governed Kyvern run is available yet. The twin remains bounded to persisted local state until a real run lands.",
                 "mode": "bounded_fallback",
             },
             "run_context": build_run_context(None),
@@ -436,7 +436,7 @@ def compose_investigation_payload(role: str, query: str) -> dict[str, Any]:
         "bounded_fallback": False,
         "response": {
             "summary": (
-                f"Latest StrategyOS run {run_context.get('run_id') or 'latest'} is "
+                f"Latest Kyvern run {run_context.get('run_id') or 'latest'} is "
                 f"{str(run_context.get('approval_status') or 'pending').replace('_', ' ')}. "
                 f"It currently carries {_format_sar_scale(recoverable)} recoverable value "
                 f"(exact amount: SAR {recoverable:,.0f}) across {finding_count} cases, "

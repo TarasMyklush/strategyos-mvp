@@ -70,7 +70,7 @@ class StructuralGraph:
     def export(self) -> dict[str, Any]:
         return {
             "meta": {
-                "purpose": "Local strong-node StrategyOS finance knowledge graph export.",
+                "purpose": "Local strong-node Kyvern finance knowledge graph export.",
                 "node_count": len(self.nodes),
                 "edge_count": len(self.edges),
                 "strong_node_labels": ["Vendor", "Invoice", "PurchaseOrder", "Contract", "Evidence", "Finding", "SKU"],

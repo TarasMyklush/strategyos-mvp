@@ -15,7 +15,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from .config import CONFIG
 
 
-app = FastAPI(title="StrategyOS Local Identity Provider")
+app = FastAPI(title="Kyvern Local Identity Provider")
 
 LOGIN_RATE_LIMIT_ATTEMPTS = 10
 LOGIN_RATE_LIMIT_WINDOW_SECONDS = 60
@@ -264,7 +264,7 @@ def login_page(manual: bool = False) -> HTMLResponse:
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Sign in — StrategyOS</title>
+  <title>Sign in — Kyvern</title>
   <style>
     :root {{ color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
     *, *::before, *::after {{ box-sizing: border-box; }}
@@ -289,8 +289,8 @@ def login_page(manual: bool = False) -> HTMLResponse:
 <body>
   <main>
     <div class="eyebrow">Customer sign-in</div>
-    <h1>Sign in to StrategyOS</h1>
-    <p>Use your authorized StrategyOS account to continue.</p>
+    <h1>Sign in to Kyvern</h1>
+    <p>Use your authorized Kyvern account to continue.</p>
     <form id="login-form">
       {username_control}
       <label>Password

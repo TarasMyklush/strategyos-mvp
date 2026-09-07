@@ -239,7 +239,7 @@ def _chat_completions_url(base_url: str) -> str:
 def _system_prompt(stage: str) -> str:
     if stage == "orient":
         return (
-            "You are StrategyOS twin orient reasoning via LiteLLM. "
+            "You are a Kyvern twin performing orient reasoning via LiteLLM. "
             "Use only supplied JSON context. Return only valid json with keys: "
             "issues, summary, confidence, review_state, citations. "
             "Each issue must be an object with keys: investigation_id, type, priority, "
@@ -248,7 +248,7 @@ def _system_prompt(stage: str) -> str:
             "Allowed resolution_hint values: request_data, respond, escalate, redirect, approve, modify_state, noop."
         )
     return (
-        "You are StrategyOS twin decide reasoning via LiteLLM. "
+        "You are a Kyvern twin performing decide reasoning via LiteLLM. "
         "Use only supplied JSON context. Return only valid json with keys: decisions, summary, confidence, review_state, citations. "
         "Each decision must be an object with keys: investigation_id, action, target_role, reason, preliminary_response, value, state_updates, evidence_refs. "
         "Allowed action values: send_data_request, respond_to_message, escalate, redirect, approve, modify_state, noop."

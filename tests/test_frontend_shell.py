@@ -141,11 +141,11 @@ def test_guide_route_renders_plain_english_public_guide():
     html = response.text
     html_lower = html.lower()
 
-    assert "How StrategyOS works" in html
+    assert "How Kyvern works" in html
     assert "From source to decision" in html
     assert "What each area is for" in html
     assert "How to read the colours" in html
-    assert "What StrategyOS will not pretend" in html
+    assert "What Kyvern will not pretend" in html
     assert "Diagnostics" in html
     assert "AI Assistants" in html
     assert "KPI evidence" in html
@@ -195,7 +195,7 @@ def test_architecture_routes_explain_one_current_system_at_two_levels():
 
     assert "Architecture for leaders" in business.text
     assert "One truth, different responsibilities" in business.text
-    assert "What StrategyOS will not pretend" in business.text
+    assert "What Kyvern will not pretend" in business.text
     assert "The human makes the call" in business.text
 
     assert "Technical architecture" in technical.text
@@ -220,15 +220,15 @@ def test_homepage_renders_minimal_executive_diagnostics_surface():
     html = _homepage_response()
 
     marker = '<script id="strategyos-executive-bootstrap" type="application/json">'
-    assert "StrategyOS — Group CEO Briefing" in html
+    assert "Kyvern — Group CEO Briefing" in html
     assert marker in html
     assert 'href="/guide"' in html
     assert 'href="/architecture"' in html
     assert "How it works" in html
     bootstrap_json = html.partition(marker)[2].partition("</script>")[0]
     bootstrap = json.loads(bootstrap_json)
-    assert bootstrap["product_name"] == "StrategyOS"
-    assert "StrategyOS" in html
+    assert bootstrap["product_name"] == "Kyvern"
+    assert "Kyvern" in html
     assert '<script id="strategyos-bootstrap"' not in html
     # Design-faithful structure: topbar
     assert 'id="topbar"' in html or 'class="topbar"' in html
@@ -245,7 +245,7 @@ def test_homepage_renders_minimal_executive_diagnostics_surface():
     assert "Viewing as" not in html
     assert "ask-toggle" not in html, "ask-toggle button must be absent (simplified topbar)"
     assert ">KA<" not in html
-    assert 'id="brand-org">StrategyOS<' in html
+    assert 'id="brand-org">Kyvern<' in html
     assert 'id="topbar-avatar">—<' in html
     # Hero banner
     assert 'id="hero"' in html or 'class="hero"' in html
@@ -291,12 +291,12 @@ def test_executive_route_renders_minimal_live_diagnostics_shell():
     js = _static_executive_js()
 
     marker = '<script id="strategyos-executive-bootstrap" type="application/json">'
-    assert "StrategyOS — Group CEO Briefing" in html
+    assert "Kyvern — Group CEO Briefing" in html
     assert marker in html
     assert 'href="/guide"' in html
     bootstrap_json = html.partition(marker)[2].partition("</script>")[0]
     bootstrap = json.loads(bootstrap_json)
-    assert bootstrap["product_name"] == "StrategyOS"
+    assert bootstrap["product_name"] == "Kyvern"
     # Design-faithful UI elements
     assert 'id="topbar"' in html or 'class="topbar"' in html
     assert 'class="brand"' in html
@@ -346,8 +346,8 @@ def test_app_entry_routes_render_executive_shell():
 
     assert app_response.status_code == 200
     assert alias_response.status_code == 200
-    assert "StrategyOS — Group CEO Briefing" in app_response.text
-    assert "StrategyOS — Group CEO Briefing" in alias_response.text
+    assert "Kyvern — Group CEO Briefing" in app_response.text
+    assert "Kyvern — Group CEO Briefing" in alias_response.text
     assert '<script id="strategyos-executive-bootstrap"' in app_response.text
     assert '<script id="strategyos-executive-bootstrap"' in alias_response.text
     assert '<script id="strategyos-bootstrap"' not in app_response.text
@@ -360,8 +360,8 @@ def test_app_entry_uses_design_faithful_executive_surface():
     html = _app_entry_response()
     js = _static_executive_js()
 
-    assert "StrategyOS — Group CEO Briefing" in html
-    assert "StrategyOS" in html
+    assert "Kyvern — Group CEO Briefing" in html
+    assert "Kyvern" in html
     assert 'id="topbar"' in html or 'class="topbar"' in html
     assert 'class="brand"' in html
     assert 'id="view-nav"' in html
@@ -440,7 +440,7 @@ def test_app_entry_embeds_parseable_executive_bootstrap_json():
     bootstrap_json = html.partition(marker)[2].partition("</script>")[0]
     assert "&quot;" not in bootstrap_json
     bootstrap = json.loads(bootstrap_json)
-    assert bootstrap["product_name"] == "StrategyOS"
+    assert bootstrap["product_name"] == "Kyvern"
     assert bootstrap["executive_route_base"] == "/app"
     assert bootstrap["executive_entry_route"] == "/app"
     assert bootstrap["requested_view_state"]["persona"] is None
@@ -475,7 +475,7 @@ def test_cfo_executive_html_is_atlas_correct_before_hydration() -> None:
     response = TestClient(api_module.app).get("/executive?persona=cfo")
 
     assert response.status_code == 200
-    assert "<title>StrategyOS — Group CFO Briefing</title>" in response.text
+    assert "<title>Kyvern — Group CFO Briefing</title>" in response.text
     assert 'id="persona-label">Group CFO</span>' in response.text
     assert "Ask Atlas" in response.text
     assert "Ask Hermes" not in response.text
@@ -784,7 +784,7 @@ def test_ui_session_and_workspace_contract_use_governed_routes_for_authenticated
         assert payload["drilldown"]["default_case_id"] is None
         assert payload["drilldown"]["cash_pulse"]["basis"] == "governed_findings"
         assert payload["drilldown"]["gravity"]["prompts"]
-        assert payload["drilldown"]["gravity"]["assistant"] == "StrategyOS"
+        assert payload["drilldown"]["gravity"]["assistant"] == "Kyvern"
         assert payload["drilldown"]["gravity"]["sandbox"]["board_state"] == "closed"
         assert payload["drilldown"]["lower_rail"]["board_state"]["presentation_state"] == "closed"
         assert payload["drilldown"]["lower_rail"]["week_ahead"][0]["detail"]
@@ -811,7 +811,7 @@ def test_ui_session_and_workspace_contract_use_governed_routes_for_authenticated
         assert any(item["reasoning_id"] == "hold-runtime-boundary" for item in payload["strategy_substrate"]["reasoning"])
         assert payload["executive_diagnostics"]["hero"]["persona_id"] == "board"
         assert payload["executive_diagnostics"]["hero"]["board_state"] == "closed"
-        assert payload["executive_diagnostics"]["persona_blueprint"]["assistant"] == "StrategyOS"
+        assert payload["executive_diagnostics"]["persona_blueprint"]["assistant"] == "Kyvern"
         assert "assistant" not in payload["executive_diagnostics"]["board_packet"]
         assert payload["executive_diagnostics"]["composition"]["board_portal"]["presentation_state"] == "closed"
         assert payload["executive_diagnostics"]["composition"]["gravity"]["sandbox"]["active_driver_key"] == "owed_upward"

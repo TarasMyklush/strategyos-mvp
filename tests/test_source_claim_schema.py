@@ -59,6 +59,17 @@ def test_backfill_migration_persists_reconciliation_and_exceptions():
     assert "difference_sar" in migration
 
 
+def test_ingestion_selection_migration_defines_exact_run_claim_membership():
+    migration = (migration_path() / "0016_ingestion_claim_selections.sql").read_text(
+        encoding="utf-8"
+    )
+    assert "create table strategyos_ingestion_batch_claims" in migration
+    assert "foreign key (tenant_id, ingestion_batch_id)" in migration
+    assert "foreign key (tenant_id, claim_revision_id)" in migration
+    assert "strategyos_ingestion_batch_claim_immutable" in migration
+    assert "enable row level security" in migration
+
+
 def test_projection_delivery_migration_adds_leases_and_cache_projection():
     migration = (migration_path() / "0003_claim_projection_delivery.sql").read_text(
         encoding="utf-8"

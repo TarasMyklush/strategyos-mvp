@@ -134,7 +134,7 @@ def save_data_quality_report(report: dict[str, Any], run_dir: Path) -> dict[str,
 
 def render_data_quality_report(report: dict[str, Any]) -> str:
     lines = [
-        "# StrategyOS Data Quality Report",
+        "# Kyvern Data Quality Report",
         "",
         f"- Status: {report['status']}",
         f"- Dataset root: {report['dataset_root']}",

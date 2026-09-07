@@ -27,7 +27,7 @@ try:
     from pydantic import BaseModel, Field, StrictBool
 except Exception as exc:  # pragma: no cover - optional cloud dependency
     raise RuntimeError(
-        "FastAPI and pydantic are required to run the StrategyOS API."
+        "FastAPI and pydantic are required to run the Kyvern API."
     ) from exc
 
 from .auth import (
@@ -350,7 +350,7 @@ async def _app_lifespan(_: FastAPI):
 
 
 app = FastAPI(
-    title="StrategyOS MVP API",
+    title="Kyvern API",
     version="0.1.0",
     # A hosted login-only surface must not publish an API catalogue to
     # unauthenticated visitors. Local development keeps the normal docs.
@@ -437,6 +437,8 @@ app.include_router(agent_runtime_router)
 
 ARTIFACT_PREVIEW_LIMIT_BYTES = 24_000
 ARTIFACT_JSON_PARSE_LIMIT_BYTES = 200_000
+# Preserve the established on-disk audit stream name so rebranding cannot split
+# the immutable access history across two files.
 ARTIFACT_ACCESS_AUDIT_LOG = "StrategyOS Artifact Access Audit.jsonl"
 KNOWLEDGE_GRAPH_ARTIFACT_KEY = "knowledge_graph"
 KNOWLEDGE_GRAPH_DEFAULT_VIEW = "findings"
@@ -1335,7 +1337,7 @@ def _build_public_safe_assistant_packet(
         "as_of": executive_presentation_payload.get("as_of"),
         "data_status": executive_presentation_payload.get("data_status"),
         "persona_id": persona_key,
-        "assistant": "StrategyOS",
+        "assistant": "Kyvern",
         "is_illustrative": False,
         "source_label": (
             "Current governed run payload"
@@ -2664,7 +2666,7 @@ def _bounded_plan_health_payload(
             badge="story mode",
             label="Awaiting governed run",
             summary="No governed finance packet has landed yet, so multi-domain posture stays at substrate level only.",
-            boundary="Finance-derived signal only — StrategyOS is composing executive posture from current cases, evidence, release, and runtime boundary data, not a full enterprise strategy compiler.",
+            boundary="Finance-derived signal only — Kyvern is composing executive posture from current cases, evidence, release, and runtime boundary data, not a full enterprise strategy compiler.",
             root_label="Governed plan posture",
             root_summary="Finance, evidence, release, and runtime lanes are wired as a truthful substrate; live posture appears after the first governed run.",
             tone="neutral",
@@ -2703,7 +2705,7 @@ def _bounded_plan_health_payload(
         badge=badge,
         label=label,
         summary=summary_text,
-        boundary="Finance-derived signal only — StrategyOS is composing executive posture from current cases, evidence, release, and runtime boundary data, not a full enterprise strategy compiler.",
+        boundary="Finance-derived signal only — Kyvern is composing executive posture from current cases, evidence, release, and runtime boundary data, not a full enterprise strategy compiler.",
         root_label="Governed plan posture",
         root_summary=f"{case_count} governed case{'s' if case_count != 1 else ''}, {_format_ratio_display(resolved_count, citation_count)} citations, and {artifact_count} surfaced artifact{'s' if artifact_count != 1 else ''} currently define the bounded executive plan readout.",
         tone=tone,
@@ -2925,7 +2927,7 @@ def _strategy_substrate_payload(
     principal: dict[str, Any],
 ) -> dict[str, Any]:
     boundary = (
-        "Finance-derived signal only — StrategyOS is composing a bounded KPI tree, "
+        "Finance-derived signal only — Kyvern is composing a bounded KPI tree, "
         "value-driver map, and strategy intent from governed cases, evidence posture, "
         "publication readiness, and runtime boundary truth; it is not claiming a full "
         "enterprise strategy compiler."
@@ -3223,7 +3225,7 @@ def _strategy_substrate_payload(
                 reasoning_id="substrate-hold",
                 claim="Hold the strategy layer at substrate level until governed evidence exists.",
                 status="bounded",
-                rationale="No governed run summary is available, so StrategyOS can only expose the operating frame and not a fabricated strategic conclusion.",
+                rationale="No governed run summary is available, so Kyvern can only expose the operating frame and not a fabricated strategic conclusion.",
                 evidence_basis=("workspace_contract", "runtime_boundary"),
                 affected_node_ids=("runtime_boundary", "value_capture", "evidence_confidence", "release_readiness"),
                 affected_driver_ids=("runtime_governance",),
@@ -3326,7 +3328,7 @@ def _strategy_substrate_payload(
         status="bounded_actionable" if total_recoverable > 0 else "bounded_visible",
         summary=(
             f"The latest governed packet exposes {_format_sar_brief(total_recoverable)} across {case_count} governed case{'s' if case_count != 1 else ''}. "
-            "StrategyOS can now support a bounded strategy readout: protect value, close evidence gaps, and respect the release gate."
+            "Kyvern can now support a bounded strategy readout: protect value, close evidence gaps, and respect the release gate."
         ),
         horizon="Latest governed run only",
         next_decision=next_decision,
@@ -4546,7 +4548,7 @@ def _drilldown_contract_payload(
     board_design = {}
     active_driver_key = str((executive_modes or {}).get("active_driver_key") or "")
     active_driver = None
-    gravity_assistant = "StrategyOS"
+    gravity_assistant = "Kyvern"
     gravity_prompts = []
     return {
         "status": "ok" if summary else "missing",
@@ -4637,7 +4639,7 @@ def _drilldown_contract_payload(
             "assistant": gravity_assistant,
             "quote": persona_blueprint.get("quote")
             or "Keep the room inside the packet; everything else is runtime truth.",
-            "by": persona_blueprint.get("by") or "StrategyOS governance boundary",
+            "by": persona_blueprint.get("by") or "Kyvern governance boundary",
             "rails": [
                 str(publication.get("publish_state") or "draft"),
                 _publication_lifecycle_mode(publication),
@@ -4882,7 +4884,10 @@ def _summary_with_governed_claim_snapshot(
         )
     # The executive finance projection is reconstructed from this authorized
     # snapshot. The whole-run check also protects remaining non-financial prose.
-    if snapshot.get("denied_count"):
+    access_denied_count = int(
+        snapshot.get("policy_denied_count", snapshot.get("denied_count") or 0) or 0
+    ) + int(snapshot.get("lineage_denied_count") or 0)
+    if access_denied_count:
         raise HTTPException(
             status_code=403,
             detail="Your source permissions do not allow this complete briefing.",
@@ -4915,7 +4920,11 @@ def _summary_with_governed_claim_snapshot(
         key: value for key, value in snapshot.items() if key != "records"
     }
     result["claim_reconciliation"] = reconciliation
-    result["canonical_claim_status"] = "ready"
+    result["canonical_claim_status"] = (
+        "ready_with_quarantined_inputs"
+        if int(snapshot.get("quarantined_count") or 0)
+        else "ready"
+    )
     # Server-created context, never taken from question text or client metadata.
     result["_claim_policy_context"] = {
         "tenant_id": context.tenant_id,
@@ -5170,7 +5179,7 @@ def _chat_threads_payload(
     assistant_name = str(
         (board_design.get("assistant") if persona_id == "board" else None)
         or persona_blueprint.get("assistant")
-        or "StrategyOS"
+        or "Kyvern"
     )
     assistant_role = str(
         persona_blueprint.get("assistantRole")
@@ -8097,8 +8106,8 @@ def _ui_bootstrap(
     strategy_substrate = _strategy_substrate_payload(summary, rows, audit_summary, principal)
     agent_modules = _agent_modules_payload(summary, rows, audit_summary, principal)
     return sanitize_executive_payload({
-        "product_name": "StrategyOS",
-        "shell_title": "StrategyOS",
+        "product_name": "Kyvern",
+        "shell_title": "Kyvern",
         "environment": _ui_environment_label(),
         "workspace_root": str(CONFIG.workspace_root),
         "default_run_dir": str(CONFIG.default_run_dir),
@@ -8209,10 +8218,10 @@ def _executive_html(
     assistant_name = str(persona_design.get("assistant") or "Hermes").strip()
     persona_label = str(persona_design.get("label") or "Group CEO").strip()
     document_title = str(
-        persona_design.get("documentTitle") or "StrategyOS — Group CEO Briefing"
+        persona_design.get("documentTitle") or "Kyvern — Group CEO Briefing"
     ).strip()
     html_text = html_text.replace(
-        "<title>StrategyOS — Group CEO Briefing</title>",
+        "<title>Kyvern — Group CEO Briefing</title>",
         f"<title>{document_title}</title>",
     )
     html_text = html_text.replace(
@@ -9073,7 +9082,7 @@ def architecture_technical_page(
 def guide_page(
     principal: dict[str, Any] = Depends(authenticate_optional_request),
 ) -> Any:
-    """Serve the non-technical StrategyOS user guide."""
+    """Serve the non-technical Kyvern user guide."""
     login_redirect = _login_or_authorized_html(principal)
     if login_redirect is not None:
         return login_redirect
@@ -9974,7 +9983,7 @@ def record_executive_decision(
         if not requested_due_date:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Choose a due date; StrategyOS will not invent one.",
+                detail="Choose a due date; Kyvern will not invent one.",
             )
         try:
             date.fromisoformat(requested_due_date)
@@ -12558,7 +12567,7 @@ def _public_safe_general_answer(question: str) -> dict[str, Any] | None:
         if needle in norm:
             return {
                 "matched": True,
-                "answer": f"{answer} That is a general-knowledge answer and is not drawn from the current StrategyOS board packet.",
+                "answer": f"{answer} That is a general-knowledge answer and is not drawn from the current Kyvern board packet.",
                 "citations": [],
                 "suggestions": ["What should I prepare for the board?", "What is driving margin pressure?", "Which challenged items need closure?"],
                 "basis": "Deterministic public-safe general-knowledge answer; no model call used.",
@@ -12597,11 +12606,11 @@ def _authenticated_app_help_result(question: str, *, role: str) -> dict[str, Any
             "but file upload and run launch require operator, tenant_operator, tenant_admin, or system access."
         )
     answer = (
-        "To process new files in StrategyOS: "
+        "To process new files in Kyvern: "
         f"{role_sentence} "
         "Open the operator lane at /app?lane=operate, then use Prepare source pack / Start analysis. "
         "Upload a ZIP source pack or choose a folder from your machine. "
-        "StrategyOS stages the files through /source-packs, validates readability, classifies finance roles, "
+        "Kyvern stages the files through /source-packs, validates readability, classifies finance roles, "
         "and asks you to confirm spreadsheet column mappings when needed. "
         "When the pack is ready, click Start analysis; if required files are missing, upload the missing files "
         "or enable partial analysis in Advanced settings. "
@@ -12611,7 +12620,7 @@ def _authenticated_app_help_result(question: str, *, role: str) -> dict[str, Any
     return {
         "matched": True,
         "answer": answer,
-        "basis": "Authenticated StrategyOS app workflow help; this is product/runtime guidance, not board-pack evidence.",
+        "basis": "Authenticated Kyvern app workflow help; this is product/runtime guidance, not board-pack evidence.",
         "citations": [
             {
                 "source_path": "strategyos://app",

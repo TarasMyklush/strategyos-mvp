@@ -566,7 +566,7 @@ def run_strategyos_workflow(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run StrategyOS MVP POC workflow.")
+    parser = argparse.ArgumentParser(description="Run Kyvern MVP POC workflow.")
     parser.add_argument(
         "--dataset",
         type=Path,

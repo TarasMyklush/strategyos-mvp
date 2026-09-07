@@ -398,7 +398,7 @@ def verify_surface(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Verify the externally visible governed StrategyOS surface.",
+        description="Verify the externally visible governed Kyvern surface.",
     )
     parser.add_argument("--base-url", default=os.environ.get("TARGET_URL", ""))
     parser.add_argument("--operator-api-key", default=os.environ.get("OPERATOR_API_KEY", ""))

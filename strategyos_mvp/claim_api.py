@@ -351,7 +351,10 @@ def query_run_snapshot(
                 limit=limit,
                 offset=offset,
             )
-        if snapshot.get('denied_count'):
+        access_denied_count = int(
+            snapshot.get('policy_denied_count', snapshot.get('denied_count') or 0) or 0
+        ) + int(snapshot.get('lineage_denied_count') or 0)
+        if access_denied_count:
             raise HTTPException(403, 'This snapshot page is not available in full. Use the claim query for authorized individual evidence.')
         return {'status': 'ok', **snapshot}
     except ValueError as exc:

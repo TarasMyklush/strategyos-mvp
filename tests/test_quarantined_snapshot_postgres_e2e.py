@@ -24,3 +24,6 @@ def test_quarantined_snapshot_entry_is_excluded_without_query_validation_crash(l
     snapshot = repo.snapshot("quarantine-proof", context=context)
     assert snapshot["records"] == []
     assert snapshot["denied_count"] == 1
+    assert snapshot["quarantined_count"] == 1
+    assert snapshot["policy_denied_count"] == 0
+    assert snapshot["lineage_denied_count"] == 0

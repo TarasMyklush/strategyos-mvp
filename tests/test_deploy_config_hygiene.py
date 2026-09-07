@@ -386,7 +386,7 @@ def test_deploy_workflow_pins_hosted_tenant_and_identity_labels() -> None:
         encoding="utf-8"
     )
     assert "STRATEGYOS_TENANT_SLUG: ${{ vars.STRATEGYOS_TENANT_SLUG || 'strategyos-live' }}" in workflow
-    assert "STRATEGYOS_TENANT_NAME: ${{ vars.STRATEGYOS_TENANT_NAME || 'StrategyOS Live' }}" in workflow
+    assert "STRATEGYOS_TENANT_NAME: ${{ vars.STRATEGYOS_TENANT_NAME || 'Kyvern Live' }}" in workflow
     assert "STRATEGYOS_IDP_OPERATOR_USERNAME: ${{ vars.STRATEGYOS_IDP_OPERATOR_USERNAME || 'operator.hosted' }}" in workflow
     assert "STRATEGYOS_IDP_REVIEWER_USERNAME: ${{ vars.STRATEGYOS_IDP_REVIEWER_USERNAME || 'reviewer.hosted' }}" in workflow
     assert "STRATEGYOS_IDP_TEST_USERS: ${{ secrets.STRATEGYOS_IDP_TEST_USERS }}" in workflow
@@ -1226,7 +1226,7 @@ def test_validate_deploy_boundary_rejects_local_identity_and_tenant_values_for_h
                 "STRATEGYOS_IDP_ENABLED=true",
                 "STRATEGYOS_IDP_ISSUER=http://localhost:8089",
                 "STRATEGYOS_TENANT_SLUG=local-poc",
-                "STRATEGYOS_TENANT_NAME=StrategyOS Local POC",
+                "STRATEGYOS_TENANT_NAME=Kyvern Local POC",
                 "STRATEGYOS_IDP_OPERATOR_USERNAME=operator.local",
                 "STRATEGYOS_IDP_REVIEWER_USERNAME=reviewer.local",
                 "STRATEGYOS_ENVIRONMENT_LABEL=Hosted QA",

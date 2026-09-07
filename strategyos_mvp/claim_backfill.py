@@ -295,7 +295,7 @@ def backfill_claims(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Preview or materialize governed claims for persisted StrategyOS runs."
+        description="Preview or materialize governed claims for persisted Kyvern runs."
     )
     target = parser.add_mutually_exclusive_group(required=True)
     target.add_argument("--run-id", action="append", dest="run_ids")

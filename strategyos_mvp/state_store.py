@@ -1257,7 +1257,7 @@ def data_management_status(run_id: str | None = None) -> dict[str, Any]:
                     if row is None:
                         return {
                             "status": "missing",
-                            "reason": "No StrategyOS run has been persisted.",
+                            "reason": "No Kyvern run has been persisted.",
                         }
                     normalized_run_id = uuid_value(row[0])
                     run_id = str(normalized_run_id or row[0])
@@ -1603,7 +1603,7 @@ def upsert_source_system(
             (tenant_id, name, system_type, source_key, origin_category, capture_method,
              governed_owner, authorization_basis)
         values (%s, %s, %s, %s, 'internal_system', 'folder_import', 'tenant_operator',
-                'Existing authenticated StrategyOS finance dataset intake')
+                'Existing authenticated Kyvern finance dataset intake')
         on conflict (tenant_id, name, system_type) do update set
             status = 'active',
             source_key = excluded.source_key,
@@ -1627,7 +1627,7 @@ def upsert_source_system(
             origin_category="internal_system",
             capture_method="folder_import",
             governed_owner="tenant_operator",
-            authorization_basis="Existing authenticated StrategyOS finance dataset intake",
+            authorization_basis="Existing authenticated Kyvern finance dataset intake",
         ),
         recorded_by="system:migration",
         rationale="Legacy source registered for shadow-claim compatibility.",
@@ -2752,7 +2752,15 @@ def persist_shadow_claim(
     )
     existing_revision = cur.fetchone()
     if existing_revision is not None:
-        return str(existing_revision[0]), False
+        revision_id = existing_revision[0]
+        _record_ingestion_claim_selection(
+            cur,
+            tenant_id=tenant_id,
+            batch_id=batch_id,
+            revision_id=revision_id,
+            reason="idempotent immutable revision selected by this ingestion",
+        )
+        return str(revision_id), False
     cur.execute(
         "select id, revision_number from strategyos_claim_revisions where claim_family_id = %s order by revision_number desc limit 1",
         (family_id,),
@@ -2835,7 +2843,34 @@ def persist_shadow_claim(
     if previous:
         queue_claim_revision_refresh(cur, tenant_id=tenant_id,
             family_id=family_id, replacement_id=revision_id)
+    _record_ingestion_claim_selection(
+        cur,
+        tenant_id=tenant_id,
+        batch_id=batch_id,
+        revision_id=revision_id,
+        reason="immutable revision materialized by this ingestion",
+    )
     return str(revision_id), True
+
+
+def _record_ingestion_claim_selection(
+    cur: Any,
+    *,
+    tenant_id: Any,
+    batch_id: Any,
+    revision_id: Any,
+    reason: str,
+) -> None:
+    """Bind a batch to the exact claim it selected without mutating the claim."""
+    cur.execute(
+        """
+        insert into strategyos_ingestion_batch_claims
+            (tenant_id, ingestion_batch_id, claim_revision_id, selection_reason)
+        values (%s, %s, %s, %s)
+        on conflict (ingestion_batch_id, claim_revision_id) do nothing
+        """,
+        (tenant_id, batch_id, revision_id, reason),
+    )
 
 
 def queue_claim_revision_refresh(cur: Any, *, tenant_id: Any, family_id: Any,
@@ -3655,19 +3690,18 @@ def persist_run_claim_snapshot(
         """
         with batch_claims as (
             select distinct cr.id, cr.claim_family_id, cr.revision_number
-            from strategyos_claim_revisions cr
-            left join strategyos_claim_evidence_links cel on cel.claim_revision_id = cr.id
-            left join strategyos_evidence_occurrences eo on eo.id = cel.evidence_occurrence_id
-            left join strategyos_ingestion_batch_documents ibd
-              on ibd.evidence_document_id = eo.evidence_document_id and ibd.batch_id = %s
-            where cr.tenant_id = %s
-              and (ibd.batch_id is not null or cr.metadata->>'batch_id' = %s)
+            from strategyos_ingestion_batch_claims ibc
+            join strategyos_claim_revisions cr
+              on cr.tenant_id = ibc.tenant_id
+             and cr.id = ibc.claim_revision_id
+            where ibc.tenant_id = %s
+              and ibc.ingestion_batch_id = %s
         )
         select distinct on (claim_family_id) claim_family_id, id
         from batch_claims
         order by claim_family_id, revision_number desc
         """,
-        (batch_id, tenant_id, str(batch_id)),
+        (tenant_id, batch_id),
     )
     for claim_family_id, claim_revision_id in cur.fetchall():
         cur.execute(
@@ -3706,20 +3740,18 @@ def persist_claim_reconciliation(
     source_record_count, source_amount = cur.fetchone()
     cur.execute(
         """
-        select count(*), coalesce(sum(value_numeric), 0)
-        from (
-            select distinct cr.id, cr.value_numeric
-            from strategyos_claim_revisions cr
-            join strategyos_claim_evidence_links cel on cel.claim_revision_id = cr.id
-            join strategyos_evidence_occurrences eo on eo.id = cel.evidence_occurrence_id
-            join strategyos_ingestion_batch_documents ibd
-              on ibd.evidence_document_id = eo.evidence_document_id and ibd.batch_id = %s
-            where cr.tenant_id = %s
-              and cr.metadata->>'legacy_projection' in
-                  ('strategyos_finance_transactions', 'strategyos_finance_balances')
-        ) linked_claims
+        select count(*), coalesce(sum(cr.value_numeric), 0)
+        from strategyos_analysis_snapshots s
+        join strategyos_analysis_snapshot_claims sc
+          on sc.tenant_id = s.tenant_id and sc.snapshot_id = s.id
+        join strategyos_claim_revisions cr
+          on cr.tenant_id = sc.tenant_id and cr.id = sc.claim_revision_id
+        where s.tenant_id = %s
+          and s.snapshot_key = %s
+          and cr.metadata->>'legacy_projection' in
+              ('strategyos_finance_transactions', 'strategyos_finance_balances')
         """,
-        (batch_id, tenant_id),
+        (tenant_id, f"run:{run_id}"),
     )
     claim_record_count, claim_amount = cur.fetchone()
     cur.execute(

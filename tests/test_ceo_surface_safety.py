@@ -2626,7 +2626,7 @@ def test_hero_morning_brief_is_structured_and_scan_safe():
     assert '"hero-briefing-signal-title": note.signal_title' in render_block
     assert '"hero-briefing-next-title": note.next_title' in render_block
     assert '"hero-briefing-compact-assistant": note.assistant + " · "' in render_block
-    assert '.replace(/^StrategyOS\\s+/i, "")' in js
+    assert '.replace(/^(?:StrategyOS|Kyvern)\\s+/i, "")' in js
     assert '.replace(/\\s+[—-]\\s+/, " · ")' in js
 
 

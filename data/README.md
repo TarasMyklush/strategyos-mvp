@@ -1,4 +1,4 @@
-# StrategyOS data
+# Kyvern data
 
 The current synthetic executive demonstration is `demo/01_Synthetic_Dataset`, formerly the enriched July 28 dataset. It includes finance/history, budgets, events, signals, calendar, question bank, document vault, board KPIs, initiatives, daily pulse, assistant profiles and executive-policy inputs. Companion strategy and market context lives in `demo/04_Strategic_Context`.
 
