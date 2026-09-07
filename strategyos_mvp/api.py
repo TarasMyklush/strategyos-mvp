@@ -10453,13 +10453,18 @@ def run_job_status(
     assert isinstance(job, dict)
     run_id = job.get("strategyos_run_id")
     if run_id:
-        run_detail = state_store.get_run_detail(str(run_id))
+        try:
+            run_detail = state_store.get_run_detail(str(run_id))
+        except PermissionError:
+            run_detail = None
+            job["run_detail_status"] = "restricted"
         if isinstance(run_detail, dict) and run_detail.get("status") not in {
             "missing",
             "skipped",
             "failed",
         }:
             job["run"] = run_detail
+            job["run_detail_status"] = "available"
     return job
 
 

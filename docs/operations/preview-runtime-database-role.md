@@ -37,6 +37,13 @@ tables, columns, indexes and migration version read-only; it never calls
 checkpoint tables. A missing or stale checkpoint contract therefore fails the
 worker closed instead of broadening runtime privileges.
 
+Hatchet job rows contain only a bounded completion receipt. Full run summaries
+and business evidence remain behind the run/source authorization boundary; old
+job rows that contain a legacy embedded summary are redacted when read. A
+completed job remains pollable when its caller may see job lifecycle state but
+not the attached run detail, which is reported as restricted rather than
+turning successful completion into a false 404.
+
 The migration job runs before the new application starts. It writes a private,
 0600 runtime connection file outside the source deployment directory:
 `/opt/strategyos-branch/runtime-database/runtime.env`. Retries preserve its secret.

@@ -487,6 +487,7 @@ def test_remote_smoke_run_forwards_auth_header() -> None:
     )
     assert 'RUN_AUTH_HEADER="${RUN_AUTH_HEADER:-}"' in script
     assert 'RUN_PAYLOAD="${RUN_PAYLOAD:-}"' in script
+    assert "PAYLOAD='{\"skip_prepare\": false, \"sync_artifacts\": true}'" in script
     assert 'curl -fsS -X POST "${base_url}/runs" -H "${RUN_AUTH_HEADER}"' in script
     assert "run_id=\"$(printf '%s' \"${response}\" | json_field run_id || true)\"" in script
     assert 'case "${run_status}:${current_stage}" in' in script

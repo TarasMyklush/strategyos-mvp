@@ -236,7 +236,7 @@ def execute_strategyos_run_job(
             job_id,
             status="succeeded",
             strategyos_run_id=str(strategyos_run_id) if strategyos_run_id else None,
-            metadata={"summary": summary},
+            metadata={"summary_receipt": state_store.run_job_summary_receipt(summary)},
         )
         return StrategyOSRunOutput(
             job_id=str(updated.get("job_id") or job_id),

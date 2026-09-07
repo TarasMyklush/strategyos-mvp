@@ -65,6 +65,11 @@ TARGET_HOST=deploy@YOUR_SERVER deploy/scripts/run_remote_workflow.sh
 ```
 
 Set `READINESS_AUTH_HEADER` and `RUN_AUTH_HEADER`, respectively, as required by the scripts. `run_remote_workflow.sh` launches work and can create application state. Leave smoke/run launch disabled during a configuration-only release unless data and review flow are prepared.
+By default the helper prepares a fresh governed run model from the configured
+source dataset (`skip_prepare: false`). Use an explicit `RUN_PAYLOAD` with
+`skip_prepare: true` only when the referenced agent-input directory has already
+been prepared and independently verified; syncing the source-dataset volume
+alone does not satisfy that condition.
 
 ## GitHub release workflow
 

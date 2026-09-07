@@ -12,7 +12,7 @@ RUN_PAYLOAD="${RUN_PAYLOAD:-}"
 if [ -n "${RUN_PAYLOAD}" ]; then
   PAYLOAD="${RUN_PAYLOAD}"
 else
-  PAYLOAD='{"skip_prepare": true, "sync_artifacts": true}'
+  PAYLOAD='{"skip_prepare": false, "sync_artifacts": true}'
 fi
 
 curl_run() {

@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import strategyos_mvp.hatchet_runtime as hatchet_runtime
 import strategyos_mvp.run_executor as run_executor
+import strategyos_mvp.state_store as state_store
 
 
 def test_hatchet_dependency_probe_requires_active_worker(monkeypatch):
@@ -169,3 +170,41 @@ def test_hatchet_worker_task_updates_job_lifecycle(monkeypatch, tmp_path: Path):
     assert updates[0][1]["status"] == "running"
     assert updates[-1][1]["status"] == "succeeded"
     assert updates[-1][1]["strategyos_run_id"] == "11111111-1111-1111-1111-111111111111"
+    assert "summary" not in updates[-1][1]["metadata"]
+    assert updates[-1][1]["metadata"]["summary_receipt"] == {
+        "run_id": "11111111-1111-1111-1111-111111111111",
+        "status": "completed",
+        "run_dir": str(tmp_path / "runs" / "run-1"),
+        "current_stage": None,
+        "approval_status": None,
+        "review_state": None,
+        "deliverables_status": None,
+        "finding_count": None,
+        "locked_finding_count": None,
+        "total_recoverable_sar": None,
+    }
+
+
+def test_legacy_job_summary_is_redacted_to_bounded_receipt():
+    record = {
+        "id": "job-legacy",
+        "strategyos_run_id": "11111111-1111-1111-1111-111111111111",
+        "metadata_json": {
+            "component": "strategyos-worker",
+            "summary": {
+                "run_id": "11111111-1111-1111-1111-111111111111",
+                "run_outcome": "awaiting_review",
+                "current_stage": "awaiting_review",
+                "findings": [{"sensitive": "must-not-leak"}],
+                "strategy_enrichment": {"sensitive": "must-not-leak"},
+                "total_recoverable_sar": 794108,
+            },
+        },
+    }
+
+    normalized = state_store.normalize_run_job_record(record)
+
+    assert "summary" not in normalized["metadata_json"]
+    assert normalized["metadata_json"]["summary_receipt"]["status"] == "awaiting_review"
+    assert normalized["metadata_json"]["summary_receipt"]["total_recoverable_sar"] == 794108
+    assert "sensitive" not in str(normalized)

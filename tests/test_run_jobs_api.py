@@ -105,3 +105,45 @@ def test_run_job_status_returns_persisted_job(monkeypatch):
         assert response.json()["job_id"] == "job-1"
     finally:
         _restore_env(original)
+
+
+def test_completed_job_status_survives_restricted_run_detail(monkeypatch):
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-secret",
+        }
+    )
+    try:
+        monkeypatch.setattr(
+            api_module.state_store,
+            "get_run_job",
+            lambda job_id: {
+                "job_id": job_id,
+                "status": "succeeded",
+                "execution_mode": "hatchet",
+                "strategyos_run_id": "11111111-1111-1111-1111-111111111111",
+                "metadata_json": {"summary_receipt": {"status": "awaiting_review"}},
+            },
+        )
+        monkeypatch.setattr(
+            api_module.state_store,
+            "get_run_detail",
+            lambda run_id: (_ for _ in ()).throw(
+                PermissionError("Run not found in the authorized source scope.")
+            ),
+        )
+        client = TestClient(api_module.app)
+
+        response = client.get(
+            "/runs/jobs/job-1",
+            headers=_auth_header("reviewer-secret"),
+        )
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "succeeded"
+        assert response.json()["run_detail_status"] == "restricted"
+        assert "run" not in response.json()
+    finally:
+        _restore_env(original)

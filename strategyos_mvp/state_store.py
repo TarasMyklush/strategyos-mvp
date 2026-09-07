@@ -4555,7 +4555,33 @@ def normalize_run_job_record(record: dict[str, Any]) -> dict[str, Any]:
     normalized["job_id"] = normalized.pop("id")
     if normalized.get("strategyos_run_id") is not None:
         normalized["strategyos_run_id"] = str(normalized["strategyos_run_id"])
+    metadata = normalized.get("metadata_json")
+    if isinstance(metadata, dict):
+        metadata = dict(metadata)
+        legacy_summary = metadata.pop("summary", None)
+        if "summary_receipt" not in metadata and isinstance(legacy_summary, dict):
+            metadata["summary_receipt"] = run_job_summary_receipt(legacy_summary)
+        normalized["metadata_json"] = metadata
     return normalized
+
+
+def run_job_summary_receipt(summary: dict[str, Any]) -> dict[str, Any]:
+    """Return the bounded workflow receipt safe for job-status responses."""
+    persisted = summary.get("state_store") if isinstance(summary.get("state_store"), dict) else {}
+    data_management = persisted.get("data_management") if isinstance(persisted.get("data_management"), dict) else {}
+    run_id = summary.get("run_id") or persisted.get("run_id")
+    return {
+        "run_id": str(run_id) if run_id else None,
+        "status": summary.get("status") or summary.get("run_outcome"),
+        "run_dir": summary.get("run_dir"),
+        "current_stage": summary.get("current_stage"),
+        "approval_status": summary.get("approval_status"),
+        "review_state": summary.get("review_state"),
+        "deliverables_status": summary.get("deliverables_status"),
+        "finding_count": summary.get("finding_count", data_management.get("findings")),
+        "locked_finding_count": summary.get("locked_findings"),
+        "total_recoverable_sar": summary.get("total_recoverable_sar"),
+    }
 
 
 def run_status_for_decision(decision: str) -> str:
