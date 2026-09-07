@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import hashlib
+import http.client
 import json
 import math
+import random
 import re
+import socket
+import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,6 +43,16 @@ INDEXED_FILTER_FIELDS = (
     "confidence",
     "source_path",
     "source_hash",
+)
+QDRANT_MAX_ATTEMPTS = 4
+QDRANT_RETRY_BASE_SECONDS = 0.25
+QDRANT_RETRYABLE_HTTP_CODES = frozenset({408, 425, 429, 500, 502, 503, 504})
+QDRANT_RETRYABLE_EXCEPTIONS = (
+    error.URLError,
+    http.client.RemoteDisconnected,
+    ConnectionError,
+    TimeoutError,
+    socket.timeout,
 )
 
 
@@ -989,21 +1003,37 @@ def _qdrant_request(
     if payload is not None:
         data = json.dumps(payload).encode("utf-8")
         headers["Content-Type"] = "application/json"
-    req = request.Request(url, data=data, headers=headers, method=method)
     # Qdrant's synchronous mutation endpoints may legitimately wait for an
     # optimizer/segment flush on a full reviewed source index. Interactive
     # reads keep the tighter bound; acknowledged writes get a bounded minute.
     timeout = 60 if method in {"PUT", "DELETE"} or "wait=true" in path else 10
-    try:
-        with request.urlopen(req, timeout=timeout) as response:
-            text = response.read().decode("utf-8")
-    except error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(
-            f"Qdrant request failed ({exc.code}) for {path}: {detail}"
-        ) from exc
-    except Exception as exc:
-        raise RuntimeError(f"Qdrant request failed for {path}: {exc}") from exc
+    text = ""
+    for attempt in range(1, QDRANT_MAX_ATTEMPTS + 1):
+        # Construct a fresh Request for each attempt. Some HTTP handlers attach
+        # state to request instances after a failed connection.
+        req = request.Request(url, data=data, headers=headers, method=method)
+        try:
+            with request.urlopen(req, timeout=timeout) as response:
+                text = response.read().decode("utf-8")
+            break
+        except error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            if (
+                exc.code not in QDRANT_RETRYABLE_HTTP_CODES
+                or attempt == QDRANT_MAX_ATTEMPTS
+            ):
+                raise RuntimeError(
+                    f"Qdrant request failed ({exc.code}) for {path}: {detail}"
+                ) from exc
+        except QDRANT_RETRYABLE_EXCEPTIONS as exc:
+            if attempt == QDRANT_MAX_ATTEMPTS:
+                raise RuntimeError(
+                    f"Qdrant request failed for {path} after {attempt} attempts: {exc}"
+                ) from exc
+        except Exception as exc:
+            raise RuntimeError(f"Qdrant request failed for {path}: {exc}") from exc
+        delay = QDRANT_RETRY_BASE_SECONDS * (2 ** (attempt - 1))
+        time.sleep(delay + random.uniform(0.0, delay * 0.2))
     if not text:
         return {}
     return json.loads(text)
