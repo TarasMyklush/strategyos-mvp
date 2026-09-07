@@ -806,6 +806,8 @@ p:last-child { margin-bottom: 0; }
 .mt-0 { margin-top: 0; }
 .text-center { text-align: center; }
 
+.pack-page { padding: 24px; border-top: 1px solid var(--border); overflow-wrap: anywhere; }
+.pack-page p { margin: 10px 0; }
 [hidden] { display: none !important; }
 .vault-controls { display: flex; align-items: end; flex-wrap: wrap; gap: 16px; }
 .vault-field { display: grid; gap: 6px; min-width: 0; flex: 1 1 220px; font-size: 13px; color: var(--muted); }
@@ -882,6 +884,20 @@ button:disabled { opacity: .5; cursor: not-allowed; }
     <p class="vault-note">These figures are preserved with their approved plan and actual revision. Source hashes verify file integrity; they do not independently certify each reported value.</p>
     <a id="saved-link">Reopen this saved analysis</a>
   </div>
+  <div id="board-pack" class="vault-panel" hidden>
+    <h2>Board pack composer</h2>
+    <p>Turn this saved analysis into an evidence-linked board review. Figures stay bound to this version; exports check current source permissions and flag newer records.</p>
+    <div class="vault-controls"><label class="vault-field">Language<select id="pack-language"><option value="bilingual">English + العربية</option><option value="en">English</option><option value="ar">العربية</option></select></label></div>
+    <details style="margin-top:18px"><summary>Client template</summary>
+      <p class="vault-note">Set client names, headings, colour and EN/AR labels in this reusable template. Labels translate exact metric and dimension names; figures and evidence cannot be overridden.</p>
+      <label class="vault-field">Load template JSON<input type="file" id="pack-load-template" accept=".json,application/json"></label>
+      <label class="vault-field">Template JSON<textarea id="pack-template" rows="12" spellcheck="false" aria-label="Board pack template JSON"></textarea></label>
+      <button type="button" class="secondary" id="pack-save-template">Download template</button>
+    </details>
+    <div class="vault-actions"><button type="button" id="pack-preview-button">Preview pack</button><button type="button" class="secondary" id="pack-pptx">Download PPTX</button><button type="button" class="secondary" id="pack-pdf">Download PDF</button></div>
+    <p class="vault-note">PDF embeds its fonts. For editable Arabic slides, install Noto Sans Arabic on the presenting computer. Source labels keep their original language unless translated in the template.</p>
+    <p id="pack-status" role="status" aria-live="polite" class="vault-message"></p><div id="pack-preview"></div>
+  </div>
   <div id="ratifier-panel" class="vault-panel" hidden>
     <details><summary>Manage ratification permissions</summary>
       <p>A tenant administrator designates a separate reviewer for this plan. The importer cannot ratify their own version.</p>
@@ -900,6 +916,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 </div>
 </main>
 <footer class="footer container"><p>Kyvern · Intent, accountability and evidence</p></footer>
+<script src="/static/board_pack.js" defer></script>
 <script src="/static/intent_vault.js" defer></script>
 </body>
 </html>

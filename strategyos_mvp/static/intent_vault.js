@@ -48,6 +48,7 @@
   }
   function resetSelection() {
     state.record = null; state.grant = null;
+    window.dispatchEvent(new CustomEvent('kyvern-analysis', { detail: null }));
     ['selected-plan', 'ratifier-panel', 'drift-panel', 'analysis-panel', 'grant-form', 'ratify-form'].forEach(function (id) { show(id, false); });
     ['plan-cells', 'analysis-cells', 'analysis-rollups', 'analysis-findings', 'plan-metadata'].forEach(function (id) { $(id).replaceChildren(); });
     $('reviewed').checked = false; $('review-note').value = ''; $('grant-status').textContent = '';
@@ -109,11 +110,12 @@
     var url = new URL(window.location.href); url.search = ''; url.searchParams.set('analysis', result.analysis_hash);
     $('saved-link').href = url.pathname + url.search;
     show('analysis-panel', true);
+    window.dispatchEvent(new CustomEvent('kyvern-analysis', { detail: result.analysis_hash }));
   }
   function bind(id, work) { $(id).addEventListener('submit', function (event) { event.preventDefault(); action(work); }); }
   $('plan-select').addEventListener('change', function () { action(loadPlan); });
-  $('actual-select').addEventListener('change', function () { show('analysis-panel', false); controls(); });
-  $('as-of').addEventListener('change', function () { show('analysis-panel', false); });
+  $('actual-select').addEventListener('change', function () { show('analysis-panel', false); window.dispatchEvent(new CustomEvent('kyvern-analysis', { detail: null })); controls(); });
+  $('as-of').addEventListener('change', function () { show('analysis-panel', false); window.dispatchEvent(new CustomEvent('kyvern-analysis', { detail: null })); });
   $('review-note').addEventListener('input', controls); $('reviewed').addEventListener('change', controls);
   $('refresh').addEventListener('click', function () { action(async function () { resetSelection(); await loadCatalog(false); await loadPlan(); }); });
   $('more').addEventListener('click', function () { action(function () { return loadCatalog(true); }); });

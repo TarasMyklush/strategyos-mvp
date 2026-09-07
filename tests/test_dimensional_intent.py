@@ -469,3 +469,110 @@ def test_cookie_writes_use_configured_https_origin_behind_proxy(setup, monkeypat
     for headers in ({'Origin':'http://testserver'}, {'Origin':'https://attacker.test','X-Forwarded-Host':'attacker.test','X-Forwarded-Proto':'https'}):
         assert s['client'].post('/api/intent/dimensional/plans',headers=headers,json=body).status_code==403
     assert s['client'].post('/api/intent/dimensional/plans',headers={'Origin':'https://preview.example.test'},json=body).status_code==200
+
+
+def test_board_pack_exports_bound_snapshot_and_translations(setup, tmp_path, monkeypatch):
+    from io import BytesIO
+    from pptx import Presentation
+    from pypdf import PdfReader
+    from strategyos_mvp import board_pack
+    s = setup
+    approve(s, import_pair(s))
+    result = analyse(s)
+    request = board_pack.PackRequest(template=board_pack.PackTemplate(labels={
+        'revenue': board_pack.Translation(en='Revenue', ar='الإيرادات')}))
+    pack = board_pack.compose(s['executive'], result['analysis_hash'], request)
+    assert pack['binding']['analysis_hash'] == result['analysis_hash']
+    assert not pack['binding']['warnings']
+    assert len(pack['evidence']) == len(result['cells']) * 2
+    assert any('الإيرادات' in line for p in pack['pages'] for line in p['lines'])
+    assert any('masks' in line for p in pack['pages'] for line in p['lines'])
+    for c in result['cells']:
+        page = next(p for p in pack['pages'] if p['lines'][0].startswith(c['cell_id'] + ' ·'))
+        assert page['lines'][3].endswith(': ' + c['target'])
+        assert page['lines'][4].endswith(': ' + c['actual'])
+    assert board_pack.compose(s['executive'], result['analysis_hash'], request)['pack_hash'] == pack['pack_hash']
+    pdf = board_pack.export_pdf(pack, 'https://kyvern.example')
+    pptx = board_pack.export_pptx(pack, 'https://kyvern.example')
+    assert len(PdfReader(BytesIO(pdf)).pages) == len(pack['pages'])
+    deck = Presentation(BytesIO(pptx))
+    assert len(deck.slides) == len(pack['pages'])
+    assert result['analysis_hash'] in deck.slides[0].notes_slide.notes_text_frame.text
+    assert any('https://kyvern.example/api/intent/' in str(r.target_ref) for slide in deck.slides for r in slide.part.rels.values())
+    # Local artifacts are optional and never created in CI or used as test truth.
+    import os
+    if os.environ.get('KYVERN_PACK_QA_DIR'):
+        root = Path(os.environ['KYVERN_PACK_QA_DIR']); root.mkdir(parents=True, exist_ok=True)
+        (root / 'board-bilingual.pdf').write_bytes(pdf)
+        (root / 'board-bilingual.pptx').write_bytes(pptx)
+        (root / 'board.json').write_text(json.dumps(pack, ensure_ascii=False, indent=2))
+    s['current']['principal'] = s['executive']
+    url = '/api/intent/dimensional/analyses/' + result['analysis_hash'] + '/board-pack'
+    assert s['client'].post(url, json=request.model_dump()).status_code == 200
+    for format in ['pdf', 'pptx']:
+        response = s['client'].post(url + '/' + format, json=request.model_dump())
+        assert response.status_code == 200
+        assert response.headers['Cache-Control'] == 'private, no-store'
+        assert response.headers['X-Kyvern-Pack-Hash'] == pack['pack_hash']
+    assert s['client'].post(url, json={'template': {'numbers': {'revenue': '999'}}}).status_code == 422
+    assert s['client'].post(url, json={'language': 'xx'}).status_code == 422
+    s['client'].cookies.set('strategyos_session', 'test-cookie')
+    monkeypatch.setenv('STRATEGYOS_PUBLIC_URL', 'https://kyvern.example')
+    assert s['client'].post(url + '/pdf', json={}).status_code == 403
+    assert s['client'].post(url + '/pdf', json={}, headers={'Origin': 'https://kyvern.example'}).status_code == 200
+
+
+def test_board_pack_revocation_integrity_and_tenant_boundaries(setup):
+    from strategyos_mvp import board_pack
+    s = setup
+    approve(s, import_pair(s)); result = analyse(s)
+    req = board_pack.PackRequest()
+    for role in ['bu', 'system', 'analyst']:
+        with pytest.raises(PermissionError):
+            board_pack.compose({**s['executive'], 'role': role}, result['analysis_hash'], req)
+    with pytest.raises(PermissionError):
+        board_pack.compose({**s['executive'], 'tenant_id': 'other'}, result['analysis_hash'], req)
+    with s['connect']() as conn:
+        conn.execute('UPDATE strategyos_source_access_policies SET export_allowed=false')
+    assert store.read_analysis(s['executive'], result['analysis_hash']) == result
+    with pytest.raises(PermissionError): board_pack.compose(s['executive'], result['analysis_hash'], req)
+    with s['connect']() as conn:
+        conn.execute('UPDATE strategyos_source_access_policies SET export_allowed=true')
+    (s['root'] / 'raw' / 'evidence.csv').write_text('changed evidence')
+    with pytest.raises(sources.SourceUnavailable): board_pack.compose(s['executive'], result['analysis_hash'], req)
+
+
+def test_board_pack_freshness_does_not_replace_saved_figures(setup):
+    from strategyos_mvp import board_pack
+    s = setup
+    approve(s, import_pair(s)); result = analyse(s)
+    original = board_pack.compose(s['executive'], result['analysis_hash'], board_pack.PackRequest())
+    newer = deepcopy(s['a']); newer['revision'] = 'newer-actuals'
+    store.import_actuals(s['operator'], Actuals.model_validate(newer), s['pack'])
+    proposal = deepcopy(s['p']); proposal['version'] = 2
+    imported = store.import_plan(s['operator'], Plan.model_validate(proposal), s['pack'])
+    # A proposal is not a new board-approved comparator.
+    fresh = board_pack.compose(s['executive'], result['analysis_hash'], board_pack.PackRequest())
+    assert fresh['binding']['warnings'] == ['new_actuals']
+    store.ratify(s['executive'], proposal['plan_id'], 2, imported['digest'], 'Reviewed the next plan version and its evidence.')
+    fresh = board_pack.compose(s['executive'], result['analysis_hash'], board_pack.PackRequest())
+    assert fresh['binding']['warnings'] == ['new_plan', 'new_actuals']
+    assert fresh['binding']['actual_digest'] == original['binding']['actual_digest']
+    assert fresh['binding']['plan_digest'] == original['binding']['plan_digest']
+    assert store.read_analysis(s['executive'], result['analysis_hash']) == result
+
+
+def test_board_pack_missing_actuals_stay_missing(setup):
+    from strategyos_mvp import board_pack
+    s = setup; s['a']['observations'].pop()
+    approve(s, import_pair(s)); result = analyse(s)
+    pack = board_pack.compose(s['executive'], result['analysis_hash'], board_pack.PackRequest(language='en'))
+    assert any(line == 'Actual: Missing' for p in pack['pages'] for line in p['lines'])
+    assert any(line == 'Status: Incomplete' for p in pack['pages'] for line in p['lines'])
+
+
+def test_board_pack_bidi_preserves_signed_decimals_and_dates():
+    from strategyos_mvp.board_pack import visual, mark_ltr
+    for value in ['2026-09-07', '-60.25', '+80.50', '0.0001']:
+        assert value in visual('الانحراف: ' + value)
+        assert '\u200e' + value + '\u200e' in mark_ltr('الانحراف: ' + value)

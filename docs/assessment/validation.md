@@ -1,5 +1,22 @@
 # Validation record
 
+## Board pack composer candidate — 7 September 2026
+
+The next additive release connects the saved Intent analysis to an EN/AR preview,
+PPTX and PDF exports, portable JSON client templates, per-cell evidence links and
+freshness warnings. There is no database migration or new connector.
+
+- Focused regression: **240 passed**, four warnings, 10.43 seconds.
+- Additional mixed-direction rendering regression covers signed decimals and dates.
+- Real disposable PostgreSQL proofs cover immutable figure binding, newer plan and
+  actual warnings, missing values, tenant/role denial, current source export
+  revocation, evidence byte changes, input validation and session CSRF.
+- Bilingual PDF and PPTX were generated from synthetic source-bound analysis and
+  all nine pages inspected. PPTX was rendered with bundled LibreOffice, not PowerPoint.
+- Hosted deployment and acceptance are pending for this candidate.
+
+Scope and limitations: [composer contract](../board-pack-composer.md).
+
 ## Hosted Intent Vault — 7 September 2026
 
 The reused `/plan` Intent Vault is deployed to **https://new.strategyos.live/plan**.

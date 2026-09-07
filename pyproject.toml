@@ -16,6 +16,9 @@ dependencies = [
   "pypdf",
   "pydantic",
   "reportlab",
+  "python-pptx>=1.0,<2",
+  "arabic-reshaper>=3,<4",
+  "python-bidi>=0.6,<1",
   "langgraph>=0.2; python_version >= '3.11'",
   "langgraph-checkpoint-postgres>=2.0; python_version >= '3.11'",
   "hatchet-sdk==1.33.10; python_version >= '3.11'",
@@ -30,7 +33,7 @@ build-backend = "setuptools.build_meta"
 include = ["strategyos_mvp*"]
 
 [tool.setuptools.package-data]
-strategyos_mvp = ["tools/*.swift", "sql/*.sql", "static/*.html", "static/*.css", "static/*.js", "static/*.svg", "static/*.woff2", "static/vendor/*.js", "twins/static/*.html"]
+strategyos_mvp = ["tools/*.swift", "fonts/*.ttf", "fonts/*.txt", "sql/*.sql", "static/*.html", "static/*.css", "static/*.js", "static/*.svg", "static/*.woff2", "static/vendor/*.js", "twins/static/*.html"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

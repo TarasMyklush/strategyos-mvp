@@ -168,3 +168,32 @@ def plan_evidence(plan_id: str, version: Annotated[int, Path(ge=1)],
     return Response(content=content, media_type='application/octet-stream', headers={
         'Content-Disposition': "attachment; filename*=UTF-8''" + quote(filename, safe=''),
         'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store'})
+
+
+from . import board_pack
+
+
+@router.get('/board-pack/template')
+def board_template(principal: dict[str, Any] = require_role('operator', 'reviewer', 'executive')):
+    perform(lambda: store._scope(principal))
+    return board_pack.PackTemplate().model_dump(mode='json')
+
+
+@router.post('/analyses/{analysis_id}/board-pack')
+def board_preview(analysis_id: str, body: board_pack.PackRequest,
+                  principal: dict[str, Any] = require_role('operator', 'reviewer', 'executive')):
+    return perform(lambda: board_pack.compose(principal, analysis_id, body))
+
+
+@router.post('/analyses/{analysis_id}/board-pack/{format}')
+def board_export(analysis_id: str, format: Literal['pdf', 'pptx'], body: board_pack.PackRequest,
+                 principal: dict[str, Any] = require_role('operator', 'reviewer', 'executive')):
+    pack = perform(lambda: board_pack.compose(principal, analysis_id, body))
+    origin = urlsplit(os.environ.get('STRATEGYOS_PUBLIC_URL', ''))
+    public_url = f'{origin.scheme}://{origin.netloc}' if origin.scheme in {'https', 'http'} and origin.netloc else ''
+    content = perform(lambda: (board_pack.export_pdf if format == 'pdf' else board_pack.export_pptx)(pack, public_url))
+    media = 'application/pdf' if format == 'pdf' else 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    return Response(content=content, media_type=media, headers={
+        'Content-Disposition': f'attachment; filename="kyvern-board-{pack["pack_hash"][:16]}.{format}"',
+        'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store',
+        'X-Kyvern-Pack-Hash': pack['pack_hash']})
