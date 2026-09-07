@@ -50,28 +50,50 @@ _RUNTIME_MARKERS = {
     'projector': 'strategyos-preview-projector:1',
 }
 
+_RUNTIME_SCOPE_ROLES = {
+    'request': 'strategyos_preview_request_scope',
+    'worker': 'strategyos_preview_worker_scope',
+    'projector': 'strategyos_preview_projector_scope',
+}
+
+_RUNTIME_SCOPE_MARKERS = {
+    scope: f'strategyos-preview-scope:{scope}:1' for scope in _RUNTIME_SCOPE_ROLES
+}
+
 
 def verify_runtime_schema(conn, *, expected_scope=None):
     """Refuse missing/mismatched schema or a runtime able to bypass its guards."""
+    scope=str(expected_scope or getattr(state_store.CONFIG,'database_runtime_scope','request')).strip().lower()
+    if scope not in _RUNTIME_MARKERS:
+        raise RuntimeError('Unsupported database runtime scope.')
     with conn.cursor() as cur:
         cur.execute('''SELECT rolsuper OR rolcreatedb OR rolcreaterole OR rolbypassrls OR rolreplication
-            OR EXISTS(SELECT 1 FROM pg_namespace n WHERE n.nspname NOT LIKE 'pg_%'
+            OR EXISTS(SELECT 1 FROM pg_namespace n WHERE n.nspname NOT LIKE 'pg_%%'
                       AND n.nspname <> 'information_schema' AND has_schema_privilege(current_user,n.oid,'CREATE'))
             OR has_database_privilege(current_user,current_database(),'TEMP')
             OR EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
                       WHERE n.nspname='public' AND c.relowner=r.oid)
-            OR EXISTS(SELECT 1 FROM pg_auth_members WHERE member=r.oid)
-            FROM pg_roles r WHERE rolname=current_user''')
+            OR EXISTS(
+                SELECT 1 FROM pg_auth_members m JOIN pg_roles granted ON granted.oid=m.roleid
+                WHERE m.member=r.oid AND granted.rolname <> %s
+            )
+            FROM pg_roles r WHERE rolname=current_user''', (_RUNTIME_SCOPE_ROLES[scope],))
         row=cur.fetchone()
         if not row or row[0]:
             raise RuntimeError('Runtime database role must not own schema, inherit privileged roles, or bypass database controls.')
-        scope=str(expected_scope or getattr(state_store.CONFIG,'database_runtime_scope','request')).strip().lower()
-        if scope not in _RUNTIME_MARKERS:
-            raise RuntimeError('Unsupported database runtime scope.')
         cur.execute("SELECT shobj_description(oid,'pg_authid') FROM pg_roles WHERE rolname=current_user")
         marker=cur.fetchone()
         if not marker or marker[0] != _RUNTIME_MARKERS[scope]:
             raise RuntimeError('Runtime database role is not provisioned for its declared scope.')
+        cur.execute(
+            "SELECT pg_has_role(current_user,%s,'MEMBER'), "
+            "array_agg(scope_role ORDER BY scope_role) FILTER (WHERE pg_has_role(current_user,scope_role,'MEMBER')) "
+            "FROM unnest(%s::text[]) scope_role",
+            (_RUNTIME_SCOPE_ROLES[scope], list(_RUNTIME_SCOPE_ROLES.values())),
+        )
+        membership = cur.fetchone()
+        if not membership or not membership[0] or membership[1] != [_RUNTIME_SCOPE_ROLES[scope]]:
+            raise RuntimeError('Runtime database role does not have one exact database-enforced scope membership.')
         cur.execute("SELECT to_regclass('public.strategyos_runtime_schema_contract')")
         if cur.fetchone()[0] is None:
             raise RuntimeError('Database schema must be prepared by the deployment migration job.')
@@ -128,6 +150,15 @@ def provision_preview_runtime(conn, destination: Path, *, role='strategyos_previ
             password=unquote(saved.password)
         passwords[scope]=password
     with conn.cursor() as cur:
+        for scope, scope_role in _RUNTIME_SCOPE_ROLES.items():
+            marker = _RUNTIME_SCOPE_MARKERS[scope]
+            cur.execute("SELECT shobj_description(oid,'pg_authid') FROM pg_roles WHERE rolname=%s", (scope_role,))
+            row = cur.fetchone()
+            if row is not None and row[0] != marker:
+                raise RuntimeError('Refusing to modify an unmanaged database scope role.')
+            if row is None:
+                cur.execute(sql.SQL('CREATE ROLE {} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS').format(sql.Identifier(scope_role)))
+                cur.execute(sql.SQL('COMMENT ON ROLE {} IS {}').format(sql.Identifier(scope_role), sql.Literal(marker)))
         for scope,(login,_) in role_specs.items():
             marker=_RUNTIME_MARKERS[scope]
             cur.execute("SELECT shobj_description(oid,'pg_authid') FROM pg_roles WHERE rolname=%s",(login,))
@@ -138,6 +169,9 @@ def provision_preview_runtime(conn, destination: Path, *, role='strategyos_previ
                 cur.execute(sql.SQL('CREATE ROLE {} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS').format(sql.Identifier(login)))
                 cur.execute(sql.SQL('COMMENT ON ROLE {} IS {}').format(sql.Identifier(login),sql.Literal(marker)))
             cur.execute(sql.SQL('ALTER ROLE {} PASSWORD {}').format(sql.Identifier(login),sql.Literal(passwords[scope])))
+            for candidate in _RUNTIME_SCOPE_ROLES.values():
+                cur.execute(sql.SQL('REVOKE {} FROM {}').format(sql.Identifier(candidate), sql.Identifier(login)))
+            cur.execute(sql.SQL('GRANT {} TO {}').format(sql.Identifier(_RUNTIME_SCOPE_ROLES[scope]), sql.Identifier(login)))
         cur.execute(sql.SQL('REVOKE TEMP ON DATABASE {} FROM PUBLIC').format(sql.Identifier(conn.info.dbname)))
         cur.execute('REVOKE CREATE ON SCHEMA public FROM PUBLIC')
         for login,_ in role_specs.values():

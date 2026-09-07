@@ -575,6 +575,9 @@ whole-scope completion certificate.
   inventory. Real PostgreSQL tests prove request isolation with omitted tenant
   predicates, blank-context denial, deliberate worker queue breadth, and the
   projector's inability to read legacy finance facts or mutate claims.
+- Migration 0015 resolves runtime scope through one verified no-login role
+  membership, keeping RLS evaluation constant-time as outbox history grows.
+  Runtime startup rejects missing, multiple or unrelated memberships.
 - New runs materialize monthly/quarterly actual-plan-floor points, BU contributor
   actual/plan lanes and cost-component actual/plan lanes as numeric claim
   revisions with exact source artifact, locator, unit and period. Presentation

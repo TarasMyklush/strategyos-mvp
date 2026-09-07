@@ -103,6 +103,24 @@ def test_background_roles_are_distinct_and_least_privileged(isolated_roles):
     assert len(set(roles))==3
 
 
+def test_runtime_scope_uses_one_constant_time_role_membership(isolated_roles):
+    import psycopg
+    url,entries,_,_,_=isolated_roles
+    with psycopg.connect(url) as owner:
+        definition=owner.execute(
+            "SELECT pg_get_functiondef('strategyos_database_runtime_scope()'::regprocedure)"
+        ).fetchone()[0]
+    assert 'pg_has_role' in definition
+    assert 'from pg_roles' not in definition.lower()
+    for key,scope in (
+        ('STRATEGYOS_RUNTIME_DATABASE_URL','request'),
+        ('STRATEGYOS_WORKER_DATABASE_URL','worker'),
+        ('STRATEGYOS_PROJECTOR_DATABASE_URL','projector'),
+    ):
+        with psycopg.connect(entries[key]) as conn:
+            assert conn.execute('SELECT strategyos_database_runtime_scope()').fetchone()[0]==scope
+
+
 def test_all_governed_tenant_tables_have_rls_enabled(isolated_roles):
     import psycopg
     url,_,_,_,_=isolated_roles

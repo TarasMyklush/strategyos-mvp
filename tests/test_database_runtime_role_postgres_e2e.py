@@ -25,6 +25,12 @@ def test_nonowner_runtime_reads_and_appends_but_cannot_rewrite_schema(ledger,mon
         db=owner.info.dbname
         owner.execute(sql.SQL('CREATE ROLE {} LOGIN PASSWORD {} NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS').format(sql.Identifier(role),sql.Literal(password)))
         owner.execute(sql.SQL("COMMENT ON ROLE {} IS 'strategyos-preview-runtime:1'").format(sql.Identifier(role)))
+        scope_role=database_schema._RUNTIME_SCOPE_ROLES['request']
+        scope_marker=database_schema._RUNTIME_SCOPE_MARKERS['request']
+        if not owner.execute('SELECT 1 FROM pg_roles WHERE rolname=%s',(scope_role,)).fetchone():
+            owner.execute(sql.SQL('CREATE ROLE {} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS').format(sql.Identifier(scope_role)))
+            owner.execute(sql.SQL('COMMENT ON ROLE {} IS {}').format(sql.Identifier(scope_role),sql.Literal(scope_marker)))
+        owner.execute(sql.SQL('GRANT {} TO {}').format(sql.Identifier(scope_role),sql.Identifier(role)))
         owner.execute(sql.SQL('REVOKE TEMP ON DATABASE {} FROM PUBLIC').format(sql.Identifier(db)))
         owner.execute(sql.SQL('GRANT CONNECT ON DATABASE {} TO {}').format(sql.Identifier(db),sql.Identifier(role)))
         owner.execute(sql.SQL('GRANT USAGE ON SCHEMA public TO {}').format(sql.Identifier(role)))

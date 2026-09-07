@@ -18,9 +18,12 @@ The preview deployment uses four database authority levels:
   maintain projection cache. It cannot read legacy finance tables, delete claims,
   or create business claims.
 
-All three runtime roles lack schema ownership, role membership, CREATE, TEMP,
-role administration, replication and RLS-bypass capability. Startup verifies
-the prepared fingerprint and exact role marker/scope, and refuses DDL. None can
+All three runtime roles lack schema ownership, privileged role membership,
+CREATE, TEMP, role administration, replication and RLS-bypass capability. Each
+has exactly one no-login scope membership used by the RLS policy; PostgreSQL's
+constant-time membership check avoids a catalogue lookup for every scanned row.
+Startup verifies the prepared fingerprint, exact role marker and sole scope
+membership, and refuses DDL. None can
 edit migration history/schema contracts, rewrite immutable claim revisions or
 assessments, or truncate tables.
 
