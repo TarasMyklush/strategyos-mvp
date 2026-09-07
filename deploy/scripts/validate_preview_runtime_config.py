@@ -33,6 +33,10 @@ def validate(config):
             raise ValueError(name+': runtime schema verification is required')
         if environment.get('STRATEGYOS_DATABASE_RUNTIME_SCOPE')!=expected_scope:
             raise ValueError(name+': runtime database scope does not match its identity')
+        if name == 'strategyos-api':
+            public = urlsplit(environment.get('STRATEGYOS_PUBLIC_URL', ''))
+            if public.scheme != 'https' or not public.hostname or public.username or public.password:
+                raise ValueError('Explicit HTTPS public URL is required for browser session writes')
         if 'POSTGRES_PASSWORD' in environment:
             raise ValueError(name+': migration password must not enter runtime environment')
     if 'schema-migration' not in migration.get('profiles',[]):

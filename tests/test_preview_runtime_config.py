@@ -20,6 +20,7 @@ def fixture():
         'STRATEGYOS_DATABASE_SCHEMA_MODE':'verify',
         'STRATEGYOS_DATABASE_RUNTIME_SCOPE':scope,
     }} for name,(user,scope) in contracts.items()}
+    services['strategyos-api']['environment']['STRATEGYOS_PUBLIC_URL']='https://preview.example.test/'
     services['strategyos-migrate']={'profiles':['schema-migration'],'read_only':True,'cap_drop':['ALL'],
         'environment':{'DATABASE_URL':'postgresql://migration:synthetic@postgres/proof'}}
     return {'name':'strategyos-branch','services':services}
@@ -83,3 +84,11 @@ def test_real_compose_inactive_migration_profile_is_included_only_for_inspection
     inspection=json.loads(subprocess.check_output(command+['--profile','schema-migration','config','--format','json'],text=True))
     module.validate(inspection)
     assert inspection['services']['strategyos-migrate']['profiles']==['schema-migration']
+
+
+@pytest.mark.parametrize('origin',['','http://preview.example.test','https://user:password@preview.example.test'])
+def test_browser_public_origin_must_be_explicit_https(origin):
+    config=fixture()
+    config['services']['strategyos-api']['environment']['STRATEGYOS_PUBLIC_URL']=origin
+    with pytest.raises(ValueError,match='public URL'):
+        module.validate(config)
