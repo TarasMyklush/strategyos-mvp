@@ -24,7 +24,7 @@ freshness warnings. There is no database migration or new connector.
   cross-origin denial. All six EN/AR/bilingual PDF/PPTX exports opened structurally,
   carried the saved analysis binding and included protected evidence links. Operator,
   reviewer and auditor composition succeeded; BU access and numeric template overrides
-  were rejected. The saved analysis remained byte-for-byte equal as parsed JSON.
+  were rejected. The saved analysis remained identical as parsed JSON.
 - Runtime revision `13c6624da42091a49c1f02b2dd14802ae8cb7089`, image
   `sha256:410d67f9f25ffcd716e144e16ba0b970d47f9796399e5ca753e0a0f0b172ab72`,
   is healthy at https://new.strategyos.live/plan. Schema verification passed.
