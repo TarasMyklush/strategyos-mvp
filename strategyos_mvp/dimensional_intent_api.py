@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Path, Query, Request, Response
 from fastapi.routing import APIRoute
 from pydantic import Field
 import psycopg
+import os
 
 from .auth import require_role
 from .dimensional_plan import Actuals, Contract, Name, Plan
@@ -37,7 +38,10 @@ class IntentRoute(APIRoute):
         async def bounded(request):
             if request.method in {'POST', 'PUT'} and request.cookies.get('strategyos_session'):
                 origin = urlsplit(request.headers.get('origin', ''))
-                if (origin.scheme, origin.netloc) != (request.url.scheme, request.url.netloc):
+                # TLS terminates at the hosted edge. Trust deployment configuration,
+                # never caller-controlled forwarded headers, for its public origin.
+                expected = urlsplit(os.environ.get('STRATEGYOS_PUBLIC_URL') or str(request.base_url))
+                if (origin.scheme, origin.netloc) != (expected.scheme, expected.netloc):
                     raise HTTPException(403, 'A same-origin request is required for this session action.')
             response = await handler(LimitedRequest(request.scope, request.receive))
             response.headers['Cache-Control'] = 'private, no-store'

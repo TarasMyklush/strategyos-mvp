@@ -459,3 +459,13 @@ def test_intent_rls_blocks_unscoped_and_other_tenant_reads(setup):
         assert conn.execute('SELECT count(*) FROM strategyos_intent_plan_versions').fetchone()[0]==1
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             conn.execute('DELETE FROM strategyos_intent_plan_versions')
+
+
+def test_cookie_writes_use_configured_https_origin_behind_proxy(setup, monkeypatch):
+    s=setup
+    monkeypatch.setenv('STRATEGYOS_PUBLIC_URL','https://preview.example.test/')
+    s['client'].cookies.set('strategyos_session','test-cookie')
+    body={'source_pack_id':s['pack'],'plan':s['p']}
+    for headers in ({'Origin':'http://testserver'}, {'Origin':'https://attacker.test','X-Forwarded-Host':'attacker.test','X-Forwarded-Proto':'https'}):
+        assert s['client'].post('/api/intent/dimensional/plans',headers=headers,json=body).status_code==403
+    assert s['client'].post('/api/intent/dimensional/plans',headers={'Origin':'https://preview.example.test'},json=body).status_code==200
