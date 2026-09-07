@@ -1,0 +1,12 @@
+{
+  "conclusion": "success",
+  "headSha": "1240f84aee814f505c8d26dc03571c7b401575a0",
+  "status": "completed",
+  "url": "https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34144354986",
+  "tests_passed": 2322,
+  "tests_skipped": 0,
+  "test_seconds": 498.37,
+  "configuration_revision": "c8b8715",
+  "configuration_tests_passed": 103,
+  "configuration_change": "Propagate the existing preview public URL; same image, database credentials and provider settings preserved."
+}

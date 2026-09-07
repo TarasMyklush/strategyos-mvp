@@ -1,0 +1,97 @@
+{
+  "target": "https://new.strategyos.live",
+  "checked_at": "2026-09-07T16:58:55.763952+00:00",
+  "synthetic": true,
+  "source_pack_id": "9b6dfb9bff887455f388c20dd8ce963bb363efa7a1a6b3938d47e888524c6f6f",
+  "plan_id": "SYNTHETIC-Intent-QA-20260907",
+  "analysis_hash": "fd7f17ff646faf619ffeb8df826c19f721abd15df42d8c8e523036194c80d537",
+  "checks": [
+    {
+      "method": "POST",
+      "path": "/api/claims/intake/staged-evidence",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/intent/dimensional/plans",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/intent/dimensional/actuals",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/intent/dimensional/catalog",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/intent/dimensional/plans/SYNTHETIC-Intent-QA-20260907/ratifier",
+      "status": 200
+    },
+    {
+      "method": "PUT",
+      "path": "/api/intent/dimensional/plans/SYNTHETIC-Intent-QA-20260907/ratifier",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/intent/dimensional/plans/SYNTHETIC-Intent-QA-20260907/versions/1/ratify",
+      "status": 403
+    },
+    {
+      "method": "POST",
+      "path": "/api/intent/dimensional/plans/SYNTHETIC-Intent-QA-20260907/versions/1/ratify",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/intent/dimensional/analyses",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/intent/dimensional/analyses/fd7f17ff646faf619ffeb8df826c19f721abd15df42d8c8e523036194c80d537",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/intent/dimensional/analyses/fd7f17ff646faf619ffeb8df826c19f721abd15df42d8c8e523036194c80d537/evidence",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/intent/dimensional/catalog",
+      "status": 403
+    },
+    {
+      "method": "GET",
+      "path": "/plan",
+      "status": 200
+    }
+  ],
+  "rollups": [
+    {
+      "metric": "revenue",
+      "unit": "SAR",
+      "target": "200",
+      "actual": "200",
+      "variance": "0",
+      "status": "on_plan",
+      "missing_cells": [],
+      "unplanned_actuals": [],
+      "measured_cells": 2,
+      "planned_cells": 2,
+      "offset_detected": true,
+      "behind_cells": [
+        "regional"
+      ],
+      "ahead_cells": [
+        "institutional"
+      ]
+    }
+  ],
+  "saved_analysis_url": "https://new.strategyos.live/plan?analysis=fd7f17ff646faf619ffeb8df826c19f721abd15df42d8c8e523036194c80d537"
+}

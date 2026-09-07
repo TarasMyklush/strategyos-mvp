@@ -1,5 +1,37 @@
 # Validation record
 
+## Hosted Intent Vault — 7 September 2026
+
+The reused `/plan` Intent Vault is deployed to **https://new.strategyos.live/plan**.
+Application revision `1240f84` passed the complete service gate: **2,322 passed,
+zero skips**, six warnings, 498.37 seconds. The image build and preview deployment
+workflow succeeded. Deployment configuration correction `c8b8715` then propagated
+the public HTTPS URL into the API without changing its image or other settings;
+**103 focused checks passed** for that correction and its affected boundaries.
+
+- The migration job prepared all five Intent tables. The live request database role
+  has SELECT/INSERT only, with tenant RLS; UPDATE/DELETE/TRUNCATE are denied.
+- Hosted acceptance used existing configured tester identities and synthetic data.
+  Thirteen recorded HTTPS session-cookie checks covered import, explicit separate
+  ratification, analysis/readback, evidence bytes and restricted-role denial. Anonymous
+  catalog access was also rejected. Source staging/registration used the existing APIs.
+- The synthetic approved plan shows 200 SAR actual against 200 SAR target, while
+  flagging the regional miss and institutional offset. The saved analysis reopened
+  identically. The test ratification explicitly disclaims business/board authority.
+- Selected-run pointer and previous release-receipt hashes remained identical.
+  The selected executive run remains awaiting review; this release did not approve it.
+  Production API/worker image identities also remained unchanged.
+- The selected run has no approved source-release manifest, so the approved-run
+  attestation helper was not used. The separate runtime receipt records its pending
+  state and actual source snapshot hash without fabricating approval.
+
+Evidence: [release](evidence/intent-vault-release.json),
+[runtime/schema](evidence/intent-vault-runtime.json),
+[hosted acceptance](evidence/intent-vault-hosted-acceptance.json),
+[predeployment identities](evidence/intent-vault-predeploy.json).
+The broader factual QA, real client ratification, Authority Matrix and board composer
+acceptance remain separate open work.
+
 ## Local governed Intent Vault — 7 September 2026
 
 The next local increment adds durable dimensional APIs and repurposes the existing

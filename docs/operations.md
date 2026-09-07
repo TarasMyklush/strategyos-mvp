@@ -131,8 +131,8 @@ For a standalone operator environment with migration-owner authority:
 .venv/bin/python -m strategyos_mvp.dimensional_intent_store --initialize
 ```
 
-This command is idempotent and does not alter existing run or board tables. It has
-not been executed against a business database as part of this implementation.
+This command is idempotent and does not alter existing run or board tables. The hosted preview migration has now been applied; the separate production stack
+was not changed. See the hosted validation receipt.
 The packaged SQL is `strategyos_mvp/sql/dimensional_intent.sql`. New plan versions,
 actual revisions, permission events, ratifications and analyses are append-only;
 triggers reject UPDATE, DELETE and TRUNCATE. Normal database backup/recovery and
