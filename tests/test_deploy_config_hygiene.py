@@ -232,6 +232,11 @@ def test_runtime_image_builds_embed_the_exact_source_revision() -> None:
         )
         assert "STRATEGYOS_RELEASE_SHA=${{ github.sha }}" in workflow
 
+    dockerfile = (REPO_ROOT / "deploy/Dockerfile").read_text(encoding="utf-8")
+    assert dockerfile.index("ARG STRATEGYOS_RELEASE_SHA") > dockerfile.index(
+        'pip install --no-cache-dir ".[search]"'
+    )
+
 
 def test_ci_skips_only_non_runtime_documentation_changes() -> None:
     ci = (REPO_ROOT / ".github/workflows/strategyos-ci.yml").read_text(encoding="utf-8")

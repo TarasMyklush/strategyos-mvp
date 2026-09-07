@@ -1,9 +1,5 @@
 FROM python:3.12-slim
 
-ARG STRATEGYOS_RELEASE_SHA=unrecorded
-ENV STRATEGYOS_RELEASE_SHA=${STRATEGYOS_RELEASE_SHA}
-LABEL org.opencontainers.image.revision=${STRATEGYOS_RELEASE_SHA}
-
 ARG CA_CERTIFICATES_VERSION=20250419
 ARG CURL_VERSION=8.14.1-2+deb13u4
 ARG POPPLER_UTILS_VERSION=25.03.0-5+deb13u4
@@ -41,6 +37,14 @@ RUN pip install --no-cache-dir --upgrade pip \
 RUN useradd --create-home --shell /bin/bash strategyos
 RUN mkdir -p /app/workspace/outputs /app/workspace/source_dataset \
     && chown -R strategyos:strategyos /app
+
+# Release identity changes on every commit. Keep it after dependency and
+# application layers so embedding the exact revision does not invalidate the
+# expensive OS/package cache.
+ARG STRATEGYOS_RELEASE_SHA=unrecorded
+ENV STRATEGYOS_RELEASE_SHA=${STRATEGYOS_RELEASE_SHA}
+LABEL org.opencontainers.image.revision=${STRATEGYOS_RELEASE_SHA}
+
 USER strategyos
 
 EXPOSE 8000
