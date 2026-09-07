@@ -175,3 +175,20 @@ catalog. This increment is deployed to the preview. Visual Authority
 Matrix integration, exact cell-to-source semantic verification, BU-level policy,
 graph projection, retention operations and first-client acceptance remain outstanding.
 G12/G13/G15 remain partial.
+
+**REQ-31 — Evidence-bound board review composer (first deployed increment).**
+Authorized whole-company users can compose a saved dimensional analysis through
+`/plan`, with English, Arabic or bilingual preview and editable PPTX/PDF export.
+Portable validated JSON templates configure client/title, colour and bilingual
+metric/dimension labels without a release; they cannot override figures or sources.
+Exports preserve exact saved values, missing status, aggregate offsets and per-cell
+plan/actual evidence references. Current source export permission and byte integrity
+are rechecked. Newer visible ratified plans or actual snapshots for the reporting
+period produce warnings rather than silent replacement. Downloads are fixed snapshots.
+
+This is a performance-review pack, limited to 200 cells/30 metrics, not a complete
+client board-pack acceptance. Server-side template registry, pack history, flexible
+page layouts, claims/graph narratives and client-approved bilingual terminology
+remain open. The Strategic Advisor console is separate work. See
+[composer contract](board-pack-composer.md), [next increments](kyvern-next-increments-2026-09-07.md)
+and [hosted validation](assessment/validation.md).

@@ -1,0 +1,151 @@
+{
+  "target": "https://new.strategyos.live",
+  "checked_at": "2026-09-07T18:17:22.043064+00:00",
+  "synthetic": true,
+  "analysis_hash": "fd7f17ff646faf619ffeb8df826c19f721abd15df42d8c8e523036194c80d537",
+  "checks": [
+    {
+      "method": "GET",
+      "path": "/api/intent/dimensional/analyses/fd7f17ff646faf619ffeb8df826c19f721abd15df42d8c8e523036194c80d537",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/intent/dimensional/board-pack/template",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/intent/dimensional/analyses/fd7f17ff646faf619ffeb8df826c19f721abd15df42d8c8e523036194c80d537/board-pack",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/intent/dimensional/analyses/fd7f17ff646faf619ffeb8df826c19f721abd15df42d8c8e523036194c80d537/board-pack/pdf",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/intent/dimensional/analyses/fd7f17ff646faf619ffeb8df826c19f721abd15df42d8c8e523036194c80d537/board-pack/pptx",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/intent/dimensional/analyses/fd7f17ff646faf619ffeb8df826c19f721abd15df42d8c8e523036194c80d537/board-pack",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/intent/dimensional/analyses/fd7f17ff646faf619ffeb8df826c19f721abd15df42d8c8e523036194c80d537/board-pack/pdf",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/intent/dimensional/analyses/fd7f17ff646faf619ffeb8df826c19f721abd15df42d8c8e523036194c80d537/board-pack/pptx",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/intent/dimensional/analyses/fd7f17ff646faf619ffeb8df826c19f721abd15df42d8c8e523036194c80d537/board-pack",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/intent/dimensional/analyses/fd7f17ff646faf619ffeb8df826c19f721abd15df42d8c8e523036194c80d537/board-pack/pdf",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/intent/dimensional/analyses/fd7f17ff646faf619ffeb8df826c19f721abd15df42d8c8e523036194c80d537/board-pack/pptx",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/intent/dimensional/analyses/fd7f17ff646faf619ffeb8df826c19f721abd15df42d8c8e523036194c80d537/board-pack",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/intent/dimensional/analyses/fd7f17ff646faf619ffeb8df826c19f721abd15df42d8c8e523036194c80d537/board-pack",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/intent/dimensional/analyses/fd7f17ff646faf619ffeb8df826c19f721abd15df42d8c8e523036194c80d537/board-pack",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/intent/dimensional/analyses/fd7f17ff646faf619ffeb8df826c19f721abd15df42d8c8e523036194c80d537/board-pack",
+      "status": 403
+    },
+    {
+      "method": "POST",
+      "path": "/api/intent/dimensional/analyses/fd7f17ff646faf619ffeb8df826c19f721abd15df42d8c8e523036194c80d537/board-pack",
+      "status": 422
+    },
+    {
+      "method": "GET",
+      "path": "/api/intent/dimensional/analyses/fd7f17ff646faf619ffeb8df826c19f721abd15df42d8c8e523036194c80d537",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/plan",
+      "status": 200
+    }
+  ],
+  "exports": [
+    {
+      "language": "en",
+      "format": "pdf",
+      "bytes": 33022,
+      "sha256": "2f026940fcafa262d831ab6e0285f3600ed44aa3646bd8c8649c25da83c9f5aa",
+      "pack_hash": "7c48bf91b0086be70c6d851452422522aa117766b4cc9e1f86138e05a301080a",
+      "pages": 9
+    },
+    {
+      "language": "en",
+      "format": "pptx",
+      "bytes": 57564,
+      "sha256": "91c2ced6b0fef792fcd3258628377cd5287081fcb36ebb6c9e6c19399dff013e",
+      "pack_hash": "7c48bf91b0086be70c6d851452422522aa117766b4cc9e1f86138e05a301080a",
+      "pages": 9
+    },
+    {
+      "language": "ar",
+      "format": "pdf",
+      "bytes": 39376,
+      "sha256": "beecc6fff3d7e335e110ff31fce9d93d81ded4dee293be60d14f23122f8e0021",
+      "pack_hash": "9b9f9ce76a73c2c213d289d7becd81369ab096bca154385211b91b9985f193e7",
+      "pages": 9
+    },
+    {
+      "language": "ar",
+      "format": "pptx",
+      "bytes": 58106,
+      "sha256": "bd7aa5a855518b0fd9cd233937a89b85fa4e4fef6945d8440bae0b7a81601af1",
+      "pack_hash": "9b9f9ce76a73c2c213d289d7becd81369ab096bca154385211b91b9985f193e7",
+      "pages": 9
+    },
+    {
+      "language": "bilingual",
+      "format": "pdf",
+      "bytes": 40333,
+      "sha256": "09b2a229217fa92a17635b8e99db1ce727ce9ad2ddf9aef6160013c889762df1",
+      "pack_hash": "35cc546a431055ec57a6e4fa120cdeffcff24793f9d3a182a8845b6ec76e6a7e",
+      "pages": 9
+    },
+    {
+      "language": "bilingual",
+      "format": "pptx",
+      "bytes": 58604,
+      "sha256": "a4c29db3adb67c98abdcfc3659de2ee751294899127a8f125d72a55ad31e1a6f",
+      "pack_hash": "35cc546a431055ec57a6e4fa120cdeffcff24793f9d3a182a8845b6ec76e6a7e",
+      "pages": 9
+    }
+  ],
+  "unchanged_analysis": true,
+  "anonymous_denied": true,
+  "cross_origin_denied": true
+}

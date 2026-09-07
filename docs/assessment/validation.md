@@ -1,8 +1,8 @@
 # Validation record
 
-## Board pack composer candidate — 7 September 2026
+## Hosted board pack composer — 7 September 2026
 
-The next additive release connects the saved Intent analysis to an EN/AR preview,
+The deployed additive release connects the saved Intent analysis to an EN/AR preview,
 PPTX and PDF exports, portable JSON client templates, per-cell evidence links and
 freshness warnings. There is no database migration or new connector.
 
@@ -13,7 +13,25 @@ freshness warnings. There is no database migration or new connector.
   revocation, evidence byte changes, input validation and session CSRF.
 - Bilingual PDF and PPTX were generated from synthetic source-bound analysis and
   all nine pages inspected. PPTX was rendered with bundled LibreOffice, not PowerPoint.
-- Hosted deployment and acceptance are pending for this candidate.
+- Full hosted service gate on application `13c6624`: **2,330 passed, zero skips**,
+  six warnings, 473.20 seconds. Image build, rollout, worker health and public HTTPS
+  readiness all passed. Workflow: https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34149926129.
+- Browser proof also exercised both downloads, Arabic preview, client/metric template
+  changes, rejected numeric overrides and template download. See
+  [local acceptance](evidence/board-pack-local-acceptance.json).
+
+- Hosted acceptance passed **18 recorded HTTPS checks**, plus anonymous and
+  cross-origin denial. All six EN/AR/bilingual PDF/PPTX exports opened structurally,
+  carried the saved analysis binding and included protected evidence links. Operator,
+  reviewer and auditor composition succeeded; BU access and numeric template overrides
+  were rejected. The saved analysis remained byte-for-byte equal as parsed JSON.
+- Runtime revision `13c6624da42091a49c1f02b2dd14802ae8cb7089`, image
+  `sha256:410d67f9f25ffcd716e144e16ba0b970d47f9796399e5ca753e0a0f0b172ab72`,
+  is healthy at https://new.strategyos.live/plan. Schema verification passed.
+  Selected run/source/receipt and production image identities were preserved.
+
+Evidence: [hosted acceptance](evidence/board-pack-hosted-acceptance.json),
+[runtime](evidence/board-pack-runtime.json), [before rollout](evidence/board-pack-predeploy.json).
 
 Scope and limitations: [composer contract](../board-pack-composer.md).
 

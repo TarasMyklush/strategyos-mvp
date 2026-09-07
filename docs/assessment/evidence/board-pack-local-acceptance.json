@@ -1,0 +1,30 @@
+{
+  "checked_at": "2026-09-07T18:05:26.754976+00:00",
+  "environment": "isolated socket-only PostgreSQL; local browser proof",
+  "synthetic": true,
+  "application_revision": "13c6624",
+  "checks": [
+    "saved analysis opens composer",
+    "bilingual preview includes exact 200/200 rollup and +60/-60 cells",
+    "PDF download reports success",
+    "PPTX download reports success",
+    "Arabic preview preserves amounts and evidence",
+    "client template changes client and metric labels",
+    "template numeric override rejected and preview cleared",
+    "validated reusable template downloads"
+  ],
+  "artifact_visual_qa": {
+    "formats": [
+      "pdf",
+      "pptx rendered with bundled LibreOffice"
+    ],
+    "pages_per_format": 9,
+    "font_fallback_corrected": true,
+    "mixed_direction_dates_and_signs_corrected": true
+  },
+  "not_claimed": [
+    "PowerPoint application verification",
+    "real client bilingual acceptance",
+    "hosted browser authentication"
+  ]
+}

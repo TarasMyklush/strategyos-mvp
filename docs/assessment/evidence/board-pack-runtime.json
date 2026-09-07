@@ -1,0 +1,97 @@
+{
+  "at": "2026-09-07T18:17:36.041330+00:00",
+  "target": "https://new.strategyos.live",
+  "containers": {
+    "strategyos-branch-strategyos-api-1": {
+      "image": "sha256:410d67f9f25ffcd716e144e16ba0b970d47f9796399e5ca753e0a0f0b172ab72",
+      "revision": "13c6624da42091a49c1f02b2dd14802ae8cb7089",
+      "state": "running",
+      "health": "healthy"
+    },
+    "strategyos-branch-strategyos-worker-1": {
+      "image": "sha256:410d67f9f25ffcd716e144e16ba0b970d47f9796399e5ca753e0a0f0b172ab72",
+      "revision": "13c6624da42091a49c1f02b2dd14802ae8cb7089",
+      "state": "running",
+      "health": null
+    },
+    "strategyos-strategyos-api-1": {
+      "image": "sha256:10602d23bafd6034d48ef3aff06cd7e5a7a37379f9361aef402283193875c483",
+      "revision": "4d58f6d7936952ff35431b304cd8bde9bc108e6a",
+      "state": "running",
+      "health": "healthy"
+    },
+    "strategyos-strategyos-worker-1": {
+      "image": "sha256:10602d23bafd6034d48ef3aff06cd7e5a7a37379f9361aef402283193875c483",
+      "revision": "4d58f6d7936952ff35431b304cd8bde9bc108e6a",
+      "state": "running",
+      "health": null
+    }
+  },
+  "public_origin": "https://new.strategyos.live/",
+  "workspace_hashes": {
+    "outputs/latest_run_pointer.json": "e934112cf7f0cc2eea3f485821e881453b2480defc7f8e1dabd7148e6f62b6d1",
+    ".strategyos_mvp_data/releases/current.json": "1f8b85b8a7dc8b41e3b87d33eefbeca8c97acd88605950779f738f62b0ff1c46"
+  },
+  "selected_run": {
+    "run_id": "5359b38c-7121-4aaa-a728-31a5dcd1fdab",
+    "status": "awaiting_review",
+    "approval_status": "pending"
+  },
+  "selected_source_snapshot": {
+    "file_count": 132,
+    "sha256": "7f4fc074c3b30931bb3c262e1123aa05a7d955078aa842acf6eee97d72697933",
+    "business_approval": "pending; unchanged by Intent acceptance"
+  },
+  "database": {
+    "verified": true,
+    "schema_fingerprint": "291a5081783eab4f159082216ff2aa4df3056aaad0b9d89420251692fa8f00b7",
+    "runtime_role": "strategyos_preview_runtime",
+    "tables": [
+      {
+        "name": "strategyos_intent_actual_versions",
+        "rls": true,
+        "select": true,
+        "insert": true,
+        "update": false,
+        "delete": false,
+        "truncate": false
+      },
+      {
+        "name": "strategyos_intent_analyses",
+        "rls": true,
+        "select": true,
+        "insert": true,
+        "update": false,
+        "delete": false,
+        "truncate": false
+      },
+      {
+        "name": "strategyos_intent_plan_versions",
+        "rls": true,
+        "select": true,
+        "insert": true,
+        "update": false,
+        "delete": false,
+        "truncate": false
+      },
+      {
+        "name": "strategyos_intent_ratifications",
+        "rls": true,
+        "select": true,
+        "insert": true,
+        "update": false,
+        "delete": false,
+        "truncate": false
+      },
+      {
+        "name": "strategyos_intent_ratifier_events",
+        "rls": true,
+        "select": true,
+        "insert": true,
+        "update": false,
+        "delete": false,
+        "truncate": false
+      }
+    ]
+  }
+}
