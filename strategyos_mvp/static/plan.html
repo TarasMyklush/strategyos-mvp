@@ -901,6 +901,52 @@ button:disabled { opacity: .5; cursor: not-allowed; }
     </form>
     </details>
   </div>
+  <div id="advisor-console" class="vault-panel">
+    <div class="section-head"><div><div class="section-eyebrow">Client setup</div><h2>Strategic Advisor console</h2></div><button id="advisor-refresh" class="secondary" type="button">Refresh configurations</button></div>
+    <p>Configure one approved objective, its historical allocation, accountabilities and bilingual board labels. Source bindings come from governed records and cannot be edited here.</p>
+    <div class="vault-controls">
+      <label class="vault-field">Saved configuration<select id="advisor-select"><option value="">Choose a configuration</option></select></label>
+      <button id="advisor-load-saved" class="secondary" type="button">Open</button>
+    </div>
+    <p id="advisor-source-binding" class="vault-note">Select a ratified plan above to begin a client setup.</p>
+    <form id="advisor-form" hidden>
+      <div class="vault-controls">
+        <label class="vault-field">Configuration ID<input id="advisor-id" required maxlength="160" pattern="[A-Za-z0-9][A-Za-z0-9_.-]*"></label>
+        <label class="vault-field">Version<input id="advisor-version" type="number" min="1" value="1" required></label>
+        <label class="vault-field">Executive sponsor<input id="advisor-sponsor" required maxlength="160"></label>
+      </div>
+      <label class="vault-field" style="margin-top:16px">Objective<textarea id="advisor-objective" minlength="20" maxlength="1000" rows="3" required></textarea></label>
+      <div class="vault-controls" style="margin-top:16px">
+        <label class="vault-field">Parent cell<select id="advisor-cell" required></select></label>
+        <label class="vault-field">Split dimension<select id="advisor-dimension" required></select></label>
+        <label class="vault-field">Prior actual snapshot<select id="advisor-actual" required><option value="">Choose prior actuals</option></select></label>
+        <label class="vault-field">Decimal places<input id="advisor-precision" type="number" min="0" max="12" value="2" required></label>
+      </div>
+      <h3 style="margin-top:24px">Board identity and labels</h3>
+      <div class="vault-controls">
+        <label class="vault-field">Client · English<input id="advisor-client-en" required maxlength="100"></label>
+        <label class="vault-field">Client · العربية<input id="advisor-client-ar" required maxlength="100" dir="rtl"></label>
+        <label class="vault-field">Board title · English<input id="advisor-title-en" required maxlength="100"></label>
+        <label class="vault-field">عنوان المجلس · العربية<input id="advisor-title-ar" required maxlength="100" dir="rtl"></label>
+        <label class="vault-field">Metric label · English<input id="advisor-metric-en" required maxlength="100"></label>
+        <label class="vault-field">المقياس · العربية<input id="advisor-metric-ar" required maxlength="100" dir="rtl"></label>
+        <label class="vault-field">Dimension label · English<input id="advisor-dimension-en" required maxlength="100"></label>
+        <label class="vault-field">البعد · العربية<input id="advisor-dimension-ar" required maxlength="100" dir="rtl"></label>
+      </div>
+      <div class="vault-actions"><button id="advisor-map" type="button" class="secondary">Load source-bound mappings</button></div>
+      <div id="advisor-readiness" class="vault-note" role="status" aria-live="polite">Mappings have not been checked.</div>
+      <div id="advisor-allocations" class="vault-table" hidden tabindex="0" role="region" aria-label="Advisor allocation mappings"></div>
+      <button id="advisor-save" type="submit" hidden>Save ready configuration</button>
+    </form>
+    <div id="advisor-review" hidden>
+      <h3 id="advisor-review-title">Configuration review</h3>
+      <div id="advisor-review-metadata" class="vault-metadata"></div>
+      <div id="advisor-checks"></div>
+      <div id="advisor-review-allocations" class="vault-table"></div>
+      <form id="advisor-approve-form" hidden><label class="vault-field">Independent review note<textarea id="advisor-review-note" required minlength="20" maxlength="2000" rows="3"></textarea></label><button type="submit">Approve configuration</button></form>
+      <div class="vault-actions"><button id="advisor-publish" type="button" hidden>Publish plan proposal</button><button id="advisor-use-template" type="button" class="secondary" hidden>Use approved board labels</button></div>
+    </div>
+  </div>
   <div id="drift-panel" class="vault-panel" hidden>
     <h2>Compare with actuals</h2>
     <p class="vault-note">Only a ratified version can be compared. The dates and units must match; missing actuals remain visible.</p>
@@ -951,5 +997,6 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 <footer class="footer container"><p>Kyvern · Intent, accountability and evidence</p></footer>
 <script src="/static/board_pack.js" defer></script>
 <script src="/static/intent_vault.js" defer></script>
+<script src="/static/advisor_console.js" defer></script>
 </body>
 </html>

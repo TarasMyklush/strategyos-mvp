@@ -67,6 +67,7 @@
   }
   function resetSelection() {
     state.record = null; state.grant = null; resetHistory();
+    window.dispatchEvent(new CustomEvent('kyvern-plan', { detail: null }));
     window.dispatchEvent(new CustomEvent('kyvern-analysis', { detail: null }));
     ['selected-plan', 'ratifier-panel', 'decomposition-panel', 'decomposition-lineage', 'drift-panel', 'analysis-panel', 'grant-form', 'ratify-form'].forEach(function (id) { show(id, false); });
     ['plan-cells', 'decomposition-allocations', 'analysis-cells', 'analysis-rollups', 'analysis-findings', 'plan-metadata'].forEach(function (id) { $(id).replaceChildren(); });
@@ -91,6 +92,7 @@
     state.plans = merge(append ? state.plans : [], data.plans, function (p) { return p.plan_id + ':' + p.version; });
     state.actuals = merge(append ? state.actuals : [], data.actuals, function (a) { return a.revision; });
     state.permissions = data.permissions; state.next = data.next_offset;
+    window.dispatchEvent(new CustomEvent('kyvern-catalog', { detail: { actuals: state.actuals, permissions: state.permissions } }));
     if (!$('as-of').value) $('as-of').value = data.today;
     $('as-of').max = data.today;
     options(); show('vault-content', true); show('vault-login', false); show('import-panel', data.permissions.can_import);
@@ -101,6 +103,7 @@
     var choice = state.plans.find(function (p) { return p.plan_id + ':' + p.version === $('plan-select').value; });
     if (!choice) return;
     state.record = await request('/plans/' + encodeURIComponent(choice.plan_id) + '/versions/' + choice.version);
+    window.dispatchEvent(new CustomEvent('kyvern-plan', { detail: state.record }));
     var record = state.record, plan = record.payload;
     $('plan-title').textContent = record.plan_id + ' · Version ' + record.version;
     $('plan-metadata').replaceChildren(node('p', label(record.governance_status)), node('p', plan.period.start + ' to ' + plan.period.end), node('p', 'Imported by ' + record.imported_by));

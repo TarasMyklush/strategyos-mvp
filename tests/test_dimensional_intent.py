@@ -22,6 +22,8 @@ from strategyos_mvp import dimensional_intent_store as store
 from strategyos_mvp.dimensional_intent_api import router
 from strategyos_mvp.dimensional_plan import Actuals, Plan
 from strategyos_mvp.plan_decomposition import DecompositionRequest, HistoricalDecompositionRequest
+from strategyos_mvp.advisor_config import AdvisorConfiguration
+from strategyos_mvp import advisor_config_store
 
 FIXTURE = Path(__file__).parent / 'fixtures' / 'dimensional_plan'
 TODAY = datetime.now(timezone.utc).date()
@@ -782,3 +784,90 @@ def test_history_decomposition_blocks_missing_history_and_stale_parent(setup):
     with pytest.raises(store.Conflict, match='newer ratified'):
         store.create_history_decomposition(s['operator'], s['p']['plan_id'], 1,
                                            HistoricalDecompositionRequest.model_validate(history_body(s, parent['digest'])))
+
+
+def advisor_body(s, digest):
+    return {
+        'schema_version': 1, 'config_id': 'synthetic-client-setup', 'version': 1,
+        'executive_sponsor': 'Chief Executive',
+        'objective': 'Expose client-level revenue drift against the plan approved by the board.',
+        'plan_id': s['p']['plan_id'], 'plan_version': 1, 'plan_digest': digest,
+        'parent_cell_id': 'regional', 'split_dimension': 'client',
+        'historical_actual_revision': 'history-prior', 'decimal_places': 2,
+        'client': {'en': 'Synthetic Healthcare', 'ar': 'الرعاية الصحية التجريبية'},
+        'board_title': {'en': 'Revenue performance review', 'ar': 'مراجعة أداء الإيرادات'},
+        'metric_label': {'en': 'Revenue', 'ar': 'الإيرادات'},
+        'dimension_label': {'en': 'Client', 'ar': 'العميل'},
+        'allocations': [
+            {'cell_id': 'regional-hospital', 'member': 'hospital', 'owner': 'Hospital lead',
+             'tolerance': '2', 'adjustment_percent': '50',
+             'label': {'en': 'Hospital', 'ar': 'مستشفى'}},
+            {'cell_id': 'regional-pharmacy', 'member': 'pharmacy', 'owner': 'Pharmacy lead',
+             'tolerance': '2', 'adjustment_percent': '0',
+             'label': {'en': 'Pharmacy', 'ar': 'صيدلية'}},
+        ],
+    }
+
+
+def test_advisor_configuration_is_versioned_approved_and_published_without_source_override(setup):
+    s = setup
+    parent = import_pair(s)
+    approve(s, parent)
+    import_history(s)
+    body = advisor_body(s, parent['digest'])
+    configured = advisor_config_store.create(s['operator'], AdvisorConfiguration.model_validate(body))
+    assert configured['readiness']['status'] == 'ready'
+    assert all(configured['readiness']['checks'].values())
+    assert configured['source_bindings']['plan']['source_pack_id'] == s['pack']
+    assert configured['approval'] is None
+    with pytest.raises(PermissionError):
+        advisor_config_store.approve(s['operator'], body['config_id'], 1, configured['digest'],
+                                     'Reviewed the complete client configuration and mappings.')
+    approval = advisor_config_store.approve(s['executive'], body['config_id'], 1, configured['digest'],
+                                            'Reviewed the complete client configuration and bilingual mappings.')
+    assert approval['config_digest'] == configured['digest']
+    template = advisor_config_store.template(s['executive'], body['config_id'], 1)
+    assert template['client']['ar'] == body['client']['ar']
+    assert template['labels']['hospital']['en'] == 'Hospital'
+    publication = advisor_config_store.publish(s['operator'], body['config_id'], 1, configured['digest'])
+    assert publication['plan_version'] == 2
+    assert advisor_config_store.publish(s['operator'], body['config_id'], 1, configured['digest']) == publication
+    proposal = store.read_plan(s['executive'], s['p']['plan_id'], 2)
+    assert proposal['payload']['derivation']['engine_version'] == 'history-adjusted-allocation.v1'
+    assert advisor_config_store.catalog(s['executive'])['configurations'][0]['approved'] is True
+    assert advisor_config_store.catalog(s['executive'])['configurations'][0]['published'] is True
+    with s['connect']() as conn:
+        for table in ['strategyos_intent_advisor_configs', 'strategyos_intent_advisor_approvals',
+                      'strategyos_intent_advisor_publications']:
+            with pytest.raises(psycopg.Error, match='immutable'):
+                conn.execute(sql.SQL('UPDATE {} SET tenant_key=tenant_key').format(sql.Identifier(table)))
+            conn.rollback()
+
+
+def test_advisor_configuration_api_roles_and_complete_mapping(setup):
+    s = setup
+    parent = import_pair(s)
+    approve(s, parent)
+    import_history(s)
+    body = advisor_body(s, parent['digest'])
+    body['allocations'][1]['member'] = 'member-without-history'
+    response = s['client'].post('/api/intent/dimensional/advisor/configurations', json=body)
+    assert response.status_code == 422
+    assert 'incomplete' in response.json()['detail']
+    body = advisor_body(s, parent['digest'])
+    spoof = deepcopy(body)
+    spoof['source_pack_id'] = 'caller-selected-pack'
+    assert s['client'].post('/api/intent/dimensional/advisor/configurations', json=spoof).status_code == 422
+    configured = s['client'].post('/api/intent/dimensional/advisor/configurations', json=body)
+    assert configured.status_code == 200, configured.text
+    record = configured.json()
+    s['current']['principal'] = s['executive']
+    prefix = '/api/intent/dimensional/advisor/configurations/synthetic-client-setup/versions/1'
+    assert s['client'].post('/api/intent/dimensional/advisor/configurations', json=body).status_code == 403
+    approved = s['client'].post(prefix + '/approve', json={
+        'expected_digest': record['digest'], 'note': 'Reviewed all guided fields and source-bound mappings independently.'})
+    assert approved.status_code == 200, approved.text
+    assert s['client'].get(prefix + '/board-template').status_code == 200
+    assert s['client'].post(prefix + '/publish', json={'expected_digest': record['digest']}).status_code == 403
+    s['current']['principal'] = s['operator']
+    assert s['client'].post(prefix + '/publish', json={'expected_digest': record['digest']}).status_code == 200

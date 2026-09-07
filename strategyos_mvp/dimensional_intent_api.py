@@ -12,6 +12,8 @@ import os
 from .auth import require_role
 from .dimensional_plan import Actuals, Contract, Name, Plan
 from .plan_decomposition import DecompositionRequest, HistoricalDecompositionRequest
+from .advisor_config import AdvisorConfiguration
+from . import advisor_config_store as advisor_store
 from . import dimensional_intent_store as store
 from .dimensional_intent_sources import SourceUnavailable
 
@@ -74,6 +76,10 @@ class Ratification(Contract):
     note: str = Field(min_length=20, max_length=2000)
 
 
+class AdvisorPublication(Contract):
+    expected_digest: Digest
+
+
 class AnalysisRequest(Contract):
     plan_id: Key
     plan_version: Version
@@ -126,6 +132,41 @@ def decompose_plan_from_history(plan_id: str, version: Annotated[int, Path(ge=1)
                                 body: HistoricalDecompositionRequest,
                                 principal: dict[str, Any] = require_role('operator')):
     return perform(lambda: store.create_history_decomposition(principal, plan_id, version, body))
+
+
+@router.post('/advisor/configurations')
+def create_advisor_configuration(body: AdvisorConfiguration,
+                                 principal: dict[str, Any] = require_role('operator')):
+    return perform(lambda: advisor_store.create(principal, body))
+
+
+@router.get('/advisor/configurations')
+def advisor_configurations(principal: dict[str, Any] = require_role('operator', 'reviewer', 'executive')):
+    return perform(lambda: advisor_store.catalog(principal))
+
+
+@router.get('/advisor/configurations/{config_id}/versions/{version}')
+def read_advisor_configuration(config_id: str, version: Annotated[int, Path(ge=1)],
+                               principal: dict[str, Any] = require_role('operator', 'reviewer', 'executive')):
+    return perform(lambda: advisor_store.read(principal, config_id, version))
+
+
+@router.post('/advisor/configurations/{config_id}/versions/{version}/approve')
+def approve_advisor_configuration(config_id: str, version: Annotated[int, Path(ge=1)], body: Ratification,
+                                  principal: dict[str, Any] = require_role('reviewer', 'executive')):
+    return perform(lambda: advisor_store.approve(principal, config_id, version, body.expected_digest, body.note))
+
+
+@router.post('/advisor/configurations/{config_id}/versions/{version}/publish')
+def publish_advisor_configuration(config_id: str, version: Annotated[int, Path(ge=1)], body: AdvisorPublication,
+                                  principal: dict[str, Any] = require_role('operator')):
+    return perform(lambda: advisor_store.publish(principal, config_id, version, body.expected_digest))
+
+
+@router.get('/advisor/configurations/{config_id}/versions/{version}/board-template')
+def advisor_board_template(config_id: str, version: Annotated[int, Path(ge=1)],
+                           principal: dict[str, Any] = require_role('operator', 'reviewer', 'executive')):
+    return perform(lambda: advisor_store.template(principal, config_id, version))
 
 
 @router.put('/plans/{plan_id}/ratifier')
