@@ -200,6 +200,115 @@ def derive_source_finance_kpis(dataset_root: Path) -> dict[str, Any]:
     }
 
 
+def _group_flash_results(root: Path) -> dict[str, Any] | None:
+    """Return one complete, reconciled group H1 flash table.
+
+    Flash results are preliminary actuals, not estimates and not approved final
+    accounts.  They can resolve an ``Actual/Est`` revenue column only when the
+    table is structurally explicit, contains BU, eliminations and group rows,
+    and independently reconciles actual and budget totals.  Ambiguous or
+    duplicate candidates fail closed.
+    """
+
+    required = {
+        "businessunit",
+        "q2revenuesarm",
+        "q2budget",
+        "h1revenue",
+        "h1budget",
+        "h1var",
+        "h1ebitda",
+        "ebitdabudget",
+        "flashcommentary",
+    }
+    candidates: list[dict[str, Any]] = []
+    for path in sorted(root.rglob("*.xlsx")):
+        try:
+            book = load_workbook(path, data_only=True, read_only=True)
+        except Exception:
+            continue
+        for sheet in book.worksheets:
+            iterator = sheet.iter_rows(values_only=True)
+            header_row = next(iterator, None)
+            headers = _header_positions(header_row or ())
+            if not required.issubset(headers):
+                continue
+            units: list[dict[str, Any]] = []
+            eliminations: dict[str, Any] | None = None
+            group: dict[str, Any] | None = None
+            seen: set[str] = set()
+            valid = True
+            for excel_row, values in enumerate(iterator, start=2):
+                name = str(_cell(values, headers, "businessunit") or "").strip()
+                if not name:
+                    continue
+                normalized_name = _normal(name)
+                if normalized_name in seen:
+                    valid = False
+                    break
+                seen.add(normalized_name)
+                actual = _decimal(_cell(values, headers, "h1revenue"))
+                plan = _decimal(_cell(values, headers, "h1budget"))
+                q2_actual = _decimal(_cell(values, headers, "q2revenuesarm"))
+                q2_plan = _decimal(_cell(values, headers, "q2budget"))
+                if None in {actual, plan, q2_actual, q2_plan}:
+                    valid = False
+                    break
+                row = {
+                    "name": name,
+                    "actual": actual,
+                    "plan": plan,
+                    "variance": actual - plan,
+                    "q2_actual": q2_actual,
+                    "q2_plan": q2_plan,
+                    "source_locator": f"{sheet.title}!Excel row {excel_row}",
+                    "note": str(_cell(values, headers, "flashcommentary") or "").strip(),
+                }
+                if normalized_name.startswith("group"):
+                    group = row
+                elif normalized_name == "eliminations":
+                    eliminations = row
+                else:
+                    units.append(row)
+            if not valid or not units or group is None or eliminations is None:
+                continue
+            actual_sum = sum((row["actual"] for row in units), Decimal()) + eliminations["actual"]
+            plan_sum = sum((row["plan"] for row in units), Decimal()) + eliminations["plan"]
+            q2_actual_sum = sum((row["q2_actual"] for row in units), Decimal()) + eliminations["q2_actual"]
+            q2_plan_sum = sum((row["q2_plan"] for row in units), Decimal()) + eliminations["q2_plan"]
+            if any(
+                value != expected
+                for value, expected in (
+                    (actual_sum, group["actual"]),
+                    (plan_sum, group["plan"]),
+                    (q2_actual_sum, group["q2_actual"]),
+                    (q2_plan_sum, group["q2_plan"]),
+                )
+            ):
+                continue
+            candidates.append(
+                {
+                    "source_file": _relative(path, root),
+                    "sha256": _sha256(path),
+                    "sheet": sheet.title,
+                    "units": units,
+                    "eliminations": eliminations,
+                    "group": group,
+                    "reconciliation": {
+                        "status": "passed",
+                        "actual_difference_sar_m": _number(actual_sum - group["actual"]),
+                        "plan_difference_sar_m": _number(plan_sum - group["plan"]),
+                        "q2_actual_difference_sar_m": _number(q2_actual_sum - group["q2_actual"]),
+                        "q2_plan_difference_sar_m": _number(q2_plan_sum - group["q2_plan"]),
+                        "business_unit_count": len(units),
+                        "includes_eliminations": True,
+                    },
+                }
+            )
+        book.close()
+    return candidates[0] if len(candidates) == 1 else None
+
+
 def _group_finance_projection(root: Path) -> dict[str, Any] | None:
     """Derive CEO KPI cards from the supplied group P&L, budget and analytics.
 
@@ -222,6 +331,14 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
         return None
     if len(rows) < 2:
         return None
+
+    # The legacy planning workbook deliberately labels group revenue as
+    # ``Actual/Est``.  A separate, reconciled flash-results table may resolve
+    # that one semantic ambiguity when it carries an explicit H1 result and a
+    # like-for-like H1 budget.  The resolver is schema driven and refuses
+    # duplicate or unreconciled candidates; it never changes an estimated
+    # EBITDA margin into an actual.
+    flash = _group_flash_results(root)
 
     headers = _header_positions(rows[0])
     revenue_column = "h1actualsarm" if "h1actualsarm" in headers else "h1actualestsarm"
@@ -271,8 +388,27 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
     # Workbook financial amounts are SAR millions.  Convert only at the
     # calculation boundary so the API remains consistently in SAR.
     million = Decimal("1000000")
-    revenue_actual = (group_total["actual"] if group_total else sum((row["actual"] for row in units), Decimal())) * million
-    revenue_plan = (group_total["plan"] if group_total else sum((row["plan"] for row in units), Decimal())) * million
+    budget_revenue_actual = group_total["actual"] if group_total else sum((row["actual"] for row in units), Decimal())
+    budget_revenue_plan = group_total["plan"] if group_total else sum((row["plan"] for row in units), Decimal())
+    budget_plan_by_unit = {_normal(row["name"]): row["plan"] for row in units}
+    flash_plan_by_unit = (
+        {_normal(row["name"]): row["plan"] for row in flash["units"]}
+        if flash
+        else {}
+    )
+    # Matching a group total is not enough: an unrelated business-unit table
+    # can coincidentally have the same total.  Require the complete unit scope
+    # and every unit's like-for-like H1 budget to align before the preliminary
+    # flash may resolve the planning workbook's mixed Actual/Est column.
+    flash_is_aligned = bool(
+        flash
+        and flash["group"]["plan"] == budget_revenue_plan
+        and flash_plan_by_unit == budget_plan_by_unit
+    )
+    revenue_actual = (
+        flash["group"]["actual"] if flash_is_aligned else budget_revenue_actual
+    ) * million
+    revenue_plan = budget_revenue_plan * million
     ebitda_actual = (group_total["actual_ebitda"] if group_total else sum((row["actual_ebitda"] for row in units), Decimal())) * million
     ebitda_plan = (group_total["plan_ebitda"] if group_total else sum((row["plan_ebitda"] for row in units), Decimal())) * million
     operating_cost_actual = revenue_actual - ebitda_actual
@@ -345,6 +481,7 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
     movers = _group_movers(units)
     movers["cash_vs_floor"] = _group_cash_floor_movers(budget_book)
     budget_file = _relative(budget_path, root)
+    flash_file = str(flash["source_file"]) if flash_is_aligned else None
     if trend.get("revenue", {}).get("actual") and analytics_path is not None:
         trend["revenue"]["actual_source_file"] = _relative(analytics_path, root)
     if trend.get("cash_vs_floor", {}).get("actual"):
@@ -352,10 +489,18 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
         trend["cash_vs_floor"]["plan_source_file"] = budget_file
     budget_sha = _sha256(budget_path)
     period = "H1 2026"
-    revenue_contributors = _group_contributor_rows(
-        units,
-        actual_value=lambda row: row["actual"],
-        plan_value=lambda row: row["plan"],
+    revenue_contributors = (
+        _group_contributor_rows(
+            list(flash["units"]),
+            actual_value=lambda row: row["actual"],
+            plan_value=lambda row: row["plan"],
+        )
+        if flash_is_aligned
+        else _group_contributor_rows(
+            units,
+            actual_value=lambda row: row["actual"],
+            plan_value=lambda row: row["plan"],
+        )
     )
     operating_cost_contributors = _group_contributor_rows(
         units,
@@ -371,8 +516,27 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
     evidence = {
         "revenue": {
             **evidence_base,
-            "details": {**evidence_base["details"], "contributors": {"revenue": revenue_contributors}},
-            "summary": f"H1 actual and plan aggregated across {len(units)} business units from the approved group budget.",
+            "files": [flash_file, budget_file] if flash_file else [budget_file],
+            "details": {
+                **evidence_base["details"],
+                **(
+                    {
+                        "file": flash_file,
+                        "sha256": flash["sha256"],
+                        "sheet": flash["sheet"],
+                        "measurement_status": "preliminary_actual",
+                        "reconciliation": flash["reconciliation"],
+                    }
+                    if flash_file
+                    else {}
+                ),
+                "contributors": {"revenue": revenue_contributors},
+            },
+            "summary": (
+                f"H1 preliminary actual and budget reconcile across {len(flash['units'])} business units plus eliminations."
+                if flash_file
+                else f"H1 actual and plan aggregated across {len(units)} business units from the approved group budget."
+            ),
         },
         "ebitda_margin": {
             **evidence_base,
@@ -387,6 +551,7 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
             "files": sorted(
                 {
                     *evidence_base["files"],
+                    *([flash_file] if flash_file else []),
                     *([cost_components["source_file"]] if cost_components else []),
                 }
             ),
@@ -402,7 +567,11 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
                     }
                 ),
             },
-            "summary": "Total cost to EBITDA is revenue less the stated business-unit EBITDA, not a proxy for a separately supplied opex ledger.",
+            "summary": (
+                "Total cost to EBITDA is the reconciled preliminary H1 revenue result less the explicitly supplied H1 EBITDA amount."
+                if flash_file
+                else "Total cost to EBITDA is revenue less the stated business-unit EBITDA, not a proxy for a separately supplied opex ledger."
+            ),
         },
         "cash_vs_floor": cash["evidence"],
     }
@@ -411,7 +580,12 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
         "derived_from": "deterministic_source_finance_kpi_engine",
         "reporting_period_key": period,
         "reporting_currency": "SAR",
-        "computation_boundary": "Group headlines use BU_Group_Budget_2026 H1 values. The revenue trend is separately labelled Tamween division steering data. No unprovided group cost allocation is inferred.",
+        "computation_boundary": (
+            "Group revenue actual comes from the reconciled H1 flash result; plan and explicit EBITDA amounts come from the aligned group budget. "
+            "The revenue trend is separately labelled Tamween division steering data. No unprovided group cost allocation is inferred."
+            if flash_file
+            else "Group headlines use BU_Group_Budget_2026 H1 values. The revenue trend is separately labelled Tamween division steering data. No unprovided group cost allocation is inferred."
+        ),
         "components": {
             "revenue_actual": _number(revenue_actual), "revenue_plan": _number(revenue_plan),
             "ebitda_actual": _number(ebitda_actual), "ebitda_plan": _number(ebitda_plan),
@@ -422,12 +596,12 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
         "dynamics": movers,
         "actual_complete": {"revenue": True, "ebitda_margin": True, "operating_cost": True, "cash_vs_floor": cash["complete"]},
         "evidence": evidence,
-        "source_files": sorted({*([budget_file]), *trend.get("source_files", []), *cash["evidence"].get("files", [])}),
+        "source_files": sorted({*([budget_file]), *([flash_file] if flash_file else []), *trend.get("source_files", []), *cash["evidence"].get("files", [])}),
     }
     # Numeric reconciliation cannot resolve a mixed Actual/Est column. Keep
     # its value for governed quarantine, never as an actual display component.
     ambiguous: dict[str, str] = {}
-    if revenue_column != "h1actualsarm":
+    if revenue_column != "h1actualsarm" and not flash_is_aligned:
         ambiguous["revenue_actual"] = "Revenue column is labelled Actual/Est without an explicit actual boundary."
     if margin_column != "ebitdah1actual" and (
         "ebitdah1actualsarm" not in headers

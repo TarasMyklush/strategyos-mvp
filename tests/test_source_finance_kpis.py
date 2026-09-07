@@ -490,3 +490,165 @@ def test_mixed_actual_estimate_is_quarantined_without_division_fallback(tmp_path
         assert result["ambiguous_components"][key]["reason"]
     assert not any(result["actual_complete"].values())
     assert result["dynamics"]["revenue"]["lifting"] == []
+
+
+def test_reconciled_flash_resolves_revenue_without_laundering_mixed_budget(tmp_path):
+    from openpyxl import Workbook
+
+    budget = Workbook()
+    budget_sheet = budget.active
+    budget_sheet.title = "BU_Budget_2026"
+    budget_sheet.append(
+        [
+            "Business Unit",
+            "H1 Budget",
+            "H1 Actual/Est (SAR M)",
+            "H1 Var",
+            "EBITDA Budget %",
+            "EBITDA H1 Est %",
+            "EBITDA H1 Budget (SAR M)",
+            "EBITDA H1 Actual (SAR M)",
+        ]
+    )
+    budget_sheet.append(["North", 100, 105, 5, 10, 12, 10.04, 12.56])
+    budget_sheet.append(["Eliminations", 0, 0, 0, None, None, 0, 0])
+    budget_sheet.append(["GROUP", 100, 105, 5, 10, 12, 10.04, 12.56])
+    budget.save(tmp_path / "BU_Group_Budget_2026.xlsx")
+
+    flash = Workbook()
+    flash_sheet = flash.active
+    flash_sheet.title = "Q2_Flash"
+    flash_sheet.append(
+        [
+            "Business Unit",
+            "Q2 Revenue (SAR M)",
+            "Q2 Budget",
+            "H1 Revenue",
+            "H1 Budget",
+            "H1 Var",
+            "H1 EBITDA %",
+            "EBITDA % Budget",
+            "Flash commentary",
+        ]
+    )
+    flash_sheet.append(["North", 55, 52, 105, 100, 5, 12, 10, "Preliminary close"])
+    flash_sheet.append(["Eliminations", 0, 0, 0, 0, 0, None, None, None])
+    flash_sheet.append(["GROUP (bottom-up)", 55, 52, 105, 100, 5, 12, 10, "Reconciled"])
+    flash.save(tmp_path / "Q2_2026_Group_Flash_Results.xlsx")
+
+    result = derive_source_finance_kpis(tmp_path)
+
+    assert result["components"]["revenue_actual"] == "105000000.00"
+    assert result["components"]["revenue_plan"] == "100000000.00"
+    assert result["components"]["ebitda_actual"] == "12560000.00"
+    assert result["components"]["operating_cost_actual"] == "92440000.00"
+    assert "revenue_actual" not in result["ambiguous_components"]
+    assert "operating_cost_actual" not in result["ambiguous_components"]
+    assert result["actual_complete"]["revenue"] is True
+    assert result["actual_complete"]["ebitda_margin"] is True
+    assert result["actual_complete"]["operating_cost"] is True
+    assert result["evidence"]["revenue"]["details"]["measurement_status"] == "preliminary_actual"
+    assert result["evidence"]["revenue"]["details"]["reconciliation"]["status"] == "passed"
+
+
+def test_unreconciled_flash_cannot_resolve_mixed_actual_estimate(tmp_path):
+    from openpyxl import Workbook
+
+    budget = Workbook()
+    budget_sheet = budget.active
+    budget_sheet.title = "BU_Budget_2026"
+    budget_sheet.append(
+        [
+            "Business Unit",
+            "H1 Budget",
+            "H1 Actual/Est (SAR M)",
+            "H1 Var",
+            "EBITDA Budget %",
+            "EBITDA H1 Est %",
+            "EBITDA H1 Budget (SAR M)",
+            "EBITDA H1 Actual (SAR M)",
+        ]
+    )
+    budget_sheet.append(["North", 100, 105, 5, 10, 12, 10, 12])
+    budget.save(tmp_path / "BU_Group_Budget_2026.xlsx")
+
+    flash = Workbook()
+    flash_sheet = flash.active
+    flash_sheet.title = "Q2_Flash"
+    flash_sheet.append(
+        [
+            "Business Unit",
+            "Q2 Revenue (SAR M)",
+            "Q2 Budget",
+            "H1 Revenue",
+            "H1 Budget",
+            "H1 Var",
+            "H1 EBITDA %",
+            "EBITDA % Budget",
+            "Flash commentary",
+        ]
+    )
+    flash_sheet.append(["North", 55, 52, 105, 100, 5, 12, 10, "Preliminary close"])
+    flash_sheet.append(["Eliminations", 0, 0, 0, 0, 0, None, None, None])
+    flash_sheet.append(["GROUP", 56, 52, 106, 100, 6, 12, 10, "Does not reconcile"])
+    flash.save(tmp_path / "Q2_2026_Group_Flash_Results.xlsx")
+
+    result = derive_source_finance_kpis(tmp_path)
+
+    assert result["components"]["revenue_actual"] is None
+    assert result["components"]["operating_cost_actual"] is None
+    assert result["ambiguous_components"]["revenue_actual"]["reason"]
+
+
+def test_flash_with_same_group_plan_but_different_unit_scope_fails_closed(tmp_path):
+    from openpyxl import Workbook
+
+    budget = Workbook()
+    sheet = budget.active
+    sheet.title = "BU_Budget_2026"
+    sheet.append(
+        [
+            "Business Unit",
+            "H1 Budget",
+            "H1 Actual/Est (SAR M)",
+            "H1 Var",
+            "EBITDA Budget %",
+            "EBITDA H1 Est %",
+            "EBITDA H1 Budget (SAR M)",
+            "EBITDA H1 Actual (SAR M)",
+        ]
+    )
+    sheet.append(["North", 60, 63, 3, 10, 12, 6, 7.56])
+    sheet.append(["South", 40, 42, 2, 10, 12, 4, 5.04])
+    sheet.append(["GROUP", 100, 105, 5, 10, 12, 10, 12.6])
+    budget.save(tmp_path / "BU_Group_Budget_2026.xlsx")
+
+    flash = Workbook()
+    sheet = flash.active
+    sheet.title = "Q2_Flash"
+    sheet.append(
+        [
+            "Business Unit",
+            "Q2 Revenue (SAR M)",
+            "Q2 Budget",
+            "H1 Revenue",
+            "H1 Budget",
+            "H1 Var",
+            "H1 EBITDA %",
+            "EBITDA % Budget",
+            "Flash commentary",
+        ]
+    )
+    # The group total reconciles, but the BU plans are swapped.  That is not a
+    # like-for-like scope and therefore cannot resolve the mixed source.
+    sheet.append(["North", 34, 22, 63, 40, 23, 12, 10, "Wrong BU scope"])
+    sheet.append(["South", 21, 30, 42, 60, -18, 12, 10, "Wrong BU scope"])
+    sheet.append(["Eliminations", 0, 0, 0, 0, 0, None, None, None])
+    sheet.append(["GROUP", 55, 52, 105, 100, 5, 12, 10, "Totals match only"])
+    flash.save(tmp_path / "Q2_2026_Group_Flash_Results.xlsx")
+
+    result = derive_source_finance_kpis(tmp_path)
+
+    assert result["components"]["revenue_actual"] is None
+    assert result["components"]["operating_cost_actual"] is None
+    assert result["ambiguous_components"]["revenue_actual"]["reason"]

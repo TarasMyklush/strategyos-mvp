@@ -57,7 +57,7 @@ def test_legion_enrichment_contract_is_data_derived() -> None:
     assert "capabilities" in payload["executive_policy"]
 
 
-def test_revenue_plan_health_keeps_plan_but_does_not_restore_ambiguous_actual() -> None:
+def test_reconciled_flash_supplies_revenue_actual_and_aligned_plan_health() -> None:
     finance = derive_source_finance_kpis(DATASET)
     payload = derive_strategy_enrichment(DATASET, finance_kpi=finance)
     revenue = next(
@@ -66,13 +66,16 @@ def test_revenue_plan_health_keeps_plan_but_does_not_restore_ambiguous_actual() 
         if item["kpi_id"] == "KPI-01"
     )
 
-    assert revenue["actual"] is None
+    assert revenue["actual"] == 4006.0
     assert revenue["checkpoint"] == 3904.0
-    assert revenue["score"] is None
-    assert revenue["measurement_status"] == "missing"
+    assert revenue["score"] == 102.6
+    assert revenue["measurement_status"] == "live"
     assert revenue["comparator_evidence"]["files"] == [
+        "19_Document_Vault/Q2_2026_Group_Flash_Results.xlsx",
         "15_Budgets_Forecasts/BU_Group_Budget_2026.xlsx"
     ]
+    assert revenue["comparator_evidence"]["details"]["measurement_status"] == "preliminary_actual"
+    assert revenue["comparator_evidence"]["details"]["reconciliation"]["status"] == "passed"
 
 
 def test_explicit_governed_revenue_retains_the_bound_comparator():
