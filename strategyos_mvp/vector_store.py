@@ -7,6 +7,7 @@ import math
 import random
 import re
 import socket
+import threading
 import time
 import uuid
 from dataclasses import dataclass
@@ -44,8 +45,9 @@ INDEXED_FILTER_FIELDS = (
     "source_path",
     "source_hash",
 )
-QDRANT_MAX_ATTEMPTS = 4
+QDRANT_MAX_ATTEMPTS = 7
 QDRANT_RETRY_BASE_SECONDS = 0.25
+QDRANT_RETRY_MAX_SECONDS = 4.0
 QDRANT_RETRYABLE_HTTP_CODES = frozenset({408, 425, 429, 500, 502, 503, 504})
 QDRANT_RETRYABLE_EXCEPTIONS = (
     error.URLError,
@@ -54,6 +56,8 @@ QDRANT_RETRYABLE_EXCEPTIONS = (
     TimeoutError,
     socket.timeout,
 )
+_CLAIM_PROJECTION_INITIALIZED_URLS: set[str] = set()
+_CLAIM_PROJECTION_INITIALIZATION_LOCK = threading.Lock()
 
 
 def project_claim_record(record: Mapping[str, Any], operation: str) -> None:
@@ -119,28 +123,37 @@ def project_claim_record(record: Mapping[str, Any], operation: str) -> None:
 
 
 def _ensure_claim_projection_collection() -> None:
-    _ensure_collection(CLAIM_PROJECTION_COLLECTION)
-    for field_name in (
-        "tenant_id",
-        "claim_revision_id",
-        "family_key",
-        "point_type",
-        "metric_key",
-        "claim_kind",
-        "business_unit",
-        "source_keys",
-        "origin_categories",
-    ):
-        try:
-            _qdrant_request(
-                "PUT",
-                f"/collections/{CLAIM_PROJECTION_COLLECTION}/index",
-                {"field_name": field_name, "field_schema": "keyword"},
-            )
-        except Exception:
-            # Index creation is idempotent and older Qdrant editions can report
-            # an already-present index differently. Point upsert remains safe.
-            continue
+    cache_key = str(CONFIG.qdrant_url or "").rstrip("/")
+    if cache_key in _CLAIM_PROJECTION_INITIALIZED_URLS:
+        return
+    with _CLAIM_PROJECTION_INITIALIZATION_LOCK:
+        if cache_key in _CLAIM_PROJECTION_INITIALIZED_URLS:
+            return
+        _ensure_collection(CLAIM_PROJECTION_COLLECTION)
+        for field_name in (
+            "tenant_id",
+            "claim_revision_id",
+            "family_key",
+            "point_type",
+            "metric_key",
+            "claim_kind",
+            "business_unit",
+            "source_keys",
+            "origin_categories",
+        ):
+            try:
+                _qdrant_request(
+                    "PUT",
+                    f"/collections/{CLAIM_PROJECTION_COLLECTION}/index",
+                    {"field_name": field_name, "field_schema": "keyword"},
+                )
+            except RuntimeError as exc:
+                # Index creation is idempotent. Tolerate only an explicit
+                # duplicate-index response; transport and server failures must
+                # leave initialization incomplete so the outbox can retry.
+                if "already" not in str(exc).lower():
+                    raise
+        _CLAIM_PROJECTION_INITIALIZED_URLS.add(cache_key)
 
 
 @dataclass(frozen=True)
@@ -1032,7 +1045,10 @@ def _qdrant_request(
                 ) from exc
         except Exception as exc:
             raise RuntimeError(f"Qdrant request failed for {path}: {exc}") from exc
-        delay = QDRANT_RETRY_BASE_SECONDS * (2 ** (attempt - 1))
+        delay = min(
+            QDRANT_RETRY_MAX_SECONDS,
+            QDRANT_RETRY_BASE_SECONDS * (2 ** (attempt - 1)),
+        )
         time.sleep(delay + random.uniform(0.0, delay * 0.2))
     if not text:
         return {}

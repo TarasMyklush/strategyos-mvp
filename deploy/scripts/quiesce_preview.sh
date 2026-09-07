@@ -36,7 +36,7 @@ if (( ${#postgres_ids[@]} == 1 )); then
   project=$(docker inspect --format '{{index .Config.Labels "com.docker.compose.project"}}' "$postgres_id")
   actual_service=$(docker inspect --format '{{index .Config.Labels "com.docker.compose.service"}}' "$postgres_id")
   [[ "$project" == strategyos-branch && "$actual_service" == postgres ]] || { echo "Preview PostgreSQL ownership mismatch; refusing recovery." >&2; exit 1; }
-  docker exec "$postgres_id" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'"'"'SQL'"'"'
+  docker exec -i "$postgres_id" sh -lc 'exec psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
 update strategyos_run_jobs
 set status = 'cancelled',
     failure_reason = 'Guarded preview shutdown interrupted this queued or running job.',
@@ -44,7 +44,7 @@ set status = 'cancelled',
     finished_at = coalesce(finished_at, now()),
     updated_at = now()
 where status in ('queued', 'running');
-SQL'
+SQL
 fi
 echo "Preview application quiesced. Database, evidence, audit history, indexes and backups retained."
 echo "Recovery requires a verified roll-forward release; no older read path was automatically enabled."

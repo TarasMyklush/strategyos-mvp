@@ -32,6 +32,7 @@ def _configure(monkeypatch) -> list[float]:
     )
     monkeypatch.setattr(vector_store.random, "uniform", lambda _start, _end: 0.0)
     monkeypatch.setattr(vector_store.time, "sleep", delays.append)
+    monkeypatch.setattr(vector_store, "QDRANT_MAX_ATTEMPTS", 4)
     return delays
 
 
@@ -120,3 +121,48 @@ def test_qdrant_request_retries_retryable_http_status(monkeypatch):
         "result": {"status": "ok"}
     }
     assert delays == [0.25, 0.5]
+
+
+def test_claim_projection_collection_is_initialized_once_per_process(monkeypatch):
+    _configure(monkeypatch)
+    vector_store._CLAIM_PROJECTION_INITIALIZED_URLS.clear()
+    calls = []
+    monkeypatch.setattr(
+        vector_store,
+        "_ensure_collection",
+        lambda collection: calls.append(("collection", collection)),
+    )
+    monkeypatch.setattr(
+        vector_store,
+        "_qdrant_request",
+        lambda method, path, payload=None: calls.append((method, path, payload)) or {},
+    )
+
+    vector_store._ensure_claim_projection_collection()
+    vector_store._ensure_claim_projection_collection()
+
+    assert [call for call in calls if call[0] == "collection"] == [
+        ("collection", vector_store.CLAIM_PROJECTION_COLLECTION)
+    ]
+    assert len([call for call in calls if call[0] == "PUT"]) == 9
+
+
+def test_claim_projection_initialization_failure_is_not_cached(monkeypatch):
+    _configure(monkeypatch)
+    vector_store._CLAIM_PROJECTION_INITIALIZED_URLS.clear()
+    attempts = []
+    monkeypatch.setattr(vector_store, "_ensure_collection", lambda _collection: None)
+
+    def unavailable(_method, _path, _payload=None):
+        attempts.append(True)
+        raise RuntimeError("Qdrant request failed: service restarting")
+
+    monkeypatch.setattr(vector_store, "_qdrant_request", unavailable)
+
+    with pytest.raises(RuntimeError, match="service restarting"):
+        vector_store._ensure_claim_projection_collection()
+    with pytest.raises(RuntimeError, match="service restarting"):
+        vector_store._ensure_claim_projection_collection()
+
+    assert len(attempts) == 2
+    assert not vector_store._CLAIM_PROJECTION_INITIALIZED_URLS
