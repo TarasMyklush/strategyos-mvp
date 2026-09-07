@@ -1,0 +1,22 @@
+{
+  "target": "https://new.strategyos.live",
+  "checked_at": "2026-09-07T20:21:11.751341+00:00",
+  "synthetic": true,
+  "config_id": "synthetic-healthcare-advisor-20260907",
+  "config_digest": "1c277d935654cc409d58f55b40c202a478880cfd9dfe13072637bfd0a86e833a",
+  "readiness": {
+    "status": "ready",
+    "checks": {"latest_ratified_plan": true, "authorized_plan_source": true, "completed_historical_snapshot": true, "complete_member_mapping": true, "owners_and_tolerances": true, "bilingual_board_labels": true}
+  },
+  "approval": {"approved_by": "https://new.strategyos.live/:executive.tester", "separate_from_creator": true},
+  "publication": {
+    "plan_id": "SYNTHETIC-Advisor-QA-20260907",
+    "plan_version": 2,
+    "plan_digest": "f3a75f37b10fa5e15adb402661334f99ad67d2ed419ce260f8846ba5bd3495a4",
+    "published_by": "https://new.strategyos.live/:operator.tester"
+  },
+  "analysis_hash": "1c0c76d86417cd7c9425329824d6b9bbb04bb6cff47afab5346b567c42acc7b3",
+  "board_pack_hash": "e00f57278d9f57a84366d1637b86cda13acbe93071a970807e9a3cb33164b407",
+  "acceptance": {"recorded_https_checks": 23, "caller_source_override_rejected": true, "creator_approval_rejected": true, "executive_publication_rejected": true, "restricted_bu_rejected": true, "anonymous_rejected": true, "untranslated_board_terms": 0},
+  "business_approval": "synthetic acceptance only; no client or board ratification"
+}

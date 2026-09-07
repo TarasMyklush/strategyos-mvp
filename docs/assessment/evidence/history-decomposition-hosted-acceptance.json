@@ -1,0 +1,23 @@
+{
+  "target": "https://new.strategyos.live",
+  "checked_at": "2026-09-07T19:49:37.946193+00:00",
+  "application_revision": "fc91beaec8fd1a7468c43b1254ad948a89c5009e",
+  "workflow": "https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34155924796",
+  "service_gate": {"passed": 2348, "skipped": 0, "warnings": 6, "seconds": 474.88},
+  "synthetic": true,
+  "plan_id": "SYNTHETIC-History-QA-20260907B",
+  "parent_digest": "c41c36172988b789bc79e64007c623ab7150faec3ca3ae7967dedea65eeaf550",
+  "history_digest": "c54f264270935cc63c57486b80f0afe5a3140d04ab7c17733fea4aca15c53c8f",
+  "proposal_digest": "0931756ab87f7cdde0c52161bdf28e8392896625ff2c76d3dad7b2faf5ff3629",
+  "analysis_hash": "e1008499852b5a488124f659f089f699ffcfa2d6efa3b8cdcedd9413b3b34319",
+  "board_pack_hash": "42e5a89e54ea347427f0d138b93756fbf2c07411961c0b43d36988bb557d0dce",
+  "allocation": {
+    "history": {"nupco": "40", "retail": "60"},
+    "adjustment_percent": {"nupco": "50", "retail": "0"},
+    "effective_weight": {"nupco": "60.0", "retail": "60"},
+    "target": {"institutional": "100", "regional-nupco": "50.00", "regional-retail": "50.00"}
+  },
+  "rollup": {"target": "200", "actual": "200", "variance": "0", "status": "on_plan", "offset_detected": true, "behind_cells": ["regional-retail"], "ahead_cells": ["regional-nupco"]},
+  "acceptance": {"recorded_https_checks": 18, "missing_history_rejected": true, "operator_ratification_rejected": true, "restricted_bu_rejected": true, "anonymous_rejected": true},
+  "business_approval": "synthetic acceptance only; no client or board ratification"
+}

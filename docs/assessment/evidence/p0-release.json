@@ -1,0 +1,13 @@
+{
+  "workflow": "https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34157845211",
+  "application_revision": "bbeaa174f6b8bf48cff682d7a11b821ff68c5b01",
+  "image": "sha256:0257e661d42a04dc8794d52bab35c3caa567e0a8c5cc715d5f25cb0b130a3a1f",
+  "service_gate": {"passed": 2350, "skipped": 0, "warnings": 6, "seconds": 526.28},
+  "build": "passed",
+  "database_backup": "passed",
+  "migration": "passed",
+  "rollout": "passed",
+  "worker_health": "passed",
+  "protected_readiness": "passed",
+  "public_https": "passed"
+}

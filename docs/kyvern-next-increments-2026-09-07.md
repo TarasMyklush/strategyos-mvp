@@ -4,8 +4,8 @@
 
 | Priority | Deliverable | Definition of done | Dependency |
 | --- | --- | --- | --- |
-| P0 | History-derived decomposition | One selected prior snapshot produces disclosed weights; adjustments bridge from history to proposal; missing values never become zero | Current explicit-weight decomposition |
-| P0 | Guided Strategic Advisor console | A strategy advisor configures sources, dimensions, owners, tolerances and board labels without JSON or an engineering ticket; readiness and approval are visible | Existing source governance and Intent Vault |
+| Closed P0 | History-derived decomposition | Deployed: one selected prior snapshot produces disclosed weights; adjustments bridge from history to proposal; missing values never become zero | Hosted acceptance recorded |
+| Closed P0 | Guided Strategic Advisor console | Deployed: a strategy advisor configures governed source bindings, dimensions, owners, tolerances and complete bilingual board labels without JSON or an engineering ticket; readiness, approval and publication are visible | Hosted acceptance recorded |
 | P1 | Board template registry and pack history | Tenant template versions and generated pack records are durable, permissioned, downloadable and stale-aware | Deployed composer |
 | P1 | Healthcare/pharma demo pack | Three synthetic stories run from governed evidence through cell drift and board pack, with sector details confined to configuration | History-derived decomposition for the mix story |
 | P1 | Price/volume/mix bridge | Exact, unit-safe bridge reconciles price, volume and mix effects to the observed variance | Explicit price and volume source fields |
@@ -17,10 +17,10 @@ as soon as its dependency is available; the HTML demonstration remains the fallb
 
 ## 1. Plan decomposition: engine proposes, Vault records
 
-Status: the first explicit-weight slice is implemented and locally verified. It
-creates a new immutable plan proposal from the latest ratified parent, preserves
-the approved total exactly, records parent/engine/weight/evidence lineage, exposes
-the result on `/plan`, reuses independent ratification and blocks ratification if
+Status: explicit and history-derived slices are implemented and hosted. They
+create a new immutable plan proposal from the latest ratified parent, preserve
+the approved total exactly, record parent/engine/weight/evidence lineage, expose
+the result on `/plan`, reuse independent ratification and block ratification if
 the parent becomes stale. The proposal can then accept matching actuals, produce
 granular drift and feed the board composer.
 
@@ -32,16 +32,13 @@ carries its owner, target, tolerance, evidence and allocation method.
 
 Remaining decomposition backlog, in order:
 
-1. Add history-derived weights from one explicitly selected prior actual snapshot,
-   plus seasonality and operator adjustments as separate inputs. Show the bridge
-   from historical mix to proposed weight; never infer a weight from a missing value.
-2. Replace allocation-row JSON with guided editable rows, source selection and
-   completeness checks in the Strategic Advisor console.
-3. Add whole-objective and multi-level decomposition across product, region,
+1. Add seasonality as a separate governed input from the already disclosed
+   historical mix and explicit adjustment bridge.
+2. Add whole-objective and multi-level decomposition across product, region,
    channel and client, with bounded proposal size and an approval view that groups
    the resulting cells without hiding any row.
-4. Add concurrency pressure, historical-unit mismatch, absent-history and large
-   realistic dataset acceptance, followed by client terminology review.
+3. Add large realistic dataset acceptance and client terminology review; concurrency,
+   historical-unit mismatch and absent-history cases are already automated.
 
 Acceptance: the sum of approved children equals the approved parent; every child
 explains its derivation; a changed parent makes a pending proposal stale; neither
@@ -50,9 +47,12 @@ input, not authorization to change board intent.
 
 ## 2. Strategic Advisor configuration console
 
-Extend the existing source intake, configuration and governance controls into one
-guided client setup flow. Start with durable configuration versions, not a second
-set of business calculations.
+The first guided client setup is implemented on `/plan`. It stores immutable
+configuration versions, derives plan and historical source bindings from authorized
+records, shows readiness, requires a separate plan-authorized reviewer, records a
+publication receipt and creates a history-derived plan proposal. Its approved
+English/Arabic labels load directly into the board composer. It does not contain
+source-policy controls.
 
 1. Capture company scope, executive sponsor, reporting period, source inventory,
    objectives and accountabilities using existing authorized records.

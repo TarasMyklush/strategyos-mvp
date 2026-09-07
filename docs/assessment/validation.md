@@ -1,5 +1,39 @@
 # Validation record
 
+## Closed P0 direction increments — 7–8 September 2026
+
+Both P0s from the 7 September direction are deployed at
+**https://new.strategyos.live/plan**. Revision `bbeaa17` is running from immutable
+image `sha256:0257e661d42a04dc8794d52bab35c3caa567e0a8c5cc715d5f25cb0b130a3a1f`.
+The final release gate passed **2,350 tests, zero skips**, six warnings in 526.28
+seconds; guarded database backup, additive migration, image rollout, worker health,
+protected readiness and public HTTPS checks passed.
+
+- History-derived decomposition selects an explicit completed snapshot, exposes
+  historical values, percentage adjustments and effective weights, preserves the
+  ratified parent total exactly and records both plan and history evidence. Hosted
+  acceptance rejected a missing member and operator ratification, then carried the
+  ratified detail through actuals, offset detection and a bilingual board pack.
+- The guided Strategic Advisor console stores immutable client configuration
+  versions over server-derived plan/history source bindings. Readiness covers the
+  latest ratified plan, source authorization, completed history, complete members,
+  owners/tolerances and every English/Arabic term used in the board pack. Separate
+  reviewer approval and operator publication are durable events. The published
+  plan still required its own independent ratification.
+- Advisor hosted acceptance recorded 23 authenticated HTTPS checks plus anonymous
+  denial. Caller-selected source packs, creator approval, executive publication and
+  restricted-BU access were rejected. The approved labels fed a granular saved
+  analysis and bilingual board pack with zero untranslated business terms.
+- All eight Intent/Advisor tables have tenant RLS. The request role has SELECT and
+  INSERT only; UPDATE, DELETE and TRUNCATE are denied. The selected executive run,
+  source snapshot, release receipt and production image remained unchanged.
+
+Evidence: [history acceptance](evidence/history-decomposition-hosted-acceptance.json),
+[Advisor acceptance](evidence/advisor-console-hosted-acceptance.json),
+[runtime/schema](evidence/p0-runtime.json), and [release](evidence/p0-release.json).
+The remaining ordered P1/P2 work is in the
+[prioritized backlog](../kyvern-next-increments-2026-09-07.md).
+
 ## Hosted plan decomposition — 7 September 2026
 
 The deployed additive release puts deterministic allocation in the engine and stores

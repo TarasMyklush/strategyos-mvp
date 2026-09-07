@@ -205,6 +205,28 @@ proposal. Generic imports cannot claim engine-generated lineage.
 The proposal uses the existing independent ratification workflow. A changed parent
 fingerprint, revoked or changed evidence, unratified/non-latest parent and a newer
 ratified plan all fail closed. Once ratified, matching granular actuals can produce
-the existing drift analysis and board pack. This first slice accepts evidence-backed
-explicit weights. Automatic historical mix, seasonality, multi-level decomposition,
-guided non-JSON allocation rows and client acceptance remain backlog work.
+the existing drift analysis and board pack. This requirement covers the explicit
+weight slice; REQ-33 adds historical mix and guided rows. Seasonality, multi-level
+decomposition and real-client acceptance remain backlog work.
+
+**REQ-33 — History-derived decomposition and Strategic Advisor configuration.**
+An authorized operator can select one completed actual snapshot before the plan
+period and use its exact matching dimensional observations as disclosed allocation
+weights. Missing or nonpositive history, unit mismatch, duplicate members and
+same/future-period snapshots fail closed. Each guided row records the historical
+value, explicit percentage adjustment, resulting positive weight, owner, tolerance,
+historical evidence reference and approved target source. Children reconcile to
+the parent exactly and remain proposals requiring independent plan ratification.
+Both source packs and the historical snapshot digest are rechecked on reads and
+ratification.
+
+The Strategic Advisor console stores immutable, consecutive client configuration
+versions over existing authorized plan and actual records. It captures an executive
+sponsor, objective, cell/dimension mapping, owners, tolerances, adjustments and
+English/Arabic client, board, metric, dimension and member labels through guided
+fields. It derives source bindings server-side; caller-selected pack or access-policy
+fields are rejected. Readiness exposes the latest ratified plan, source authorization,
+completed history, full member mapping, accountability and bilingual-label checks.
+A separate plan-authorized reviewer approves the configuration. An operator may
+then publish it once to an immutable receipt and generated plan proposal. Approved
+labels produce a validated board template without changing figures or evidence.

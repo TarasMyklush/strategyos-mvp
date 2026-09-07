@@ -870,6 +870,11 @@ def test_advisor_configuration_api_roles_and_complete_mapping(setup):
     spoof = deepcopy(body)
     spoof['source_pack_id'] = 'caller-selected-pack'
     assert s['client'].post('/api/intent/dimensional/advisor/configurations', json=spoof).status_code == 422
+    incomplete_labels = deepcopy(body)
+    incomplete_labels['additional_labels'].pop('region')
+    missing_label = s['client'].post('/api/intent/dimensional/advisor/configurations', json=incomplete_labels)
+    assert missing_label.status_code == 422
+    assert 'Bilingual board labels are incomplete' in missing_label.json()['detail']
     configured = s['client'].post('/api/intent/dimensional/advisor/configurations', json=body)
     assert configured.status_code == 200, configured.text
     record = configured.json()

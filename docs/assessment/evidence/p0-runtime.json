@@ -1,0 +1,21 @@
+{
+  "target": "https://new.strategyos.live/plan",
+  "checked_at": "2026-09-07T20:21:24.123184+00:00",
+  "application_revision": "bbeaa174f6b8bf48cff682d7a11b821ff68c5b01",
+  "image": "sha256:0257e661d42a04dc8794d52bab35c3caa567e0a8c5cc715d5f25cb0b130a3a1f",
+  "state": "running",
+  "health": "healthy",
+  "public_origin": "https://new.strategyos.live/",
+  "database_schema_verified": true,
+  "database_schema_fingerprint": "6aef29ead39e15bf7e788448ef7f3bae5347fd0dbe6a02f31c0f628afeec5820",
+  "runtime_role": "strategyos_preview_runtime",
+  "intent_table_count": 8,
+  "intent_table_permissions": {"row_level_security": true, "select": true, "insert": true, "update": false, "delete": false, "truncate": false},
+  "selected_run": {"run_id": "5359b38c-7121-4aaa-a728-31a5dcd1fdab", "status": "awaiting_review", "approval_status": "pending"},
+  "selected_run_pointer_sha256": "e934112cf7f0cc2eea3f485821e881453b2480defc7f8e1dabd7148e6f62b6d1",
+  "release_receipt_sha256": "1f8b85b8a7dc8b41e3b87d33eefbeca8c97acd88605950779f738f62b0ff1c46",
+  "selected_source_snapshot_sha256": "7f4fc074c3b30931bb3c262e1123aa05a7d955078aa842acf6eee97d72697933",
+  "production_revision": "4d58f6d7936952ff35431b304cd8bde9bc108e6a",
+  "production_image": "sha256:10602d23bafd6034d48ef3aff06cd7e5a7a37379f9361aef402283193875c483",
+  "identity_comparison": "selected pointer, release receipt, selected source snapshot and production images unchanged"
+}
