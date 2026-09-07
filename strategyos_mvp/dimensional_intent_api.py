@@ -11,6 +11,7 @@ import os
 
 from .auth import require_role
 from .dimensional_plan import Actuals, Contract, Name, Plan
+from .plan_decomposition import DecompositionRequest
 from . import dimensional_intent_store as store
 from .dimensional_intent_sources import SourceUnavailable
 
@@ -104,6 +105,12 @@ def import_plan(body: PlanImport, principal: dict[str, Any] = require_role('oper
 def read_plan(plan_id: str, version: Annotated[int, Path(ge=1)],
               principal: dict[str, Any] = require_role('operator', 'reviewer', 'executive')):
     return perform(lambda: store.read_plan(principal, plan_id, version))
+
+
+@router.post('/plans/{plan_id}/versions/{version}/decompose')
+def decompose_plan(plan_id: str, version: Annotated[int, Path(ge=1)], body: DecompositionRequest,
+                   principal: dict[str, Any] = require_role('operator')):
+    return perform(lambda: store.create_decomposition(principal, plan_id, version, body))
 
 
 @router.put('/plans/{plan_id}/ratifier')

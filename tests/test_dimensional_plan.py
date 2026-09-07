@@ -8,7 +8,8 @@ import sys
 
 import pytest
 
-from strategyos_mvp.dimensional_plan import Actuals, Plan, evaluate
+from strategyos_mvp.dimensional_plan import Actuals, Plan, evaluate, fingerprint
+from strategyos_mvp.plan_decomposition import DecompositionRequest, decompose
 
 FIXTURE = Path(__file__).parent / 'fixtures' / 'dimensional_plan'
 
@@ -182,3 +183,71 @@ def test_absent_actual_and_negative_values(bundle):
     row = next(c for c in run(bundle)['cells'] if c['cell_id'] == 'institutional')
     assert row['variance'] == '-110'
     assert row['status'] == 'behind'
+
+
+def decomposition_request(plan, **changes):
+    source = deepcopy(plan['cells'][0]['source'])
+    payload = {
+        'parent_digest': fingerprint(Plan.model_validate(plan).model_dump(mode='json')),
+        'parent_cell_id': 'regional',
+        'split_dimension': 'client',
+        'decimal_places': 2,
+        'allocations': [
+            {'cell_id': 'regional-hospital', 'member': 'hospital', 'weight': '1',
+             'owner': 'hospital-owner', 'tolerance': '1', 'basis': source},
+            {'cell_id': 'regional-pharmacy', 'member': 'pharmacy', 'weight': '2',
+             'owner': 'pharmacy-owner', 'tolerance': '1', 'basis': source},
+        ],
+    }
+    payload.update(changes)
+    return DecompositionRequest.model_validate(payload)
+
+
+def test_decomposition_reconciles_exactly_and_records_lineage(bundle):
+    plan = Plan.model_validate(bundle[0])
+    proposal = decompose(plan, decomposition_request(bundle[0]), next_version=2)
+    children = {cell.id: str(cell.target) for cell in proposal.cells}
+    assert children['regional-hospital'] == '33.33'
+    assert children['regional-pharmacy'] == '66.67'
+    assert sum(cell.target for cell in proposal.cells) == plan.metrics['revenue'].planned_total
+    assert proposal.derivation.parent_version == 1
+    assert proposal.derivation.remainder_rule == 'final_lexicographic_cell'
+    assert proposal.derivation.allocations[0].owner == 'hospital-owner'
+    assert proposal.derivation.request_hash
+    # Identical input is deterministic regardless of request allocation order.
+    reversed_request = decomposition_request(bundle[0])
+    reversed_request.allocations.reverse()
+    assert decompose(plan, reversed_request, next_version=2) == proposal
+
+
+@pytest.mark.parametrize('change,match', [
+    ({'parent_cell_id': 'missing'}, 'Parent cell'),
+    ({'split_dimension': 'unknown'}, 'split dimension'),
+])
+def test_decomposition_rejects_invalid_scope_or_precision(bundle, change, match):
+    request = decomposition_request(bundle[0], **change)
+    with pytest.raises(ValueError, match=match):
+        decompose(Plan.model_validate(bundle[0]), request, next_version=2)
+
+
+def test_decomposition_rejects_precision_that_cannot_hold_parent(bundle):
+    bundle[0]['cells'][0]['target'] = '100.5'
+    bundle[0]['cells'][1]['target'] = '99.5'
+    request = decomposition_request(bundle[0], decimal_places=0)
+    with pytest.raises(ValueError, match='more decimal places'):
+        decompose(Plan.model_validate(bundle[0]), request, next_version=2)
+
+
+def test_decomposition_rejects_duplicate_outputs(bundle):
+    request = decomposition_request(bundle[0]).model_dump(mode='json')
+    request['allocations'][1]['cell_id'] = request['allocations'][0]['cell_id']
+    with pytest.raises(ValueError, match='unique'):
+        DecompositionRequest.model_validate(request)
+
+
+def test_decomposition_lineage_cannot_disagree_with_result_cells(bundle):
+    proposal = decompose(Plan.model_validate(bundle[0]), decomposition_request(bundle[0]), next_version=2)
+    payload = proposal.model_dump(mode='json')
+    next(cell for cell in payload['cells'] if cell['id'] == 'regional-hospital')['owner'] = 'other-owner'
+    with pytest.raises(ValueError, match='differs'):
+        Plan.model_validate(payload)

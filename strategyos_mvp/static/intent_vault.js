@@ -11,6 +11,18 @@
   function label(status) { return ({ on_plan: 'On plan', ahead: 'Ahead', behind: 'Behind', incomplete: 'Incomplete', missing: 'Missing', proposed: 'Proposed', ratified: 'Ratified' })[status] || status; }
   function dimensions(value) { return Object.keys(value).sort().map(function (k) { return k + ': ' + value[k]; }).join(' · '); }
   function planPath() { return '/plans/' + encodeURIComponent(state.record.plan_id) + '/versions/' + state.record.version; }
+  function safeId(value) { return String(value).toLowerCase().replace(/[^a-z0-9_.-]+/g, '-').replace(/^-|-$/g, '').slice(0, 120) || 'cell'; }
+  function seedDecomposition() {
+    if (!state.record) return;
+    var cell = state.record.payload.cells.find(function (item) { return item.id === $('decomposition-cell').value; });
+    var dimension = $('decomposition-dimension').value;
+    if (!cell || !dimension) return;
+    var original = cell.dimensions[dimension], prefix = safeId(cell.id);
+    $('decomposition-rows').value = JSON.stringify([
+      { cell_id: prefix + '-' + safeId(original), member: original, weight: '1', owner: cell.owner, tolerance: String(cell.tolerance), basis: cell.source },
+      { cell_id: prefix + '-new-member', member: original + '-new', weight: '1', owner: cell.owner, tolerance: String(cell.tolerance), basis: cell.source }
+    ], null, 2);
+  }
   function table(target, headings, rows) {
     var t = node('table'), h = node('thead'), tr = node('tr'), b = node('tbody');
     headings.forEach(function (heading) { var th = node('th', heading); th.scope = 'col'; tr.appendChild(th); });
@@ -49,8 +61,8 @@
   function resetSelection() {
     state.record = null; state.grant = null;
     window.dispatchEvent(new CustomEvent('kyvern-analysis', { detail: null }));
-    ['selected-plan', 'ratifier-panel', 'drift-panel', 'analysis-panel', 'grant-form', 'ratify-form'].forEach(function (id) { show(id, false); });
-    ['plan-cells', 'analysis-cells', 'analysis-rollups', 'analysis-findings', 'plan-metadata'].forEach(function (id) { $(id).replaceChildren(); });
+    ['selected-plan', 'ratifier-panel', 'decomposition-panel', 'decomposition-lineage', 'drift-panel', 'analysis-panel', 'grant-form', 'ratify-form'].forEach(function (id) { show(id, false); });
+    ['plan-cells', 'decomposition-allocations', 'analysis-cells', 'analysis-rollups', 'analysis-findings', 'plan-metadata'].forEach(function (id) { $(id).replaceChildren(); });
     $('reviewed').checked = false; $('review-note').value = ''; $('grant-status').textContent = '';
   }
   function options() {
@@ -87,7 +99,21 @@
       return [c.id + ' · ' + dimensions(c.dimensions), c.metric, c.owner, c.target + ' ' + plan.metrics[c.metric].unit, c.tolerance,
               link(c.source.locator, planPath() + '/evidence?cell_id=' + encodeURIComponent(c.id))];
     }));
+    if (plan.derivation) {
+      var d = plan.derivation;
+      $('decomposition-summary').textContent = 'Created from ' + d.parent_plan_id + ' v' + d.parent_version + ', cell ' + d.parent_cell_id + ', split by ' + d.split_dimension + '. Engine ' + d.engine_version + '; remainder: ' + d.remainder_rule + '. Parent fingerprint: ' + d.parent_digest + '.';
+      table('decomposition-allocations', ['Result cell', 'Member', 'Weight', 'Owner / tolerance', 'Evidence'], d.allocations.map(function (a) {
+        return [a.cell_id, a.member, a.weight, a.owner + ' / ' + a.tolerance, a.basis.locator + ' · SHA-256 ' + a.basis.sha256];
+      }));
+      show('decomposition-lineage', true);
+    }
+    $('decomposition-cell').replaceChildren();
+    plan.cells.forEach(function (c) { $('decomposition-cell').add(new Option(c.id + ' · ' + c.metric + ' · ' + c.target, c.id)); });
+    $('decomposition-dimension').replaceChildren();
+    Object.keys(plan.dimensions).sort().forEach(function (d) { $('decomposition-dimension').add(new Option(d, d)); });
+    seedDecomposition();
     show('selected-plan', true); show('drift-panel', true); show('ratify-form', record.permissions.can_ratify);
+    show('decomposition-panel', record.governance_status === 'ratified' && state.permissions.can_import);
     show('ratifier-panel', state.permissions.can_manage_ratifiers);
     message('Loaded version ' + record.version + '.');
   }
@@ -115,6 +141,8 @@
   function bind(id, work) { $(id).addEventListener('submit', function (event) { event.preventDefault(); action(work); }); }
   $('plan-select').addEventListener('change', function () { action(loadPlan); });
   $('actual-select').addEventListener('change', function () { show('analysis-panel', false); window.dispatchEvent(new CustomEvent('kyvern-analysis', { detail: null })); controls(); });
+  $('decomposition-cell').addEventListener('change', seedDecomposition);
+  $('decomposition-dimension').addEventListener('change', seedDecomposition);
   $('as-of').addEventListener('change', function () { show('analysis-panel', false); window.dispatchEvent(new CustomEvent('kyvern-analysis', { detail: null })); });
   $('review-note').addEventListener('input', controls); $('reviewed').addEventListener('change', controls);
   $('refresh').addEventListener('click', function () { action(async function () { resetSelection(); await loadCatalog(false); await loadPlan(); }); });
@@ -126,6 +154,21 @@
   bind('analysis-form', async function () {
     var result = await request('/analyses', { plan_id: state.record.plan_id, plan_version: state.record.version, actual_revision: $('actual-select').value, as_of: $('as-of').value });
     renderAnalysis(result); message('Drift calculated and saved.');
+  });
+  bind('decomposition-form', async function () {
+    var allocations = JSON.parse($('decomposition-rows').value);
+    if (!Array.isArray(allocations)) throw new Error('Allocation rows must be a JSON array.');
+    var result = await request(planPath() + '/decompose', {
+      parent_digest: state.record.digest,
+      parent_cell_id: $('decomposition-cell').value,
+      split_dimension: $('decomposition-dimension').value,
+      decimal_places: Number($('decomposition-precision').value),
+      allocations: allocations
+    });
+    await loadCatalog(false);
+    $('plan-select').value = result.plan_id + ':' + result.version;
+    await loadPlan();
+    message('Decomposition proposal created as version ' + result.version + '. An independently authorized reviewer must ratify it.');
   });
   $('ratifier-subject').addEventListener('input', function () { state.grant = null; show('grant-form', false); });
   bind('grant-read-form', async function () {

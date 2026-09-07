@@ -1,5 +1,31 @@
 # Validation record
 
+## Plan decomposition candidate — 7 September 2026
+
+The next additive release puts deterministic allocation in the engine and stores
+its output and lineage as an immutable Vault plan proposal. One approved cell can
+be split using evidence-backed positive weights, owners, tolerances and a selected
+dimension. The exact parent total is preserved with a disclosed remainder rule.
+
+- Focused engine and PostgreSQL decomposition checks: **77 passed**, one warning,
+  7.34 seconds. The wider affected regression passed **266 checks** in 10.05
+  seconds after the concurrency proof was added. JavaScript syntax, Python
+  compilation and diff checks passed.
+- Tests cover exact 33.33/66.67 reconciliation, deterministic input ordering,
+  duplicates, precision limits, parent ratification/fingerprint, idempotency,
+  concurrent duplicate requests, generic lineage spoofing, restricted roles,
+  changed evidence and stale-parent
+  rejection. The verified chain continues through granular actuals, saved drift
+  and the evidence-bound board composer.
+- Isolated browser proof created version 2 from a ratified target, displayed its
+  parent fingerprint, engine/remainder rule, source-backed weights and exact 50/50
+  cells. The operator could create but not ratify the proposal.
+- Full service deployment and hosted acceptance are pending for this candidate.
+
+Remaining historical-weight, seasonality, multi-level and guided-console work is
+tracked in [the prioritized backlog](../kyvern-next-increments-2026-09-07.md).
+Local details: [acceptance evidence](evidence/plan-decomposition-local-acceptance.json).
+
 ## Hosted board pack composer — 7 September 2026
 
 The deployed additive release connects the saved Intent analysis to an EN/AR preview,

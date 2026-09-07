@@ -861,11 +861,33 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   <div id="selected-plan" class="vault-panel" hidden>
     <h2 id="plan-title">Selected plan</h2><div id="plan-metadata" class="vault-metadata"></div>
     <p id="approval-note"></p><div id="plan-cells" class="vault-table" tabindex="0" role="region" aria-label="Plan targets and evidence"></div>
+    <div id="decomposition-lineage" hidden>
+      <h3>Decomposition lineage</h3>
+      <p id="decomposition-summary" class="vault-note"></p>
+      <div id="decomposition-allocations" class="vault-table" tabindex="0" role="region" aria-label="Decomposition weights and evidence"></div>
+    </div>
     <form id="ratify-form" hidden>
       <h3>Ratify this version</h3>
       <label class="vault-field">Review note<textarea id="review-note" required minlength="20" maxlength="2000" rows="3" placeholder="Record the basis for approving these targets and owners."></textarea></label>
       <label class="vault-check"><input id="reviewed" type="checkbox" required><span>I have reviewed this version’s targets, owners and supporting evidence.</span></label>
       <button id="ratify-button" type="submit">Ratify reviewed version</button>
+    </form>
+  </div>
+  <div id="decomposition-panel" class="vault-panel" hidden>
+    <h2>Decompose an approved target</h2>
+    <p>Split one approved cell into accountable detail. The engine calculates exact targets from positive weights; the result is a new proposal and still needs an independent ratifier.</p>
+    <form id="decomposition-form">
+      <div class="vault-controls">
+        <label class="vault-field">Approved parent cell<select id="decomposition-cell" required></select></label>
+        <label class="vault-field">Dimension to split<select id="decomposition-dimension" required></select></label>
+        <label class="vault-field">Decimal places<input id="decomposition-precision" type="number" value="2" min="0" max="12" required></label>
+      </div>
+      <label class="vault-field" style="margin-top:16px">Allocation rows (JSON)<textarea id="decomposition-rows" rows="10" required spellcheck="false" aria-describedby="decomposition-help">[
+  {"cell_id":"north-retail","member":"retail","weight":"60","owner":"Sales North","tolerance":"0","basis":{"path":"evidence.csv","locator":"approved allocation basis","sha256":"replace-with-source-sha256"}},
+  {"cell_id":"north-institutional","member":"institutional","weight":"40","owner":"Key Accounts","tolerance":"0","basis":{"path":"evidence.csv","locator":"approved allocation basis","sha256":"replace-with-source-sha256"}}
+]</textarea></label>
+      <p id="decomposition-help" class="vault-note">Use decimal strings for weights and amounts. Each row needs a unique cell ID, member, owner, tolerance and registered evidence reference. The final cell in ID order receives the disclosed rounding remainder.</p>
+      <button id="decomposition-button" type="submit">Create decomposition proposal</button>
     </form>
   </div>
   <div id="drift-panel" class="vault-panel" hidden>

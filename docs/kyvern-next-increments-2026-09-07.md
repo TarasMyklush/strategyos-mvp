@@ -2,31 +2,31 @@
 
 ## 1. Plan decomposition: engine proposes, Vault records
 
+Status: the first explicit-weight slice is implemented and locally verified. It
+creates a new immutable plan proposal from the latest ratified parent, preserves
+the approved total exactly, records parent/engine/weight/evidence lineage, exposes
+the result on `/plan`, reuses independent ratification and blocks ratification if
+the parent becomes stale. The proposal can then accept matching actuals, produce
+granular drift and feed the board composer.
+
 Keep the approved plan of record in the Intent Vault. Put split computation in a
 pure engine module so historical weights, seasonality and explicit adjustments
 never mutate the approved record. The operator starts from a ratified total and
 selects the product, region, channel and client dimensions. Each proposed cell
 carries its owner, target, tolerance, evidence and allocation method.
 
-Implement in this order:
+Remaining decomposition backlog, in order:
 
-1. Add a strict decomposition request contract: approved parent plan/version/digest,
-   metric and period, allocation dimensions, historical snapshot revision, explicit
-   weights where no history exists, decimal precision and owners. Reject mixed units,
-   duplicate tuples, zero total weights and missing owners. No invented historical
-   values or automatic distribution through unknown cells.
-2. Add deterministic allocation with exact decimal reconciliation and a disclosed
-   remainder rule. Preserve the approved total exactly. Record method/version,
-   source revisions, weights and any operator override separately from result cells.
-3. Persist the proposal and its lineage in append-only tenant tables. Carry parent
-   digest and historical evidence references. Recheck authorization at calculation,
-   read and ratification, including export restrictions.
-4. Extend `/plan` with a decomposition review: total, proposed cells, unexplained
-   allocation gaps and changed assumptions. Reuse named, independent ratification.
-   A proposal becomes a Vault plan version only after explicit approval.
-5. Run missing-history, conflicting-unit, tiny-remainder, source-revocation,
-   concurrent-ratification, cross-tenant and hosted synthetic workflow checks.
-   Deploy as one complete propose → review → ratify → drift → board-pack increment.
+1. Add history-derived weights from one explicitly selected prior actual snapshot,
+   plus seasonality and operator adjustments as separate inputs. Show the bridge
+   from historical mix to proposed weight; never infer a weight from a missing value.
+2. Replace allocation-row JSON with guided editable rows, source selection and
+   completeness checks in the Strategic Advisor console.
+3. Add whole-objective and multi-level decomposition across product, region,
+   channel and client, with bounded proposal size and an approval view that groups
+   the resulting cells without hiding any row.
+4. Add concurrency pressure, historical-unit mismatch, absent-history and large
+   realistic dataset acceptance, followed by client terminology review.
 
 Acceptance: the sum of approved children equals the approved parent; every child
 explains its derivation; a changed parent makes a pending proposal stale; neither

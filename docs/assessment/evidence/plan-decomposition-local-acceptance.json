@@ -1,0 +1,32 @@
+{
+  "date": "2026-09-07",
+  "environment": "isolated socket-only PostgreSQL and local browser",
+  "synthetic": true,
+  "checks": [
+    "latest ratified parent required",
+    "parent fingerprint bound",
+    "positive explicit decimal weights",
+    "exact target reconciliation",
+    "disclosed final-lexicographic-cell remainder",
+    "owner tolerance and evidence lineage",
+    "idempotent proposal creation",
+    "concurrent identical requests create one version",
+    "generic lineage spoof rejected",
+    "stale parent ratification rejected",
+    "changed evidence rejected",
+    "independent ratification required",
+    "matching granular actuals produce drift",
+    "ratified granular drift composes a board pack",
+    "operator browser flow created and displayed version 2"
+  ],
+  "browser_observation": {
+    "parent": "synthetic-plan v1",
+    "proposal": "synthetic-plan v2",
+    "split_cell": "institutional",
+    "split_dimension": "client",
+    "targets": ["50.00", "50.00"],
+    "engine": "weighted-allocation.v1",
+    "remainder_rule": "final_lexicographic_cell"
+  },
+  "business_approval": "synthetic proof only; no client or board ratification"
+}

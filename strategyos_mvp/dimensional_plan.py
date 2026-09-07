@@ -60,6 +60,29 @@ class Cell(Contract):
     source: SourceReference
 
 
+class DecompositionAllocation(Contract):
+    cell_id: Name
+    member: Name
+    weight: Amount = Field(gt=0)
+    owner: Name
+    tolerance: Amount = Field(ge=0)
+    basis: SourceReference
+
+
+class PlanDerivation(Contract):
+    kind: Literal["decomposition"]
+    engine_version: Literal["weighted-allocation.v1"]
+    parent_plan_id: Name
+    parent_version: int = Field(ge=1, strict=True)
+    parent_digest: str = Field(pattern=r"^[a-f0-9]{64}$")
+    parent_cell_id: Name
+    split_dimension: Name
+    decimal_places: int = Field(ge=0, le=12, strict=True)
+    remainder_rule: Literal["final_lexicographic_cell"]
+    allocations: list[DecompositionAllocation] = Field(min_length=2, max_length=500)
+    request_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
 class Plan(Contract):
     schema_version: Literal[1]
     plan_id: Name
@@ -75,6 +98,7 @@ class Plan(Contract):
     dimensions: dict[Name, list[Name]] = Field(min_length=1)
     metrics: dict[Name, Metric] = Field(min_length=1)
     cells: list[Cell] = Field(min_length=1, max_length=100000)
+    derivation: PlanDerivation | None = None
 
     @model_validator(mode="after")
     def validate_plan(self):
@@ -104,6 +128,21 @@ class Plan(Contract):
                     raise ValueError("Every metric requires plan cells.")
                 if totals[metric] != definition.planned_total:
                     raise ValueError(f"{metric}: cell targets do not reconcile to planned_total.")
+        if self.derivation:
+            if self.derivation.parent_plan_id != self.plan_id or self.derivation.parent_version >= self.version:
+                raise ValueError("Decomposition lineage must reference an earlier version of this plan.")
+            basis = self.derivation.model_dump(mode="json", exclude={"request_hash"})
+            if fingerprint(basis) != self.derivation.request_hash:
+                raise ValueError("Decomposition lineage hash mismatch.")
+            derived = {item.cell_id for item in self.derivation.allocations}
+            cells = {cell.id: cell for cell in self.cells}
+            if not derived.issubset(cells):
+                raise ValueError("Decomposition lineage references missing result cells.")
+            for item in self.derivation.allocations:
+                cell = cells[item.cell_id]
+                if (cell.dimensions.get(self.derivation.split_dimension) != item.member or
+                        cell.owner != item.owner or cell.tolerance != item.tolerance or cell.source != item.basis):
+                    raise ValueError("Decomposition lineage differs from its result cells.")
         return self
 
 

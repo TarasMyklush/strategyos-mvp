@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from dataclasses import replace
 from datetime import datetime, timezone
+from decimal import Decimal
 import json
 from pathlib import Path
 import shutil
@@ -20,6 +21,7 @@ from strategyos_mvp import auth, dimensional_intent_sources as sources
 from strategyos_mvp import dimensional_intent_store as store
 from strategyos_mvp.dimensional_intent_api import router
 from strategyos_mvp.dimensional_plan import Actuals, Plan
+from strategyos_mvp.plan_decomposition import DecompositionRequest
 
 FIXTURE = Path(__file__).parent / 'fixtures' / 'dimensional_plan'
 TODAY = datetime.now(timezone.utc).date()
@@ -576,3 +578,129 @@ def test_board_pack_bidi_preserves_signed_decimals_and_dates():
     for value in ['2026-09-07', '-60.25', '+80.50', '0.0001']:
         assert value in visual('الانحراف: ' + value)
         assert '\u200e' + value + '\u200e' in mark_ltr('الانحراف: ' + value)
+
+
+def decomposition_body(s, digest):
+    source = deepcopy(s['p']['cells'][0]['source'])
+    return {
+        'parent_digest': digest,
+        'parent_cell_id': 'regional',
+        'split_dimension': 'client',
+        'decimal_places': 2,
+        'allocations': [
+            {'cell_id': 'regional-hospital', 'member': 'hospital', 'weight': '1',
+             'owner': 'hospital-owner', 'tolerance': '1', 'basis': source},
+            {'cell_id': 'regional-pharmacy', 'member': 'pharmacy', 'weight': '2',
+             'owner': 'pharmacy-owner', 'tolerance': '1', 'basis': source},
+        ],
+    }
+
+
+def test_decomposition_requires_ratified_parent_and_is_idempotent(setup):
+    s = setup
+    parent = import_pair(s)
+    request = DecompositionRequest.model_validate(decomposition_body(s, parent['digest']))
+    with pytest.raises(store.Conflict, match='ratified'):
+        store.create_decomposition(s['operator'], s['p']['plan_id'], 1, request)
+    approve(s, parent)
+    proposal = store.create_decomposition(s['operator'], s['p']['plan_id'], 1, request)
+    repeated = store.create_decomposition(s['operator'], s['p']['plan_id'], 1, request)
+    assert repeated['digest'] == proposal['digest']
+    assert proposal['version'] == 2
+    assert proposal['payload']['derivation']['parent_digest'] == parent['digest']
+    assert proposal['payload']['derivation']['request_hash']
+    children = {cell['id']: cell['target'] for cell in proposal['payload']['cells']}
+    assert children['regional-hospital'] == '33.33'
+    assert children['regional-pharmacy'] == '66.67'
+    assert sum(Decimal(cell['target']) for cell in proposal['payload']['cells']) == Decimal('200')
+    # The existing independent plan ratification makes the derived proposal authoritative.
+    ratified = store.ratify(s['executive'], s['p']['plan_id'], 2, proposal['digest'],
+                            'Reviewed decomposition weights, owners, evidence and exact reconciliation.')
+    assert ratified['plan_digest'] == proposal['digest']
+    assert store.read_plan(s['executive'], s['p']['plan_id'], 2)['governance_status'] == 'ratified'
+    assert store.create_decomposition(s['operator'], s['p']['plan_id'], 1, request)['governance_status'] == 'ratified'
+    split_actuals = deepcopy(s['a'])
+    split_actuals['revision'] = 'decomposed-actuals'
+    regional = split_actuals['observations'].pop(0)
+    split_actuals['observations'].extend([
+        {**regional, 'dimensions': {**regional['dimensions'], 'client': 'hospital'}, 'value': '10'},
+        {**regional, 'dimensions': {**regional['dimensions'], 'client': 'pharmacy'}, 'value': '30'},
+    ])
+    store.import_actuals(s['operator'], Actuals.model_validate(split_actuals), s['pack'])
+    result = store.create_analysis(s['executive'], s['p']['plan_id'], 2,
+                                   split_actuals['revision'], TODAY)
+    assert result['rollups'][0]['actual'] == '200'
+    assert result['rollups'][0]['offset_detected'] is True
+    from strategyos_mvp import board_pack
+    pack = board_pack.compose(s['executive'], result['analysis_hash'], board_pack.PackRequest(language='en'))
+    assert pack['binding']['plan_digest'] == proposal['digest']
+    assert any(line.startswith('regional-hospital') for page in pack['pages'] for line in page['lines'])
+
+
+def test_decomposition_api_and_generic_lineage_spoofing_boundaries(setup):
+    s = setup
+    parent = import_pair(s)
+    approve(s, parent)
+    prefix = '/api/intent/dimensional/plans/' + s['p']['plan_id'] + '/versions/1/decompose'
+    body = decomposition_body(s, parent['digest'])
+    response = s['client'].post(prefix, json=body)
+    assert response.status_code == 200, response.text
+    assert response.json()['payload']['derivation']['engine_version'] == 'weighted-allocation.v1'
+    s['current']['principal'] = s['executive']
+    assert s['client'].post(prefix, json=body).status_code == 403
+    spoof = response.json()['payload']
+    spoof['version'] = 3
+    s['current']['principal'] = s['operator']
+    assert s['client'].post('/api/intent/dimensional/plans',
+                            json={'source_pack_id': s['pack'], 'plan': spoof}).status_code == 422
+
+
+def test_decomposition_stale_parent_blocks_ratification(setup):
+    s = setup
+    parent = import_pair(s)
+    approve(s, parent)
+    request = DecompositionRequest.model_validate(decomposition_body(s, parent['digest']))
+    proposal = store.create_decomposition(s['operator'], s['p']['plan_id'], 1, request)
+    direct = deepcopy(s['p'])
+    direct['version'] = 3
+    imported = store.import_plan(s['operator'], Plan.model_validate(direct), s['pack'])
+    store.ratify(s['executive'], s['p']['plan_id'], 3, imported['digest'],
+                  'Reviewed a newer direct plan version and its evidence independently.')
+    with pytest.raises(store.Conflict, match='newer ratified'):
+        store.create_decomposition(s['operator'], s['p']['plan_id'], 1, request)
+    with pytest.raises(store.Conflict, match='stale'):
+        store.ratify(s['executive'], s['p']['plan_id'], 2, proposal['digest'],
+                      'Reviewed the old decomposition weights, owners and evidence.')
+
+
+def test_decomposition_source_and_parent_integrity_are_rechecked(setup):
+    s = setup
+    parent = import_pair(s)
+    approve(s, parent)
+    body = decomposition_body(s, parent['digest'])
+    body['parent_digest'] = 'a' * 64
+    with pytest.raises(store.Conflict, match='fingerprint'):
+        store.create_decomposition(s['operator'], s['p']['plan_id'], 1,
+                                   DecompositionRequest.model_validate(body))
+    body['parent_digest'] = parent['digest']
+    (s['root'] / 'raw' / 'evidence.csv').write_text('changed')
+    with pytest.raises(sources.SourceUnavailable):
+        store.create_decomposition(s['operator'], s['p']['plan_id'], 1,
+                                   DecompositionRequest.model_validate(body))
+
+
+def test_concurrent_identical_decomposition_creates_one_version(setup):
+    s = setup
+    parent = import_pair(s)
+    approve(s, parent)
+    request = DecompositionRequest.model_validate(decomposition_body(s, parent['digest']))
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(
+            lambda _: store.create_decomposition(s['operator'], s['p']['plan_id'], 1, request),
+            range(2),
+        ))
+    assert results[0]['digest'] == results[1]['digest']
+    assert results[0]['version'] == results[1]['version'] == 2
+    with s['connect']() as conn:
+        assert conn.execute('''SELECT count(*) FROM strategyos_intent_plan_versions
+            WHERE plan_id=%s''', (s['p']['plan_id'],)).fetchone()[0] == 2

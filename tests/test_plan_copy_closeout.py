@@ -24,6 +24,8 @@ def test_plan_page_fetches_governed_api_payload_instead_of_static_truth() -> Non
     assert '>How it works</a>' in html
     assert "Loading your plans" in html
     assert "/static/intent_vault.js" in html
+    assert 'id="decomposition-form"' in html
+    assert "Create decomposition proposal" in html
     assert "/static/plan_data.js" not in html
     assert "window.STRATEGYOS_PLAN" not in html
     assert 'font-size: clamp(30px, 4vw, 40px);' in html

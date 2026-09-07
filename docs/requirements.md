@@ -192,3 +192,19 @@ page layouts, claims/graph narratives and client-approved bilingual terminology
 remain open. The Strategic Advisor console is separate work. See
 [composer contract](board-pack-composer.md), [next increments](kyvern-next-increments-2026-09-07.md)
 and [hosted validation](assessment/validation.md).
+
+**REQ-32 — Governed explicit-weight plan decomposition.** An authorized operator
+can select the latest ratified plan version and split one cell along an existing
+dimension. Every output row declares a positive decimal weight, unique cell/member,
+owner, tolerance and registered evidence basis. The deterministic engine assigns
+targets at the requested precision, gives the final lexicographic cell the disclosed
+remainder and preserves the approved metric total exactly. It records engine version,
+parent digest/version/cell, inputs, evidence and request hash in the immutable plan
+proposal. Generic imports cannot claim engine-generated lineage.
+
+The proposal uses the existing independent ratification workflow. A changed parent
+fingerprint, revoked or changed evidence, unratified/non-latest parent and a newer
+ratified plan all fail closed. Once ratified, matching granular actuals can produce
+the existing drift analysis and board pack. This first slice accepts evidence-backed
+explicit weights. Automatic historical mix, seasonality, multi-level decomposition,
+guided non-JSON allocation rows and client acceptance remain backlog work.
