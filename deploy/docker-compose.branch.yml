@@ -7,16 +7,19 @@ services:
     environment:
       DATABASE_URL: ${STRATEGYOS_RUNTIME_DATABASE_URL:-postgresql://unconfigured@postgres/strategyos}
       STRATEGYOS_DATABASE_SCHEMA_MODE: verify
+      STRATEGYOS_DATABASE_RUNTIME_SCOPE: request
 
   strategyos-worker:
     environment:
-      DATABASE_URL: ${STRATEGYOS_RUNTIME_DATABASE_URL:-postgresql://unconfigured@postgres/strategyos}
+      DATABASE_URL: ${STRATEGYOS_WORKER_DATABASE_URL:-postgresql://unconfigured@postgres/strategyos}
       STRATEGYOS_DATABASE_SCHEMA_MODE: verify
+      STRATEGYOS_DATABASE_RUNTIME_SCOPE: worker
 
   strategyos-claim-projector:
     environment:
-      DATABASE_URL: ${STRATEGYOS_RUNTIME_DATABASE_URL:-postgresql://unconfigured@postgres/strategyos}
+      DATABASE_URL: ${STRATEGYOS_PROJECTOR_DATABASE_URL:-postgresql://unconfigured@postgres/strategyos}
       STRATEGYOS_DATABASE_SCHEMA_MODE: verify
+      STRATEGYOS_DATABASE_RUNTIME_SCOPE: projector
 
   strategyos-migrate:
     profiles: [schema-migration]

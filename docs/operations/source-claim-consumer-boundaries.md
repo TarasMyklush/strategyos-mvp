@@ -8,7 +8,8 @@ Preview deployment and cross-role browser evidence must be recorded separately.
 | --- | --- | --- |
 | Claim query, snapshot and source intake APIs | Claim repository: current tenant/role/BU/purpose, immutable revisions, source occurrences, runtime eligibility | Complete mapping of legacy business semantics; steward decisions cannot be invented |
 | Claim graph/vector/cache projections | Canonical revision IDs; outbox; authoritative recheck after candidate retrieval | Operational SLO and ownership sign-off |
-| Diagnostics, legacy charts and business prose | Whole-run source authorization plus canonical headline snapshot overlay | Full per-claim view-model adoption remains incomplete; do not describe whole-run denial as granular parity |
+| Diagnostics finance cards, chart series, movers and cost breakdown | Policy-filtered immutable headline and presentation claims; actual/plan/floor and BU/component lanes are reconstructed after authorization | Historical snapshots remain immutable and need a fresh run to gain presentation claims |
+| Diagnostics non-financial business prose | Whole-run source authorization for generated run outputs | Convert future granular/restricted prose products to typed claims before allowing partial briefing access |
 | Raw source previews/downloads and review files | Current source/export authorization; unregistered attachments are unavailable | Retention and erasure policy decision |
 | Closed board packet list/read/question/download | Frozen content with current source policy; download requires export rights | Online regression acceptance; no real meeting closed for QA |
 | Existing twin saved state and interactive tools | Authorized analysis and actor/tenant/role/BU namespace; current rights at request boundary; legacy root files not inherited | Durable authority envelope and explicit release rules for cross-actor/background work |
@@ -26,7 +27,10 @@ parallel data path. No production flags are changed by this preview workflow.
 Migration 0012 adds database rejection of in-place updates/deletes of claim
 revision and assessment rows; corrections and review changes must append records.
 It does not claim to prevent a privileged database owner from altering DDL or
-truncating tables. Runtime role separation/RLS remains required. No administrative
+truncating tables. Migration 0014 adds database-enforced tenant isolation to the
+governed source/claim/snapshot/projection/receipt/reconciliation tables for the
+non-owner request, worker and projector roles. Legacy application tables still
+use their existing repository/query boundary. No administrative
 erasure bypass or retention period is invented by this change; authorized disposal
 needs a separately reviewed, audited procedure. No existing claim is deleted.
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import atexit
+import calendar
 import hashlib
 import json
 import math
@@ -514,6 +515,17 @@ def executive_snapshot_for_run(run_id: str) -> dict[str, Any]:
                         f.finding_json,
                         count(c.id) as citation_count,
                         count(c.id) filter (where c.resolved) as resolved_citation_count,
+                        coalesce(
+                            jsonb_agg(
+                                jsonb_build_object(
+                                    'source_path', c.source_path,
+                                    'source_hash', c.source_hash,
+                                    'locator', c.locator,
+                                    'excerpt', c.excerpt
+                                ) order by c.id
+                            ) filter (where c.id is not null),
+                            '[]'::jsonb
+                        ) as citations,
                         lower(f.status) = 'challenged' as challenged
                     from strategyos_findings f
                     left join strategyos_finding_citations c
@@ -595,7 +607,10 @@ def executive_snapshot_for_run(run_id: str) -> dict[str, Any]:
                 "confidence": str(row.get("confidence") or ""),
                 "status": str(row.get("status") or ""),
                 "recoverable_sar": row.get("recoverable_sar"),
+                "recoverable_usd": finding_payload.get("recoverable_usd"),
                 "leakage_sar": row.get("leakage_sar"),
+                "vendor_id": str(row.get("vendor_id") or finding_payload.get("vendor_id") or ""),
+                "vendor_name": str(row.get("vendor_name") or finding_payload.get("vendor_name") or ""),
                 "owner": str(row.get("vendor_name") or row.get("vendor_id") or ""),
                 # The recommended action and who owns it are written into
                 # finding_json by persist_findings (asdict of the whole Finding),
@@ -605,6 +620,8 @@ def executive_snapshot_for_run(run_id: str) -> dict[str, Any]:
                 # inferred here.
                 "remediation": str(finding_payload.get("remediation") or ""),
                 "rationale": str(finding_payload.get("rationale") or ""),
+                "calculation": dict(finding_payload.get("calculation") or {}),
+                "citations": list(row.get("citations") or []),
                 "citation_count": int(row.get("citation_count") or 0),
                 "resolved_citation_count": int(row.get("resolved_citation_count") or 0),
                 "challenged": bool(row.get("challenged")),
@@ -2163,6 +2180,17 @@ def persist_finance_records(
     )
     counts["canonical_claim_revisions"] += kpi_claims["claims"]
     counts["canonical_claim_exceptions"] += kpi_claims["exceptions"]
+    presentation_claims = persist_finance_presentation_claims(
+        cur,
+        tenant_id=tenant_id,
+        batch_id=batch_id,
+        run_id=run_id,
+        evidence_ids=evidence_ids,
+        finance_payload=dict(summary.get("finance_kpi") or {}),
+        recorded_at=summary.get("created_at"),
+    )
+    counts["canonical_claim_revisions"] += presentation_claims["claims"]
+    counts["canonical_claim_exceptions"] += presentation_claims["exceptions"]
     snapshot_count = persist_run_claim_snapshot(
         cur,
         tenant_id=tenant_id,
@@ -2963,6 +2991,7 @@ def persist_transaction_claims(
                 "transaction_type": transaction_type,
                 "counterparty_key": text_value(row.get("counterparty_key")),
                 "source_currency": source_currency.upper(),
+                "record": attributes,
             },
             period_start=event_date,
             period_end=event_date,
@@ -3005,14 +3034,20 @@ def persist_balance_claims(
             subject_type = "finance_account"
             metric_key = "finance.trial_balance.net"
             author_identity = None
-            dimensions = {"account": text_value(row.get("account")) or natural_key}
+            dimensions = {
+                "account": text_value(row.get("account")) or natural_key,
+                "record": row.get("attributes") if isinstance(row.get("attributes"), dict) else {},
+            }
         elif balance_type == "cash_forecast":
             claim_kind = ClaimKind.FORECAST
             subject_type = "cash_forecast_line"
             metric_key = "finance.cash_forecast.balance"
             author_identity = "source-role:cfo"
             attributes = row.get("attributes") if isinstance(row.get("attributes"), dict) else {}
-            dimensions = {"sheet_name": text_value(attributes.get("sheet_name")) or "forecast"}
+            dimensions = {
+                "sheet_name": text_value(attributes.get("sheet_name")) or "forecast",
+                "record": attributes,
+            }
         else:
             exceptions += 1
             _record_claim_backfill_exception(
@@ -3064,6 +3099,12 @@ _FINANCE_KPI_COMPONENTS: dict[str, tuple[str, ClaimKind, str]] = {
     "board_floor": ("ceo.cash_floor", ClaimKind.PLAN, "cash_vs_floor"),
 }
 
+_FINANCE_PRESENTATION_METRICS = {
+    "trend": "ceo.presentation.trend",
+    "contributor": "ceo.presentation.contributor",
+    "cost_component": "ceo.presentation.cost_component",
+}
+
 
 def _finance_period(value: Any) -> tuple[date | None, date | None]:
     text = str(value or "").strip()
@@ -3082,6 +3123,43 @@ def _finance_period(value: Any) -> tuple[date | None, date | None]:
     if year and ("fy" in normalized or normalized == str(year)):
         return date(year, 1, 1), date(year, 12, 31)
     return None, None
+
+
+def _presentation_period(value: Any) -> tuple[date | None, date | None]:
+    """Resolve only exact month/quarter labels used by governed charts."""
+    text = str(value or "").strip()
+    month = re.fullmatch(r"(20\d{2})-(0[1-9]|1[0-2])", text)
+    if month:
+        year, number = int(month.group(1)), int(month.group(2))
+        return date(year, number, 1), date(year, number, calendar.monthrange(year, number)[1])
+    quarter = re.fullmatch(r"(20\d{2})-Q([1-4])", text, re.I)
+    if quarter:
+        year, number = int(quarter.group(1)), int(quarter.group(2))
+        start_month = (number - 1) * 3 + 1
+        end_month = start_month + 2
+        return date(year, start_month, 1), date(
+            year, end_month, calendar.monthrange(year, end_month)[1]
+        )
+    return None, None
+
+
+def _source_document_for_path(
+    evidence_ids: dict[str, str], source_path: Any
+) -> tuple[str | None, str | None]:
+    normalized = str(source_path or "").strip().replace("\\", "/")
+    if not normalized:
+        return None, None
+    if normalized in evidence_ids:
+        return evidence_ids[normalized], normalized
+    matches = [
+        (path, document_id)
+        for path, document_id in evidence_ids.items()
+        if path.replace("\\", "/").endswith(normalized)
+        or normalized.endswith(path.replace("\\", "/"))
+    ]
+    if len(matches) == 1:
+        return matches[0][1], matches[0][0]
+    return None, normalized
 
 
 def _aware_datetime(value: Any) -> datetime | None:
@@ -3297,6 +3375,241 @@ def persist_finance_kpi_claims(
     return {"claims": claims, "exceptions": exceptions}
 
 
+def persist_finance_presentation_claims(
+    cur: Any,
+    *,
+    tenant_id: str,
+    batch_id: str,
+    run_id: str,
+    evidence_ids: dict[str, str],
+    finance_payload: dict[str, Any],
+    recorded_at: Any,
+) -> dict[str, int]:
+    """Materialize chart points and driver detail as governed numeric claims.
+
+    Every value must carry an exact source artifact and period.  Incomplete
+    presentation data is quarantined instead of surviving in the run summary as
+    an ungoverned fallback.
+    """
+    if not finance_payload.get("authoritative"):
+        return {"claims": 0, "exceptions": 0}
+    from .source_claims import decimal_value
+
+    claims = 0
+    exceptions = 0
+    as_of_at = _aware_datetime(recorded_at)
+    reporting_start, reporting_end = _finance_period(finance_payload.get("reporting_period_key"))
+
+    def reject(record_key: str, reason_code: str, detail: str, metadata: dict[str, Any]) -> None:
+        nonlocal exceptions
+        exceptions += 1
+        _record_claim_backfill_exception(
+            cur,
+            tenant_id=tenant_id,
+            run_id=run_id,
+            batch_id=batch_id,
+            record_type="finance_presentation_component",
+            record_key=record_key,
+            reason_code=reason_code,
+            detail=detail,
+            metadata=metadata,
+        )
+
+    def write(
+        *,
+        record_key: str,
+        subject_type: str,
+        subject_key: str,
+        metric_key: str,
+        claim_kind: ClaimKind,
+        value: Any,
+        unit: str,
+        source_path: Any,
+        source_locator: str,
+        dimensions: dict[str, Any],
+        period_start: date | None,
+        period_end: date | None,
+        business_unit: str | None = None,
+    ) -> None:
+        nonlocal claims
+        try:
+            numeric = decimal_value(value)
+        except ValueError:
+            reject(record_key, "value_invalid", "Presentation value is not a finite decimal.", {"value": str(value)})
+            return
+        if period_start is None or period_end is None:
+            reject(record_key, "period_unresolved", "Presentation claim has no exact governed period.", {"label": dimensions.get("label")})
+            return
+        document_id, normalized_source = _source_document_for_path(evidence_ids, source_path)
+        if document_id is None:
+            reject(record_key, "evidence_unresolved", "Presentation claim source artifact could not be matched.", {"source_path": normalized_source})
+            return
+        _revision_id, created = persist_shadow_claim(
+            cur,
+            tenant_id=tenant_id,
+            batch_id=batch_id,
+            subject_type=subject_type,
+            subject_key=subject_key,
+            metric_key=metric_key,
+            claim_kind=claim_kind,
+            value_numeric=numeric,
+            unit=unit,
+            currency="SAR" if unit == "SAR" else None,
+            source_document_id=document_id,
+            source_locator=source_locator,
+            author_identity="source-role:cfo",
+            business_unit=business_unit,
+            dimensions=dimensions,
+            metadata={
+                "projection": "executive_finance_presentation",
+                "run_id": str(run_id),
+                "source_path": normalized_source,
+            },
+            period_start=period_start,
+            period_end=period_end,
+            as_of_at=as_of_at,
+        )
+        claims += int(created)
+
+    trend = finance_payload.get("trend") if isinstance(finance_payload.get("trend"), dict) else {}
+    for driver_key, series_payload in trend.items():
+        if driver_key == "source_files" or not isinstance(series_payload, dict):
+            continue
+        labels = list(series_payload.get("labels") or [])
+        unit = "percent" if str(series_payload.get("unit")).casefold() == "percent" else "SAR"
+        for series, claim_kind in (("actual", ClaimKind.ACTUAL), ("plan", ClaimKind.PLAN), ("floor", ClaimKind.PLAN)):
+            values = list(series_payload.get(series) or [])
+            if not values:
+                continue
+            source_path = series_payload.get(f"{series}_source_file")
+            if series == "floor" and not source_path:
+                source_path = series_payload.get("plan_source_file")
+            if len(values) != len(labels):
+                reject(
+                    f"trend:{driver_key}:{series}",
+                    "series_length_mismatch",
+                    "Presentation labels and values have different lengths.",
+                    {"labels": len(labels), "values": len(values)},
+                )
+                continue
+            for order, (label, value) in enumerate(zip(labels, values, strict=True)):
+                start, end = _presentation_period(label)
+                dimensions = {
+                    "presentation_component": "trend",
+                    "driver_key": driver_key,
+                    "series": series,
+                    "label": str(label),
+                    "order": order,
+                    "scope_note": str(series_payload.get("scope_note") or ""),
+                    "plan_note": str(series_payload.get("plan_note") or ""),
+                }
+                notes = list(series_payload.get("notes") or [])
+                if order < len(notes) and str(notes[order]).strip():
+                    dimensions["note"] = str(notes[order]).strip()
+                write(
+                    record_key=f"trend:{driver_key}:{series}:{label}",
+                    subject_type="enterprise",
+                    subject_key="group",
+                    metric_key=_FINANCE_PRESENTATION_METRICS["trend"],
+                    claim_kind=claim_kind,
+                    value=value,
+                    unit=unit,
+                    source_path=source_path,
+                    source_locator=f"finance_kpi.trend.{driver_key}.{series}[{order}]",
+                    dimensions=dimensions,
+                    period_start=start,
+                    period_end=end,
+                )
+
+    evidence = finance_payload.get("evidence") if isinstance(finance_payload.get("evidence"), dict) else {}
+    for driver_key in ("revenue", "ebitda_margin", "operating_cost"):
+        evidence_payload = evidence.get(driver_key) if isinstance(evidence.get(driver_key), dict) else {}
+        details = evidence_payload.get("details") if isinstance(evidence_payload.get("details"), dict) else {}
+        contributors = details.get("contributors") if isinstance(details.get("contributors"), dict) else {}
+        rows = list(contributors.get(driver_key) or [])
+        source_path = next(iter(evidence_payload.get("files") or []), None)
+        for order, row in enumerate(rows):
+            if not isinstance(row, dict) or not str(row.get("label") or "").strip():
+                continue
+            label = str(row["label"]).strip()
+            is_margin = driver_key == "ebitda_margin"
+            values = (
+                (("actual", ClaimKind.ACTUAL, row.get("value_percent")), ("plan", ClaimKind.PLAN, row.get("plan_percent")))
+                if is_margin
+                else (("actual", ClaimKind.ACTUAL, row.get("value_sar")), ("plan", ClaimKind.PLAN, row.get("plan_sar")))
+            )
+            for series, claim_kind, value in values:
+                if value in (None, ""):
+                    continue
+                write(
+                    record_key=f"contributor:{driver_key}:{label}:{series}",
+                    subject_type="business_unit",
+                    subject_key=label,
+                    metric_key=_FINANCE_PRESENTATION_METRICS["contributor"],
+                    claim_kind=claim_kind,
+                    value=value,
+                    unit="percent" if is_margin else "SAR",
+                    source_path=source_path,
+                    source_locator=str(row.get("source_locator") or f"finance_kpi.evidence.{driver_key}.contributors[{order}]"),
+                    business_unit=label,
+                    dimensions={
+                        "presentation_component": "contributor",
+                        "driver_key": driver_key,
+                        "series": series,
+                        "label": label,
+                        "order": order,
+                        "contributor_kind": str(row.get("contributor_kind") or "business_unit"),
+                        "note": str(row.get("note") or ""),
+                    },
+                    period_start=reporting_start,
+                    period_end=reporting_end,
+                )
+
+    operating = evidence.get("operating_cost") if isinstance(evidence.get("operating_cost"), dict) else {}
+    details = operating.get("details") if isinstance(operating.get("details"), dict) else {}
+    components = details.get("cost_components") if isinstance(details.get("cost_components"), dict) else {}
+    if components.get("available"):
+        source_path = components.get("source_file")
+        for order, row in enumerate(list(components.get("rows") or [])):
+            if not isinstance(row, dict):
+                continue
+            business_unit = str(row.get("business_unit") or "").strip()
+            component = str(row.get("component") or "").strip()
+            if not business_unit or not component:
+                continue
+            for series, claim_kind, value in (
+                ("actual", ClaimKind.ACTUAL, row.get("actual_sar")),
+                ("plan", ClaimKind.PLAN, row.get("budget_sar")),
+            ):
+                if value in (None, ""):
+                    continue
+                write(
+                    record_key=f"cost_component:{business_unit}:{component}:{series}",
+                    subject_type="business_unit_cost_component",
+                    subject_key=f"{business_unit}:{component}",
+                    metric_key=_FINANCE_PRESENTATION_METRICS["cost_component"],
+                    claim_kind=claim_kind,
+                    value=value,
+                    unit="SAR",
+                    source_path=source_path,
+                    source_locator=str(row.get("locator") or f"finance_kpi.cost_components[{order}]"),
+                    business_unit=business_unit,
+                    dimensions={
+                        "presentation_component": "cost_component",
+                        "driver_key": "operating_cost",
+                        "series": series,
+                        "business_unit": business_unit,
+                        "component": component,
+                        "order": order,
+                        "driver": str(row.get("driver") or ""),
+                        "cross_ref": str(row.get("cross_ref") or ""),
+                    },
+                    period_start=reporting_start,
+                    period_end=reporting_end,
+                )
+    return {"claims": claims, "exceptions": exceptions}
+
+
 def persist_run_claim_snapshot(
     cur: Any,
     *,
@@ -3410,10 +3723,16 @@ def persist_claim_reconciliation(
     )
     claim_record_count, claim_amount = cur.fetchone()
     cur.execute(
-        "select count(*) from strategyos_claim_backfill_exceptions where ingestion_batch_id = %s",
+        """
+        select
+            count(*) filter (where record_type <> 'finance_presentation_component'),
+            count(*) filter (where record_type = 'finance_presentation_component')
+        from strategyos_claim_backfill_exceptions
+        where ingestion_batch_id = %s
+        """,
         (batch_id,),
     )
-    exception_count = int(cur.fetchone()[0])
+    exception_count, presentation_exception_count = (int(value) for value in cur.fetchone())
     difference = Decimal(str(claim_amount)) - Decimal(str(source_amount))
     counts_match = int(source_record_count) == int(claim_record_count)
     amounts_match = difference == Decimal("0")
@@ -3422,6 +3741,8 @@ def persist_claim_reconciliation(
         "record_counts_match": counts_match,
         "amounts_match": amounts_match,
         "all_claims_have_source_or_lineage": exception_count == 0,
+        "presentation_claim_exceptions": presentation_exception_count,
+        "presentation_claims_fail_closed": True,
     }
     cur.execute(
         """
@@ -4169,8 +4490,12 @@ def database_connection() -> tuple[Any | None, dict[str, Any] | None]:
         try:
             if scope_bound:
                 from .access_scope import principal_scope
-                from .database_tenant import bind_connection_context
-                bind_connection_context(conn, principal_scope.get())
+                from .database_tenant import bind_runtime_context
+                bind_runtime_context(
+                    conn,
+                    runtime_scope=getattr(CONFIG, 'database_runtime_scope', 'request'),
+                    principal=principal_scope.get(),
+                )
             return _PooledConnectionHandle(pool, conn, scope_bound=scope_bound), None
         except Exception:
             conn.close()

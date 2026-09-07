@@ -7,11 +7,13 @@ that live ERP, news-provider, email or chat connectors have been built. Syntheti
 public/licensed/correspondence records exercise the same repository contract;
 they are explicitly fixtures, not messages received from real people.
 
-The executive application still contains legacy presentation projections.
-Whole-run source authorization protects their charts, prose and tables as one
-unit. This is deliberately conservative: per-source or BU-restricted users must
-use the claim API instead of receiving a potentially leaky partial briefing.
-It is not yet a full per-claim rewrite of every legacy presentation component.
+Executive financial headlines, chart series, actual/plan/floor comparators,
+business-unit movers and cost-component breakdowns are reconstructed from the
+policy-filtered immutable snapshot. Authenticated Hermes and `/qa` build their
+finance tables from the same authorized claim records and do not reopen dataset
+files. Whole-run authorization remains around generated non-financial prose and
+other legacy outputs; restricted users still fail closed rather than receive a
+partial prose briefing.
 
 ## Reproducible checks
 
@@ -55,6 +57,10 @@ It is not yet a full per-claim rewrite of every legacy presentation component.
 | Legacy mixed Actual/Est group columns cannot become actuals or drive derived actual margin | `test_source_finance_kpis.py`, `test_finance_semantic_quarantine.py` |
 | Quarantined snapshot rows are excluded without crashing eligible reads | `test_quarantined_snapshot_postgres_e2e.py` |
 | Historical semantic audit verifies original file hashes and never rewrites approved history | `test_finance_semantics_audit.py` |
+| Request/worker/projector database identities, exact markers and verify-only startup | `test_database_runtime_role_postgres_e2e.py`, `test_preview_runtime_config.py` |
+| Governed-ledger RLS with omitted tenant predicates, blank context and projector least privilege | `test_claim_row_level_security_postgres_e2e.py`, `test_database_tenant_context_postgres_e2e.py` |
+| Executive chart/mover/component values are typed claims and legacy values cannot survive | `test_governed_finance.py`, `test_claim_store_postgres_e2e.py` |
+| Authenticated deterministic/model QA uses a claim-backed table adapter, not source-file reload | `test_governed_qa_context.py`, `test_qa_api.py` |
 
 Run the complete suite against dedicated disposable PostgreSQL, Neo4j and Qdrant,
 with the release-pinned local embedding model provisioned:
@@ -79,8 +85,9 @@ image, and rejects skipped tests as well as failures.
   unknown semantics must remain unknown instead of inventing units or kinds.
 - Actual third-party connector authentication, delivery, retries and consent
   need real integrations; no live CFO request or reply is simulated as real.
-- A full per-claim migration of all legacy UI/read models remains distinct from
-  the conservative whole-run authorization boundary.
+- Generated non-financial prose and legacy operational read models remain under
+  conservative whole-run authorization. Financial presentation and authenticated
+  QA have crossed to the granular claim snapshot.
 - Source traceability is labelled “Source traced”, not “Evidence verified”.
   Explicit assessment events remain separately visible; the UI does not infer
   a review from a source's origin or successful retrieval.
@@ -557,3 +564,29 @@ explicitly labels the separate board-commitment aggregate.
 Historical finance semantics, granular legacy consumer adoption, database role
 separation/RLS, and recovery downgrade controls remain open; this entry is not a
 whole-scope completion certificate.
+
+### Runtime isolation and financial-consumer closure candidate
+
+- The preview configuration now provisions distinct request, worker and projector
+  database logins with immutable role markers and exact runtime scopes. API,
+  worker and projector container configuration is validated as three different
+  identities targeting one prepared database; migration credentials are absent.
+- Migration 0014 enables RLS on the complete governed source-and-claim table
+  inventory. Real PostgreSQL tests prove request isolation with omitted tenant
+  predicates, blank-context denial, deliberate worker queue breadth, and the
+  projector's inability to read legacy finance facts or mutate claims.
+- New runs materialize monthly/quarterly actual-plan-floor points, BU contributor
+  actual/plan lanes and cost-component actual/plan lanes as numeric claim
+  revisions with exact source artifact, locator, unit and period. Presentation
+  exceptions are retained but cannot reappear as legacy values.
+- The executive financial read model deletes legacy headline, chart, mover,
+  completeness, contributor and cost-component values before rebuilding them
+  from the authorized snapshot. Missing claims render unavailable.
+- Authenticated Hermes and `/qa` no longer reload dataset files or rerun finance
+  detectors. Their table adapter is constructed from policy-filtered claim
+  records; model evidence receives the same claim-backed bundle.
+- Local non-service suite: **2,070 passed, 150 integration/service tests skipped**.
+  Dedicated PostgreSQL RLS/runtime suite: **23 passed**. Presentation-claim
+  PostgreSQL round trip passed. A frozen full service gate, preview deployment,
+  fresh governed run and online API/browser acceptance remain required before
+  this candidate is a release.

@@ -231,7 +231,7 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
         return None
     units: list[dict[str, Any]] = []
     group_total: dict[str, Decimal] | None = None
-    for values in rows[1:]:
+    for excel_row, values in enumerate(rows[1:], start=2):
         unit = str(_cell(values, headers, "businessunit") or "").strip()
         actual = _decimal(_cell(values, headers, revenue_column))
         plan = _decimal(_cell(values, headers, "h1budget"))
@@ -255,6 +255,7 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
             continue
         units.append({
             "name": unit,
+            "source_locator": f"BU_Budget_2026!Excel row {excel_row}",
             "actual": actual,
             "plan": plan,
             "variance": variance,
@@ -309,10 +310,12 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
             trend["ebitda_margin"] = {
                 **division_dynamics["ebitda_margin"],
                 "scope_note": "Tamween division monthly ledger actuals; group H1 headline is shown above.",
+                "actual_source_file": _relative(gl_path, root),
             }
             trend["operating_cost"] = {
                 **division_dynamics["total_cost_to_ebitda"],
                 "scope_note": "Tamween division monthly COGS plus cash operating cost; group H1 headline is shown above.",
+                "actual_source_file": _relative(gl_path, root),
             }
             if division_budget_path is not None:
                 division_plan = _division_monthly_plan(
@@ -331,6 +334,7 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
                         trend[key]["plan_note"] = (
                             "Approved Tamween monthly budget aligned to the same division and account scope as the actual series."
                         )
+                        trend[key]["plan_source_file"] = _relative(division_budget_path, root)
             trend["source_files"] = sorted({
                 *trend.get("source_files", []),
                 _relative(gl_path, root),
@@ -341,6 +345,11 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
     movers = _group_movers(units)
     movers["cash_vs_floor"] = _group_cash_floor_movers(budget_book)
     budget_file = _relative(budget_path, root)
+    if trend.get("revenue", {}).get("actual") and analytics_path is not None:
+        trend["revenue"]["actual_source_file"] = _relative(analytics_path, root)
+    if trend.get("cash_vs_floor", {}).get("actual"):
+        trend["cash_vs_floor"]["actual_source_file"] = budget_file
+        trend["cash_vs_floor"]["plan_source_file"] = budget_file
     budget_sha = _sha256(budget_path)
     period = "H1 2026"
     revenue_contributors = _group_contributor_rows(
@@ -365,7 +374,14 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
             "details": {**evidence_base["details"], "contributors": {"revenue": revenue_contributors}},
             "summary": f"H1 actual and plan aggregated across {len(units)} business units from the approved group budget.",
         },
-        "ebitda_margin": {**evidence_base, "summary": "H1 EBITDA uses the supplied financial amounts where present. Revenue times the stated margin is used only when no amount is supplied; no group allocation has been added."},
+        "ebitda_margin": {
+            **evidence_base,
+            "details": {
+                **evidence_base["details"],
+                "contributors": {"ebitda_margin": _group_margin_contributor_rows(units)},
+            },
+            "summary": "H1 EBITDA uses the supplied financial amounts where present. Revenue times the stated margin is used only when no amount is supplied; no group allocation has been added.",
+        },
         "operating_cost": {
             **evidence_base,
             "files": sorted(
@@ -471,6 +487,32 @@ def _group_contributor_rows(
                 "variance_sar": _number(variance * Decimal("1000000")),
                 "share_pct": float((actual / total * 100).quantize(Decimal("0.1"))) if total else None,
                 "direction": "above_plan" if variance > 0 else "below_plan" if variance < 0 else "on_plan",
+                "source_locator": str(row.get("source_locator") or ""),
+            }
+        )
+    return result
+
+
+def _group_margin_contributor_rows(units: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for row in sorted(
+        units,
+        key=lambda item: abs(Decimal(item["actual_margin"]) - Decimal(item["plan_margin"])),
+        reverse=True,
+    ):
+        actual = Decimal(row["actual_margin"])
+        plan = Decimal(row["plan_margin"])
+        variance = actual - plan
+        result.append(
+            {
+                "label": str(row["name"]),
+                "contributor_kind": "business_unit",
+                "value_percent": _number(actual),
+                "plan_percent": _number(plan),
+                "variance_pp": _number(variance),
+                "direction": "above_plan" if variance > 0 else "below_plan" if variance < 0 else "on_plan",
+                "source_locator": str(row.get("source_locator") or ""),
+                "note": str(row.get("note") or ""),
             }
         )
     return result
@@ -756,6 +798,8 @@ def _group_cash_floor_trend(book: Any) -> dict[str, Any]:
     labels: list[str] = []
     actual: list[str] = []
     budgets: list[str] = []
+    floors: list[str] = []
+    notes: list[str] = []
     for values in rows[1:]:
         quarter = str(_cell(values, headers, "quarter") or "").strip()
         value = _decimal(_cell(values, headers, "actualforecastsarb"))
@@ -766,12 +810,16 @@ def _group_cash_floor_trend(book: Any) -> dict[str, Any]:
         labels.append(quarter.split(" (", 1)[0])
         actual.append(_number(value * Decimal("1000000000")) or "0")
         budgets.append(_number(budget * Decimal("1000000000")) or "0")
+        floors.append(_number(floor * Decimal("1000000000")) or "0")
+        notes.append(str(_cell(values, headers, "note") or "").strip())
     if len(actual) < 2:
         return empty
     return {
         "labels": labels,
         "actual": actual,
         "plan": budgets,
+        "floor": floors,
+        "notes": notes,
         "has_plan_series": True,
         "unit": "sar",
         "scope_note": "Explicitly labelled quarterly group cash actuals versus budget; estimates and forecasts are excluded.",

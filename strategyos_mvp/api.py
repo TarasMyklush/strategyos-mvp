@@ -54,6 +54,7 @@ from .executive_read_model import build_executive_read_model
 from .claim_store import ClaimRepository
 from .governed_finance import (
     FINANCE_HEADLINE_METRIC_KEYS,
+    FINANCE_PRESENTATION_METRIC_KEYS,
     finance_payload_from_claim_snapshot,
 )
 from .source_claims import PolicyContext, UsePurpose
@@ -64,7 +65,7 @@ from .executive_display import (
 )
 from .assistants import get_orchestrator, list_supported_personas
 from .assistants.graph_retrieval import route_graph_question
-from .ingestion import load_dataset
+from .governed_qa_context import claim_backed_bundle, persisted_findings
 from .neo4j_store import check_neo4j_ready, graph_status_for_run
 from .ocr import runtime_dependency_status
 from .prepare_inputs import prepare_agent_input
@@ -91,7 +92,6 @@ from .platform_foundation import (
 )
 from . import qa as qa_engine
 from . import llm_qa
-from .skills.finance_controls import run_all_finance_skills
 from .reviewer_runtime import resume_reviewed_run
 from .review_files import (
     build_review_file_registry,
@@ -4862,7 +4862,7 @@ def _summary_with_governed_claim_snapshot(
         snapshot = repository.snapshot(
             f"run:{run_id}",
             context=context,
-            metric_keys=FINANCE_HEADLINE_METRIC_KEYS,
+            metric_keys=FINANCE_HEADLINE_METRIC_KEYS | FINANCE_PRESENTATION_METRIC_KEYS,
         )
         reconciliation = repository.reconciliation(run_id, tenant_id=tenant_id)
     except KeyError:
@@ -4880,9 +4880,8 @@ def _summary_with_governed_claim_snapshot(
             status_code=503,
             detail="The governed briefing has not passed reconciliation.",
         )
-    # The legacy narrative/trend projection has no per-claim ACL boundary yet.
-    # A partial headline overlay would expose denied data through those siblings.
-    # Deny the whole briefing until all of its headline sources are accessible.
+    # The executive finance projection is reconstructed from this authorized
+    # snapshot. The whole-run check also protects remaining non-financial prose.
     if snapshot.get("denied_count"):
         raise HTTPException(
             status_code=403,
@@ -11611,11 +11610,6 @@ def public_report_preview(
     )
 
 
-# Cache reloaded Q&A contexts by a stable run key so repeated chat questions do
-# not reload the dataset each time. Keyed by (dataset_root, run_mode).
-_QA_CONTEXT_CACHE: dict[tuple[str, str, str], dict[str, Any]] = {}
-
-
 def _load_kg_snapshot(summary: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     artifacts = summary.get("artifacts") or {}
     graph_path = artifacts.get(KNOWLEDGE_GRAPH_ARTIFACT_KEY) or artifacts.get("knowledge_graph")
@@ -11671,56 +11665,75 @@ def _qa_summary_for_run(run_id: str | None) -> dict[str, Any]:
 
 
 def _resolve_qa_context(run_id: str | None) -> dict[str, Any]:
-    """Reload the bundle + findings for a run so Q&A can compute fresh answers.
-
-    Uses the latest run when run_id is omitted. Returns a context dict with the
-    bundle, findings, and the resolved run identifiers, or raises HTTPException
-    with actionable guidance when no answerable run exists.
-    """
+    """Resolve persisted run metadata without reopening source artifacts."""
     summary = _qa_summary_for_run(run_id)
     resolved_run_id = summary.get("run_id") or run_id
-    dataset_root = summary.get("dataset") or summary.get("dataset_root")
     run_mode = str(summary.get("run_mode") or "full")
-    if not dataset_root:
+    if not resolved_run_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No completed run is available to answer questions yet. Start a run first.",
         )
-    cache_run_key = str(resolved_run_id or dataset_root)
-    cache_key = (cache_run_key, str(dataset_root), run_mode)
-    cached = _QA_CONTEXT_CACHE.get(cache_key)
-    if cached is None:
-        dataset_path = Path(str(dataset_root))
-        if not dataset_path.exists():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"The run's source data is no longer available at {dataset_root}.",
-            )
-        try:
-            bundle = load_dataset(dataset_path, strict=(run_mode != "partial"))
-            findings = run_all_finance_skills(bundle)
-            kg_nodes, kg_edges = _load_kg_snapshot(summary)
-        except Exception as exc:  # pragma: no cover - defensive reload guard
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Could not reload the run's data for Q&A: {exc}",
-            ) from exc
-        cached = {
-            "bundle": bundle,
-            "findings": findings,
-            "kg_nodes": kg_nodes,
-            "kg_edges": kg_edges,
-        }
-        _QA_CONTEXT_CACHE[cache_key] = cached
+    detail = state_store.get_run_detail(str(resolved_run_id))
+    persisted = list(detail.get("findings") or []) if isinstance(detail, Mapping) else []
+    kg_nodes, kg_edges = _load_kg_snapshot(summary)
     return {
-        "bundle": cached["bundle"],
-        "findings": cached["findings"],
-        "kg_nodes": cached.get("kg_nodes") or [],
-        "kg_edges": cached.get("kg_edges") or [],
+        "bundle": None,
+        "findings": persisted_findings(persisted),
+        "kg_nodes": kg_nodes,
+        "kg_edges": kg_edges,
         "summary": summary,
         "run_id": resolved_run_id,
         "run_mode": run_mode,
     }
+
+
+def _hydrate_governed_qa_context(
+    context: dict[str, Any], *, principal: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Attach only policy-filtered snapshot records to deterministic/model QA."""
+    summary = context.get("summary") if isinstance(context.get("summary"), Mapping) else {}
+    # Unit/in-process callers may inject an already-authorized synthetic bundle.
+    # Production contexts created by _resolve_qa_context always arrive empty and
+    # carry the server-generated policy marker after snapshot authorization.
+    if context.get("bundle") is not None and not isinstance(summary.get("_claim_policy_context"), Mapping):
+        return context
+    run_id = str(context.get("run_id") or summary.get("run_id") or "").strip()
+    policy = summary.get("_claim_policy_context") if isinstance(summary.get("_claim_policy_context"), Mapping) else {}
+    tenant_id = str(policy.get("tenant_id") or principal.get("tenant_id") or "").strip()
+    role = str(principal.get("role") or "").strip()
+    if not run_id or not tenant_id or not role:
+        context["bundle"] = None
+        return context
+    policy_context = PolicyContext(
+        tenant_id=tenant_id,
+        principal_id=str(policy.get("principal_id") or principal.get("subject") or "unknown"),
+        roles=frozenset({role}),
+        purpose=UsePurpose.EXECUTIVE_BRIEFING,
+        business_units=frozenset(
+            str(item)
+            for item in (policy.get("business_units") or principal.get("business_units") or [])
+            if str(item).strip()
+        ),
+    )
+    try:
+        snapshot = ClaimRepository().snapshot(f"run:{run_id}", context=policy_context)
+    except (KeyError, RuntimeError):
+        raise HTTPException(
+            status_code=503,
+            detail="The governed assistant evidence snapshot is unavailable. No source files were reopened.",
+        ) from None
+    if snapshot.get("requires_resolution") or snapshot.get("requires_recompute"):
+        raise HTTPException(
+            status_code=403,
+            detail="The governed assistant evidence is not fully authorized and current for this briefing.",
+        )
+    records = [record for record in list(snapshot.get("records") or []) if isinstance(record, Mapping)]
+    context["bundle"] = claim_backed_bundle(records)
+    context["governed_claim_record_count"] = len(records)
+    context["governed_claim_denied_count"] = int(snapshot.get("denied_count") or 0)
+    context["data_boundary"] = "authorized_claim_snapshot"
+    return context
 
 
 def _resolve_public_assistant_context(
@@ -15446,6 +15459,7 @@ async def _assistant_chat_response(
             principal=principal_context,
         )
         context["authenticated_role"] = str(principal_context.get("role") or "")
+        context = _hydrate_governed_qa_context(context, principal=principal_context)
     llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
 
     if _question_has_semantic_kpi_mismatch(question) or _question_has_semantic_self_reference(question):
@@ -16488,6 +16502,7 @@ def data_qa(
         context["summary"] = _summary_with_governed_claim_snapshot(
             context["summary"], principal=_,
         )
+        context = _hydrate_governed_qa_context(context, principal=_)
     orchestrator = get_orchestrator()
 
     def _risk_payload(response_mode: str, basis: str, matched: bool, status_payload: dict[str, Any] | None = None) -> dict[str, Any]:

@@ -349,6 +349,8 @@ def test_group_cash_floor_history_is_a_governed_chart_not_a_synthetic_series():
         "labels": ["2025-Q4", "2026-Q1"],
         "actual": ["1320000000.00", "1370000000.00"],
         "plan": ["1300000000.00", "1340000000.00"],
+        "floor": ["1200000000.00", "1200000000.00"],
+        "notes": ["Approved floor", "Approved floor"],
         "has_plan_series": True,
         "unit": "sar",
         "scope_note": "Explicitly labelled quarterly group cash actuals versus budget; estimates and forecasts are excluded.",

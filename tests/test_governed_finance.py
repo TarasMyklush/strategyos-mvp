@@ -59,9 +59,110 @@ def test_snapshot_overlay_removes_unauthorized_legacy_headline_values():
     assert result["components"] == {"revenue_actual": "100"}
     assert result["components"].get("revenue_plan") is None
     assert result["components"].get("operating_cost_actual") is None
-    assert result["trend"] == legacy["trend"]
+    assert result["trend"] == {}
     assert result["claim_snapshot"]["denied_count"] == 2
     assert result["component_claims"]["revenue_actual"]["claim_revision_id"] == "revision-revenue_actual"
+
+
+def _presentation_claim(
+    component: str,
+    *,
+    driver: str,
+    series: str,
+    label: str,
+    value: str,
+    order: int = 0,
+    unit: str = "SAR",
+    business_unit: str | None = None,
+    extra_dimensions: dict | None = None,
+) -> dict:
+    metric = {
+        "trend": "ceo.presentation.trend",
+        "contributor": "ceo.presentation.contributor",
+        "cost_component": "ceo.presentation.cost_component",
+    }[component]
+    return {
+        "claim_revision_id": f"revision-{component}-{driver}-{series}-{label}",
+        "family_key": f"family-{component}-{driver}-{series}-{label}",
+        "label": label,
+        "claim_kind": "actual" if series == "actual" else "plan",
+        "metric_key": metric,
+        "value": value,
+        "scale": "1",
+        "unit": unit,
+        "currency": "SAR" if unit == "SAR" else None,
+        "business_unit": business_unit,
+        "period": {"start": "2026-01-01", "end": "2026-01-31"},
+        "traceability": "present",
+        "dimensions": {
+            "presentation_component": component,
+            "driver_key": driver,
+            "series": series,
+            "label": label,
+            "order": order,
+            **(extra_dimensions or {}),
+        },
+        "sources": [{"source_key": "erp-finance", "origin_category": "internal_system"}],
+    }
+
+
+def test_presentation_claims_reconstruct_chart_movers_and_cost_detail():
+    records = [
+        _claim("operating_cost_actual", "120"),
+        _claim("operating_cost_plan", "100", kind="plan"),
+        _presentation_claim("trend", driver="operating_cost", series="actual", label="2026-01", value="120"),
+        _presentation_claim("trend", driver="operating_cost", series="plan", label="2026-01", value="100"),
+        _presentation_claim("contributor", driver="operating_cost", series="actual", label="Tamween", value="70", business_unit="Tamween"),
+        _presentation_claim("contributor", driver="operating_cost", series="plan", label="Tamween", value="50", business_unit="Tamween"),
+        _presentation_claim(
+            "cost_component",
+            driver="operating_cost",
+            series="actual",
+            label="People",
+            value="45",
+            business_unit="Tamween",
+            extra_dimensions={"business_unit": "Tamween", "component": "People"},
+        ),
+        _presentation_claim(
+            "cost_component",
+            driver="operating_cost",
+            series="plan",
+            label="People",
+            value="40",
+            business_unit="Tamween",
+            extra_dimensions={"business_unit": "Tamween", "component": "People"},
+        ),
+    ]
+    result = finance_payload_from_claim_snapshot(
+        {"reporting_currency": "SAR", "trend": {"operating_cost": {"actual": [999]}}},
+        {"records": records},
+    )
+
+    assert result["trend"]["operating_cost"] == {
+        "labels": ["2026-01"],
+        "actual": ["120"],
+        "plan": ["100"],
+        "has_plan_series": True,
+        "unit": "sar",
+    }
+    assert result["dynamics"]["operating_cost"]["dragging"] == [
+        {"name": "Tamween", "delta": "SAR 20 above plan"}
+    ]
+    assert result["evidence"]["operating_cost"]["details"]["cost_components"]["rows"][0]["variance_sar"] == "5"
+
+
+def test_presentation_series_cannot_misrepresent_its_claim_kind():
+    record = _presentation_claim(
+        "trend",
+        driver="revenue",
+        series="actual",
+        label="2026-01",
+        value="120",
+    )
+    record["claim_kind"] = "plan"
+
+    with pytest.raises(ValueError, match="series does not match"):
+        finance_payload_from_claim_snapshot({}, {"records": [record]})
 
 
 def test_governed_snapshot_drives_cards_and_discloses_claim_lineage():

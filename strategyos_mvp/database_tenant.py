@@ -29,9 +29,36 @@ def bind_connection_context(conn: Any, principal: Mapping[str, Any] | None) -> N
             or not principal.get('subject') or not principal.get('role')):
         raise RuntimeError('Database tenant context requires a verified request identity.')
     tenant_key=str(principal.get('tenant_id') or '').strip()
+    # The tenants table is itself protected. Bind the signed tenant reference
+    # first so PostgreSQL exposes only the matching slug/UUID candidate; then
+    # resolve ambiguity and bind the canonical UUID used by all child policies.
+    _write_context(conn,tenant_key,'')
     with conn.cursor() as cur:
         tenant_uuid=str(resolve_tenant_reference(cur,tenant_key))
     _write_context(conn,tenant_key,tenant_uuid)
+
+
+def bind_runtime_context(
+    conn: Any,
+    *,
+    runtime_scope: str,
+    principal: Mapping[str, Any] | None,
+) -> None:
+    """Prepare one pooled checkout for its database-enforced runtime identity.
+
+    Request identities receive only the tenant asserted by verified middleware.
+    Background identities receive no request tenant; their narrowly scoped RLS
+    authority is derived by PostgreSQL from the provisioned login role, never
+    from an application-controlled setting.
+    """
+    scope = str(runtime_scope or "").strip().lower()
+    if scope == "request":
+        bind_connection_context(conn, principal)
+        return
+    if scope in {"worker", "projector"}:
+        bind_connection_context(conn, None)
+        return
+    raise RuntimeError("Unsupported database runtime scope.")
 
 
 def clear_connection_context(conn: Any) -> None:

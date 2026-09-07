@@ -3883,39 +3883,27 @@ def test_latest_run_knowledge_graph_requires_auth():
 
 
 def test_qa_context_resolves_explicit_run_id_from_state_store(monkeypatch, tmp_path):
-    dataset_root = tmp_path / "dataset"
-    dataset_root.mkdir()
-    captured: dict[str, object] = {}
-    api_module._QA_CONTEXT_CACHE.clear()
-
-    def fake_run_detail(run_id: str):
-        return {
-            "run_id": run_id,
-            "dataset_root": str(dataset_root),
-            "run_dir": str(tmp_path / "run"),
-            "summary_json": {"run_mode": "partial"},
-        }
-
-    def fake_load_dataset(path: Path, *, strict: bool):
-        captured["path"] = path
-        captured["strict"] = strict
-        return object()
-
-    monkeypatch.setattr(api_module.state_store, "get_run_detail", fake_run_detail)
-    monkeypatch.setattr(api_module, "load_dataset", fake_load_dataset)
-    monkeypatch.setattr(api_module, "run_all_finance_skills", lambda bundle: ["finding"])
+    monkeypatch.setattr(
+        api_module,
+        "_qa_summary_for_run",
+        lambda run_id: {"run_id": run_id, "run_mode": "partial"},
+    )
+    monkeypatch.setattr(
+        api_module.state_store,
+        "get_run_detail",
+        lambda run_id: {"status": "ok", "findings": []},
+    )
 
     context = api_module._resolve_qa_context("run-77")
 
     assert context["run_id"] == "run-77"
     assert context["run_mode"] == "partial"
-    assert captured == {"path": dataset_root, "strict": False}
-    assert context["findings"] == ["finding"]
+    assert context["bundle"] is None
+    assert context["findings"] == []
 
 
 def test_inline_ceo_kpi_chat_uses_server_resolved_contract_and_never_llm(monkeypatch):
     original, client = _client_with_auth()
-    api_module._QA_CONTEXT_CACHE.clear()
     try:
         monkeypatch.setattr(
             api_module,
@@ -3998,7 +3986,6 @@ def test_inline_ceo_kpi_chat_uses_server_resolved_contract_and_never_llm(monkeyp
 
 def test_kpi_mover_note_context_is_resolved_governedly_across_hermes_entrypoints(monkeypatch):
     original, client = _client_with_auth()
-    api_module._QA_CONTEXT_CACHE.clear()
     context = {
         "bundle": object(),
         "findings": [],
@@ -4117,7 +4104,6 @@ def test_kpi_mover_note_context_is_resolved_governedly_across_hermes_entrypoints
 
 def test_assistant_chat_models_target_margin_from_governed_finance_kpis_despite_stale_cash_context(monkeypatch):
     original, client = _client_with_auth()
-    api_module._QA_CONTEXT_CACHE.clear()
     try:
         monkeypatch.setattr(
             api_module,

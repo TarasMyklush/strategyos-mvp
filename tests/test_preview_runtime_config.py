@@ -10,8 +10,16 @@ spec.loader.exec_module(module)
 
 
 def fixture():
-    services={name:{'environment':{'DATABASE_URL':'postgresql://strategyos_preview_runtime:synthetic@postgres/proof',
-        'STRATEGYOS_DATABASE_SCHEMA_MODE':'verify'}} for name in ('strategyos-api','strategyos-worker','strategyos-claim-projector')}
+    contracts={
+        'strategyos-api':('strategyos_preview_runtime','request'),
+        'strategyos-worker':('strategyos_preview_worker','worker'),
+        'strategyos-claim-projector':('strategyos_preview_projector','projector'),
+    }
+    services={name:{'environment':{
+        'DATABASE_URL':f'postgresql://{user}:synthetic@postgres/proof',
+        'STRATEGYOS_DATABASE_SCHEMA_MODE':'verify',
+        'STRATEGYOS_DATABASE_RUNTIME_SCOPE':scope,
+    }} for name,(user,scope) in contracts.items()}
     services['strategyos-migrate']={'profiles':['schema-migration'],'read_only':True,'cap_drop':['ALL'],
         'environment':{'DATABASE_URL':'postgresql://migration:synthetic@postgres/proof'}}
     return {'name':'strategyos-branch','services':services}
@@ -32,6 +40,18 @@ def test_later_overlay_cannot_restore_runtime_migration_authority(service,field,
     config=fixture()
     config['services'][service]['environment'][field]=value
     with pytest.raises(ValueError): module.validate(config)
+
+
+@pytest.mark.parametrize('service',[
+    'strategyos-api','strategyos-worker','strategyos-claim-projector',
+])
+def test_runtime_scope_cannot_be_relabelled(service):
+    config=fixture()
+    config['services'][service]['environment']['STRATEGYOS_DATABASE_RUNTIME_SCOPE']='request'
+    if service=='strategyos-api':
+        config['services'][service]['environment']['STRATEGYOS_DATABASE_RUNTIME_SCOPE']='worker'
+    with pytest.raises(ValueError,match='scope'):
+        module.validate(config)
 
 
 def test_preview_deploy_prepares_role_before_starting_new_application():

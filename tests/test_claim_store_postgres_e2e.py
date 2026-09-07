@@ -25,6 +25,7 @@ from strategyos_mvp.state_store import (
     ensure_data_schema,
     persist_claim_reconciliation,
     persist_finance_kpi_claims,
+    persist_finance_presentation_claims,
     persist_run_claim_snapshot,
     persist_transaction_claims,
 )
@@ -353,6 +354,62 @@ def test_run_backfill_materializes_kpis_lineage_snapshot_and_reconciliation():
                 },
                 recorded_at="2026-07-01T00:00:00Z",
             )
+            presentation_result = persist_finance_presentation_claims(
+                cur,
+                tenant_id=tenant_id,
+                batch_id=batch_id,
+                run_id=run_id,
+                evidence_ids={"erp/revenue.csv": document_id},
+                finance_payload={
+                    "authoritative": True,
+                    "reporting_period_key": "2026-01-01 to 2026-06-30",
+                    "trend": {
+                        "revenue": {
+                            "labels": ["2026-06"],
+                            "actual": ["100"],
+                            "plan": ["95"],
+                            "unit": "sar",
+                            "actual_source_file": "erp/revenue.csv",
+                            "plan_source_file": "erp/revenue.csv",
+                        }
+                    },
+                    "evidence": {
+                        "revenue": {
+                            "files": ["erp/revenue.csv"],
+                            "details": {
+                                "contributors": {
+                                    "revenue": [
+                                        {
+                                            "label": "BU One",
+                                            "value_sar": "100",
+                                            "plan_sar": "95",
+                                            "source_locator": "row 2",
+                                        }
+                                    ]
+                                }
+                            },
+                        },
+                        "operating_cost": {
+                            "details": {
+                                "cost_components": {
+                                    "available": True,
+                                    "source_file": "erp/revenue.csv",
+                                    "rows": [
+                                        {
+                                            "business_unit": "BU One",
+                                            "component": "People",
+                                            "actual_sar": "40",
+                                            "budget_sar": "35",
+                                            "locator": "row 2",
+                                        }
+                                    ],
+                                }
+                            }
+                        },
+                    },
+                },
+                recorded_at="2026-07-01T00:00:00Z",
+            )
             snapshot_count = persist_run_claim_snapshot(
                 cur,
                 tenant_id=tenant_id,
@@ -367,6 +424,7 @@ def test_run_backfill_materializes_kpis_lineage_snapshot_and_reconciliation():
 
             assert transaction_result == {"claims": 1, "exceptions": 0}
             assert kpi_result == {"claims": 4, "exceptions": 0}
+            assert presentation_result == {"claims": 6, "exceptions": 0}
             assert snapshot_count == 1
             assert reconciliation_count == 1
             cur.execute(
@@ -385,7 +443,7 @@ def test_run_backfill_materializes_kpis_lineage_snapshot_and_reconciliation():
                 "select count(*) from strategyos_analysis_snapshot_claims where snapshot_id = (select id from strategyos_analysis_snapshots where snapshot_key = %s)",
                 (f"run:{run_id}",),
             )
-            assert cur.fetchone()[0] == 5
+            assert cur.fetchone()[0] == 11
 
     repo = ClaimRepository(_connection_factory(url))
     snapshot = repo.snapshot(
@@ -397,7 +455,7 @@ def test_run_backfill_materializes_kpis_lineage_snapshot_and_reconciliation():
             purpose=UsePurpose.EXECUTIVE_BRIEFING,
         ),
     )
-    assert len(snapshot["records"]) == 5
+    assert len(snapshot["records"]) == 11
     headline_snapshot = repo.snapshot(
         f"run:{run_id}",
         context=PolicyContext(
@@ -461,7 +519,7 @@ def test_run_backfill_materializes_kpis_lineage_snapshot_and_reconciliation():
     while batch_events := repo.lease_projection_batch(worker_id="e2e-worker", limit=500):
         events.extend(batch_events)
     tenant_events = [item for item in events if item["tenant_id"] == tenant_id]
-    assert len(tenant_events) == 15
+    assert len(tenant_events) == 33
     cache_event = next(item for item in tenant_events if item["projection_type"] == "cache")
     record = repo.projection_record(
         cache_event["claim_revision_id"], tenant_id=tenant_id

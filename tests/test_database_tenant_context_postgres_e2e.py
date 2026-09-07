@@ -19,6 +19,8 @@ def tenant_runtime(monkeypatch,tmp_path):
     if not url:
         pytest.skip('Dedicated Postgres proof endpoint required.')
     role='strategyos_preview_runtime_'+uuid4().hex[:12]
+    suffix=role.removeprefix('strategyos_preview_runtime')
+    roles=(role,'strategyos_preview_worker'+suffix,'strategyos_preview_projector'+suffix)
     table='qa_tenant_pool_'+uuid4().hex
     tenant_ids=[uuid4(),uuid4()]
     slugs=['pool-a-'+uuid4().hex,'pool-b-'+uuid4().hex]
@@ -37,7 +39,8 @@ def tenant_runtime(monkeypatch,tmp_path):
             owner.execute(sql.SQL("CREATE POLICY bound_tenant ON {} USING(tenant_id=nullif(current_setting('strategyos.tenant_uuid',true),'')::uuid) WITH CHECK(tenant_id=nullif(current_setting('strategyos.tenant_uuid',true),'')::uuid)").format(sql.Identifier(table)))
             owner.commit()
             database_schema.provision_preview_runtime(owner,path,role=role)
-        runtime_url=path.read_text().strip().split('=',1)[1]
+        runtime_entries=dict(line.split('=',1) for line in path.read_text().splitlines())
+        runtime_url=runtime_entries['STRATEGYOS_RUNTIME_DATABASE_URL']
         pool=ConnectionPool(runtime_url,min_size=1,max_size=1,timeout=3,open=True)
         pool.wait()
         monkeypatch.setattr(state_store,'_get_pool',lambda:pool)
@@ -48,9 +51,10 @@ def tenant_runtime(monkeypatch,tmp_path):
             pool.close()
         with psycopg.connect(url) as owner:
             owner.execute(sql.SQL('DROP TABLE IF EXISTS {}').format(sql.Identifier(table)))
-            if owner.execute('SELECT 1 FROM pg_roles WHERE rolname=%s',(role,)).fetchone():
-                owner.execute(sql.SQL('DROP OWNED BY {}').format(sql.Identifier(role)))
-                owner.execute(sql.SQL('DROP ROLE {}').format(sql.Identifier(role)))
+            for login in roles:
+                if owner.execute('SELECT 1 FROM pg_roles WHERE rolname=%s',(login,)).fetchone():
+                    owner.execute(sql.SQL('DROP OWNED BY {}').format(sql.Identifier(login)))
+                    owner.execute(sql.SQL('DROP ROLE {}').format(sql.Identifier(login)))
 
 
 def identity(tenant,**overrides):
