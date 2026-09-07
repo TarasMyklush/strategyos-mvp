@@ -395,7 +395,19 @@ def finance_payload_from_claim_snapshot(
     trend, dynamics, cost_components = _presentation_projection(presentation_records, currency)
     legacy_evidence = dict(payload.get("evidence") or {})
     evidence: dict[str, dict[str, Any]] = {}
-    for evidence_key in EVIDENCE_COMPONENTS:
+    evidence_components = dict(EVIDENCE_COMPONENTS)
+    calculation_models = (
+        payload.get("calculation_models")
+        if isinstance(payload.get("calculation_models"), Mapping)
+        else {}
+    )
+    if calculation_models.get("operating_cost") == "revenue_minus_ebitda":
+        # This source contract supplies an explicit group EBITDA amount and a
+        # reconciled group revenue actual.  COGS is already inside the
+        # resulting total-cost bridge, so demanding it again would create a
+        # false gap and double-count it in the presentation.
+        evidence_components["ebitda_margin"] = ("ebitda_actual", "ebitda_plan")
+    for evidence_key in evidence_components:
         legacy_item = legacy_evidence.get(evidence_key)
         item = {
             key: value
@@ -403,7 +415,7 @@ def finance_payload_from_claim_snapshot(
             if key not in {"details", "files", "claim_revisions", "claim_labels", "governed_sources"}
         }
         evidence[evidence_key] = item
-    for evidence_key, keys in EVIDENCE_COMPONENTS.items():
+    for evidence_key, keys in evidence_components.items():
         item = evidence.setdefault(evidence_key, {})
         linked = [component_claims[key] for key in keys if key in component_claims]
         driver_presentation = [
@@ -456,7 +468,7 @@ def finance_payload_from_claim_snapshot(
             for key in keys
             if key not in {"revenue_plan", "ebitda_plan", "operating_cost_plan", "board_floor"}
         )
-        for evidence_key, keys in EVIDENCE_COMPONENTS.items()
+        for evidence_key, keys in evidence_components.items()
     }
 
     result = {

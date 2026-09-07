@@ -748,7 +748,10 @@ def _executive_kpi_brief(
     evidence_details = evidence.get("details") if isinstance(evidence.get("details"), Mapping) else {}
     source_files = list(evidence.get("files") or [])
     source_titles = list(dict.fromkeys(_source_title(item) for item in source_files))
-    group_budget_basis = any("bu_group_budget" in str(item).lower() for item in source_files)
+    group_budget_basis = (
+        spec.get("cost_bridge_model") == "revenue_minus_ebitda"
+        or any("bu_group_budget" in str(item).lower() for item in source_files)
+    )
     formula = str(spec["formula"])
     comparison_name = "Current-period comparison"
     comparison_value = comparison if comparison_available else "Not yet aligned"
@@ -988,8 +991,23 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
         "reconciliation_status": claim_reconciliation.get("status"),
     }
     cards: list[dict[str, Any]] = []
+    formula_overrides = (
+        finance_payload.get("formulas")
+        if isinstance(finance_payload.get("formulas"), Mapping)
+        else {}
+    )
+    calculation_models = (
+        finance_payload.get("calculation_models")
+        if isinstance(finance_payload.get("calculation_models"), Mapping)
+        else {}
+    )
 
     for spec in _CEO_KPI_SPECS:
+        spec = {
+            **spec,
+            "formula": str(formula_overrides.get(spec["key"]) or spec["formula"]),
+            "cost_bridge_model": calculation_models.get("operating_cost"),
+        }
         if not finance_payload:
             cards.append(
                 _unavailable_ceo_kpi(
@@ -1038,7 +1056,11 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
             comparison = _basis_points_display(variance_bps)
             missing_inputs = [] if plan_margin is not None else ["H1 EBITDA budget aligned to this scope", "H1 revenue budget aligned to this scope"]
             comparison_available = plan_margin is not None
-            if spec["key"] == "ebitda_margin" and _number_or_none(components.get("cogs_actual")) is None:
+            if (
+                spec["key"] == "ebitda_margin"
+                and spec.get("cost_bridge_model") != "revenue_minus_ebitda"
+                and _number_or_none(components.get("cogs_actual")) is None
+            ):
                 missing_inputs.append("Cost of goods sold bridge input")
         else:
             pct = (actual / comparator) * 100 if comparator not in {None, 0} else None
@@ -1073,7 +1095,10 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
         actual_is_complete = source_actual_complete and reconciliation_passed
         actual_missing = []
         if not source_actual_complete:
-            actual_missing.append("Complete latest cash-position balances")
+            if spec["key"] == "cash_vs_floor":
+                actual_missing.append("Complete latest cash-position balances")
+            elif not missing_inputs:
+                actual_missing.append("Complete source evidence bridge")
         if not reconciliation_passed:
             actual_missing.append("Passed canonical claim reconciliation")
         missing_inputs = list(dict.fromkeys([*missing_inputs, *actual_missing]))

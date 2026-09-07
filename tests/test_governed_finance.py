@@ -213,6 +213,67 @@ def test_governed_snapshot_drives_cards_and_discloses_claim_lineage():
     assert read_model["canonical_claim_status"] == "ready"
 
 
+def test_reconciled_group_bridge_uses_its_declared_formula_without_false_cogs_gap():
+    legacy = {
+        "authoritative": True,
+        "derived_from": "deterministic_source_finance_kpi_engine",
+        "reporting_period_key": "H1 2026",
+        "reporting_currency": "SAR",
+        "components": {},
+        "calculation_models": {
+            "revenue": "reconciled_preliminary_group_flash",
+            "ebitda_margin": "explicit_ebitda_divided_by_reconciled_revenue",
+            "operating_cost": "revenue_minus_ebitda",
+        },
+        "formulas": {
+            "revenue": "Revenue = reconciled group H1 preliminary actual; the comparison is the aligned approved H1 budget.",
+            "ebitda_margin": "EBITDA margin = explicit group H1 EBITDA ÷ reconciled group H1 Revenue; variance to plan is shown in basis points.",
+            "operating_cost": "Operating cost to EBITDA = reconciled group H1 Revenue − explicit group H1 EBITDA; it includes cost of goods sold.",
+        },
+    }
+    finance = finance_payload_from_claim_snapshot(
+        legacy,
+        {
+            "snapshot_id": "snapshot-group-bridge",
+            "snapshot_key": "run:group-bridge",
+            "analysis_as_of": "2026-07-01T00:00:00+00:00",
+            "policy_version": "source-claim-v1",
+            "records": [
+                _claim("revenue_actual", "100"),
+                _claim("revenue_plan", "95", kind="plan"),
+                _claim("ebitda_actual", "20"),
+                _claim("ebitda_plan", "19", kind="plan"),
+                _claim("operating_cost_actual", "80"),
+                _claim("operating_cost_plan", "76", kind="plan"),
+            ],
+        },
+        reconciliation={"status": "passed", "difference_sar": "0"},
+    )
+    cards = build_executive_presentation(
+        build_executive_read_model(
+            {"run_id": "group-bridge", "finance_kpi": finance},
+            [],
+            {},
+            {"report_count": 0},
+            {},
+        )
+    )["driver_grid"]
+    ebitda = cards[1]
+    operating_cost = cards[2]
+
+    assert finance["actual_complete"]["ebitda_margin"] is True
+    assert ebitda["availability"] == "verified"
+    assert ebitda["missing_inputs"] == []
+    assert all("Not supplied" not in step["value"] for step in ebitda["executive_brief"]["calculation"]["steps"])
+    assert [step["label"] for step in ebitda["executive_brief"]["calculation"]["steps"]] == [
+        "Consolidated group revenue",
+        "Consolidated group EBITDA",
+        "Total cost to EBITDA (including COGS)",
+    ]
+    assert "Revenue − explicit group H1 EBITDA" in operating_cost["formula"]
+    assert "includes cost of goods sold" in operating_cost["formula"]
+
+
 def test_partial_reconciliation_never_renders_as_evidence_verified():
     finance = finance_payload_from_claim_snapshot(
         {

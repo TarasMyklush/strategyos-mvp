@@ -580,6 +580,24 @@ def _group_finance_projection(root: Path) -> dict[str, Any] | None:
         "derived_from": "deterministic_source_finance_kpi_engine",
         "reporting_period_key": period,
         "reporting_currency": "SAR",
+        "calculation_models": {
+            "revenue": (
+                "reconciled_preliminary_group_flash"
+                if flash_file
+                else "group_budget_reported_actual"
+            ),
+            "ebitda_margin": "explicit_ebitda_divided_by_group_revenue",
+            "operating_cost": "revenue_minus_ebitda",
+        },
+        "formulas": {
+            "revenue": (
+                "Revenue = reconciled group H1 preliminary actual; the comparison is the aligned approved H1 budget."
+                if flash_file
+                else "Revenue = reported group H1 actual; the comparison is the aligned approved H1 budget."
+            ),
+            "ebitda_margin": "EBITDA margin = explicit group H1 EBITDA ÷ group H1 Revenue; variance to plan is shown in basis points.",
+            "operating_cost": "Operating cost to EBITDA = group H1 Revenue − explicit group H1 EBITDA; it includes cost of goods sold.",
+        },
         "computation_boundary": (
             "Group revenue actual comes from the reconciled H1 flash result; plan and explicit EBITDA amounts come from the aligned group budget. "
             "The revenue trend is separately labelled Tamween division steering data. No unprovided group cost allocation is inferred."

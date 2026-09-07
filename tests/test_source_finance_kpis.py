@@ -549,6 +549,13 @@ def test_reconciled_flash_resolves_revenue_without_laundering_mixed_budget(tmp_p
     assert result["actual_complete"]["operating_cost"] is True
     assert result["evidence"]["revenue"]["details"]["measurement_status"] == "preliminary_actual"
     assert result["evidence"]["revenue"]["details"]["reconciliation"]["status"] == "passed"
+    assert result["calculation_models"] == {
+        "revenue": "reconciled_preliminary_group_flash",
+        "ebitda_margin": "explicit_ebitda_divided_by_group_revenue",
+        "operating_cost": "revenue_minus_ebitda",
+    }
+    assert "group H1 Revenue" in result["formulas"]["ebitda_margin"]
+    assert "Revenue − explicit group H1 EBITDA" in result["formulas"]["operating_cost"]
 
 
 def test_unreconciled_flash_cannot_resolve_mixed_actual_estimate(tmp_path):
