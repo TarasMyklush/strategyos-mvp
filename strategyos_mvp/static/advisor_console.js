@@ -23,7 +23,7 @@
     t.appendChild(body); $(target).replaceChildren(t);
   }
   function input(field, value, type) { var n = document.createElement('input'); n.dataset.field = field; n.value = value; n.type = type || 'text'; n.required = true; return n; }
-  function resetPreview() { preview = null; $('advisor-allocations').replaceChildren(); show('advisor-allocations', false); show('advisor-save', false); $('advisor-readiness').textContent = 'Mappings have not been checked.'; }
+  function resetPreview() { preview = null; $('advisor-allocations').replaceChildren(); $('advisor-labels').replaceChildren(); show('advisor-allocations', false); show('advisor-labels', false); show('advisor-save', false); $('advisor-readiness').textContent = 'Mappings have not been checked.'; }
   function planPath() { return '/plans/' + encodeURIComponent(plan.plan_id) + '/versions/' + plan.version; }
   function populatePlan() {
     resetPreview(); show('advisor-form', Boolean(plan && plan.governance_status === 'ratified' && permissions.can_import));
@@ -61,7 +61,15 @@
       return [input('cell_id', safe(parent.id + '-' + item.member)), item.member, item.historical_value, adjustment,
         input('owner', parent.owner), tolerance, input('label_en', item.member), input('label_ar', item.member), item.source.locator];
     }));
-    show('advisor-allocations', true); show('advisor-save', preview.readiness === 'ready');
+    var covered = new Set([parent.metric, preview.split_dimension].concat(preview.candidates.map(function (item) { return item.member; })));
+    var terms = new Set(Object.keys(plan.payload.dimensions));
+    plan.payload.cells.forEach(function (cell) { Object.values(cell.dimensions).forEach(function (value) { terms.add(value); }); });
+    preview.candidates.forEach(function (item) { terms.add(item.member); });
+    var additional = Array.from(terms).filter(function (term) { return !covered.has(term); }).sort();
+    table('advisor-labels', ['Additional board term', 'English label', 'Arabic label'], additional.map(function (term) {
+      var en = input('label_en', term), ar = input('label_ar', term); en.dataset.term = term; ar.dataset.term = term; return [term, en, ar];
+    }));
+    show('advisor-allocations', true); show('advisor-labels', additional.length > 0); show('advisor-save', preview.readiness === 'ready');
     $('advisor-readiness').textContent = preview.readiness === 'ready' ? 'Ready: plan ratified; both source packs authorized; history complete; add owners, tolerances and both board languages, then save.' : 'Blocked: the selected historical mix is incomplete or nonpositive.';
   }); });
   $('advisor-form').addEventListener('submit', function (event) { event.preventDefault(); action(async function () {
@@ -69,6 +77,11 @@
     var rows = Array.from($('advisor-allocations').querySelectorAll('tbody tr'));
     function field(row, name) { return row.querySelector('[data-field="' + name + '"]').value.trim(); }
     var parent = plan.payload.cells.find(function (cell) { return cell.id === preview.parent_cell_id; });
+    var additionalLabels = {};
+    Array.from($('advisor-labels').querySelectorAll('tbody tr')).forEach(function (row) {
+      var en = row.querySelector('[data-field="label_en"]'), ar = row.querySelector('[data-field="label_ar"]');
+      additionalLabels[en.dataset.term] = { en: en.value.trim(), ar: ar.value.trim() };
+    });
     var body = { schema_version: 1, config_id: $('advisor-id').value.trim(), version: Number($('advisor-version').value),
       executive_sponsor: $('advisor-sponsor').value.trim(), objective: $('advisor-objective').value.trim(),
       plan_id: plan.plan_id, plan_version: plan.version, plan_digest: plan.digest,
@@ -78,6 +91,7 @@
       board_title: { en: $('advisor-title-en').value.trim(), ar: $('advisor-title-ar').value.trim() },
       metric_label: { en: $('advisor-metric-en').value.trim(), ar: $('advisor-metric-ar').value.trim() },
       dimension_label: { en: $('advisor-dimension-en').value.trim(), ar: $('advisor-dimension-ar').value.trim() },
+      additional_labels: additionalLabels,
       allocations: rows.map(function (row, index) { return { cell_id: field(row, 'cell_id'), member: preview.candidates[index].member,
         owner: field(row, 'owner'), tolerance: field(row, 'tolerance'), adjustment_percent: field(row, 'adjustment_percent'),
         label: { en: field(row, 'label_en'), ar: field(row, 'label_ar') } }; }) };

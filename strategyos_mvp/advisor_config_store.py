@@ -42,6 +42,13 @@ def _validate(principal, conn, config, *, require_latest=True):
         Plan.model_validate(plan['payload']), Actuals.model_validate(actual['payload']),
         config.decomposition_request(), next_version=latest_plan + 1,
         historical_digest=actual['digest'], historical_source_pack_id=actual['source_pack_id'])
+    expected_labels = {cell.metric for cell in preview.cells}
+    expected_labels.update(preview.dimensions)
+    expected_labels.update(member for cell in preview.cells for member in cell.dimensions.values())
+    configured_labels = {parent.metric, config.split_dimension, *configured, *config.additional_labels}
+    missing_labels = sorted(expected_labels - configured_labels)
+    if missing_labels:
+        raise ValueError('Bilingual board labels are incomplete: ' + ', '.join(missing_labels) + '.')
     return plan, actual, parent, preview, newest == config.plan_version
 
 

@@ -798,6 +798,11 @@ def advisor_body(s, digest):
         'board_title': {'en': 'Revenue performance review', 'ar': 'مراجعة أداء الإيرادات'},
         'metric_label': {'en': 'Revenue', 'ar': 'الإيرادات'},
         'dimension_label': {'en': 'Client', 'ar': 'العميل'},
+        'additional_labels': {
+            'product': {'en': 'Product', 'ar': 'المنتج'}, 'region': {'en': 'Region', 'ar': 'المنطقة'},
+            'item-a': {'en': 'Item A', 'ar': 'الصنف أ'}, 'north': {'en': 'North', 'ar': 'الشمال'},
+            'south': {'en': 'South', 'ar': 'الجنوب'}, 'institution': {'en': 'Institution', 'ar': 'مؤسسة'},
+        },
         'allocations': [
             {'cell_id': 'regional-hospital', 'member': 'hospital', 'owner': 'Hospital lead',
              'tolerance': '2', 'adjustment_percent': '50',

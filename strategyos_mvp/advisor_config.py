@@ -34,6 +34,7 @@ class AdvisorConfiguration(Contract):
     board_title: Translation
     metric_label: Translation
     dimension_label: Translation
+    additional_labels: dict[Name, Translation] = Field(default_factory=dict, max_length=200)
     allocations: list[AdvisorAllocation] = Field(min_length=2, max_length=500)
 
     @model_validator(mode="after")
@@ -55,7 +56,8 @@ class AdvisorConfiguration(Contract):
         )
 
     def board_template(self, metric: str):
-        labels = {metric: self.metric_label, self.split_dimension: self.dimension_label}
+        labels = dict(self.additional_labels)
+        labels.update({metric: self.metric_label, self.split_dimension: self.dimension_label})
         labels.update({item.member: item.label for item in self.allocations})
         return PackTemplate(
             template_id=self.config_id[:80], version=self.version,
