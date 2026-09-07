@@ -56,6 +56,7 @@ def _truncate_strategyos_tables(database_url: str) -> None:
                 where schemaname = 'public'
                   and tablename like 'strategyos_%'
                   and tablename not in ('strategyos_schema_migrations', 'strategyos_runtime_schema_contract')
+                  and tablename not like 'strategyos_intent_%'
                 order by tablename
                 """
             )

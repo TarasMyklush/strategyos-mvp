@@ -136,8 +136,10 @@ def test_fixture_reset_preserves_deployment_history(ledger,module_name):
         database_schema.prepare_schema(conn)
         before=conn.execute('SELECT version,checksum_sha256 FROM strategyos_schema_migrations ORDER BY version').fetchall()
         contract=conn.execute('SELECT fingerprint FROM strategyos_runtime_schema_contract').fetchone()
+        conn.execute("INSERT INTO strategyos_intent_plan_versions(tenant_key,plan_id,version,source_pack_id,payload,digest,imported_by) VALUES('fixture-preservation',%s,1,'synthetic','{}','synthetic','test') ON CONFLICT DO NOTHING", (module_name,))
     importlib.import_module('tests.'+module_name)._truncate_strategyos_tables(ledger[1])
     with psycopg.connect(ledger[1]) as conn:
         assert conn.execute('SELECT version,checksum_sha256 FROM strategyos_schema_migrations ORDER BY version').fetchall()==before
         assert conn.execute('SELECT fingerprint FROM strategyos_runtime_schema_contract').fetchone()==contract
+        assert conn.execute("SELECT count(*) FROM strategyos_intent_plan_versions WHERE tenant_key='fixture-preservation' AND plan_id=%s", (module_name,)).fetchone()[0]==1
         database_schema.prepare_schema(conn)
