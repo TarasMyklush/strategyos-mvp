@@ -721,7 +721,7 @@ def history_body(s, digest):
     }
 
 
-def import_history(s):
+def import_history(s, pack=None):
     source = deepcopy(s['p']['cells'][0]['source'])
     source['locator'] = 'historical mix rows'
     year = TODAY.year - 2
@@ -736,7 +736,7 @@ def import_history(s):
              'unit': 'SAR', 'value': '60', 'source': source},
         ],
     }
-    return store.import_actuals(s['operator'], Actuals.model_validate(history), s['pack'])
+    return store.import_actuals(s['operator'], Actuals.model_validate(history), pack or s['pack'])
 
 
 def test_history_candidates_and_governed_decomposition_api(setup):
@@ -813,12 +813,19 @@ def test_advisor_configuration_is_versioned_approved_and_published_without_sourc
     s = setup
     parent = import_pair(s)
     approve(s, parent)
-    import_history(s)
+    history_pack = 'owned-history-pack'
+    history_root = s['root'].parent / history_pack
+    shutil.copytree(s['root'], history_root)
+    history_manifest = json.loads((history_root / 'summary.json').read_text())
+    history_manifest['source_pack_id'] = history_pack
+    (history_root / 'summary.json').write_text(json.dumps(history_manifest))
+    import_history(s, history_pack)
     body = advisor_body(s, parent['digest'])
     configured = advisor_config_store.create(s['operator'], AdvisorConfiguration.model_validate(body))
     assert configured['readiness']['status'] == 'ready'
     assert all(configured['readiness']['checks'].values())
     assert configured['source_bindings']['plan']['source_pack_id'] == s['pack']
+    assert configured['source_bindings']['historical_actuals']['source_pack_id'] == history_pack
     assert configured['approval'] is None
     with pytest.raises(PermissionError):
         advisor_config_store.approve(s['operator'], body['config_id'], 1, configured['digest'],

@@ -108,15 +108,27 @@ def read(principal, config_id, version):
 
 def catalog(principal):
     tenant, _ = intent._scope(principal)
+    visible = []
     with intent._connection() as conn:
-        cursor = conn.execute('''SELECT c.config_id,c.version,c.digest,c.created_by,c.created_at,
+        cursor = conn.execute('''SELECT c.config_id,c.version,c.digest,c.created_by,c.created_at,c.payload,
             (a.version IS NOT NULL) approved,(p.version IS NOT NULL) published
             FROM strategyos_intent_advisor_configs c
             LEFT JOIN strategyos_intent_advisor_approvals a USING(tenant_key,config_id,version)
             LEFT JOIN strategyos_intent_advisor_publications p USING(tenant_key,config_id,version)
             WHERE c.tenant_key=%s ORDER BY c.created_at DESC,c.config_id,c.version DESC LIMIT 100''', (tenant,))
         rows = [dict(zip([column.name for column in cursor.description], values)) for values in cursor.fetchall()]
-    return {'configurations': [intent._public(row) for row in rows]}
+        from .dimensional_intent_sources import SourceUnavailable
+        for row in rows:
+            config = AdvisorConfiguration.model_validate(row['payload'])
+            try:
+                plan = intent._plan(conn, tenant, config.plan_id, config.plan_version)
+                actual = intent._actuals(conn, tenant, config.historical_actual_revision)
+                intent._sources(principal, plan, kind='plan', verify_bytes=False)
+                intent._sources(principal, actual, kind='actuals', verify_bytes=False)
+            except (PermissionError, SourceUnavailable, intent.NotFound):
+                continue
+            visible.append(intent._public({key: value for key, value in row.items() if key != 'payload'}))
+    return {'configurations': visible}
 
 
 def approve(principal, config_id, version, expected_digest, note):
