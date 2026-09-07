@@ -200,6 +200,17 @@ def test_hatchet_components_and_runtime_contract_are_pinned() -> None:
     assert "SERVER_AUTH_COOKIE_SECRETS:" in compose
 
 
+def test_qdrant_capacity_and_patch_version_are_explicit() -> None:
+    compose = (REPO_ROOT / "deploy/docker-compose.yml").read_text(encoding="utf-8")
+    env_example = (REPO_ROOT / "deploy/.env.example").read_text(encoding="utf-8")
+
+    assert "image: qdrant/qdrant:v1.9.7" in compose
+    assert "mem_limit: ${QDRANT_MEMORY_LIMIT:-2g}" in compose
+    assert "memswap_limit: ${QDRANT_MEMORY_SWAP_LIMIT:-3g}" in compose
+    assert "QDRANT_MEMORY_LIMIT=2g" in env_example
+    assert "QDRANT_MEMORY_SWAP_LIMIT=3g" in env_example
+
+
 def test_actions_workflows_reuse_dependency_and_image_caches() -> None:
     ci = (REPO_ROOT / ".github/workflows/strategyos-ci.yml").read_text(encoding="utf-8")
     branch = (

@@ -372,7 +372,12 @@ services:
     restart: unless-stopped
 
   qdrant:
-    image: qdrant/qdrant:v1.9.5
+    # Stay on the newest patch of the current storage-compatible minor. Qdrant
+    # requires sequential minor upgrades for persisted data; do not jump this
+    # single-node volume directly to the CI proof version.
+    image: qdrant/qdrant:v1.9.7
+    mem_limit: ${QDRANT_MEMORY_LIMIT:-2g}
+    memswap_limit: ${QDRANT_MEMORY_SWAP_LIMIT:-3g}
     ulimits:
       nofile:
         soft: 65536
