@@ -28,6 +28,11 @@ TODAY = datetime.now(timezone.utc).date()
 @pytest.fixture(scope='module')
 def postgres():
     initdb, pg_ctl = shutil.which('initdb'), shutil.which('pg_ctl')
+    if not initdb:
+        candidates = sorted(Path('/usr/lib/postgresql').glob('*/bin/initdb'))
+        if candidates:
+            initdb = str(candidates[-1])
+            pg_ctl = str(candidates[-1].with_name('pg_ctl'))
     if not initdb or not pg_ctl:
         pytest.skip('Local PostgreSQL initdb/pg_ctl required for isolated dimensional proof.')
     with tempfile.TemporaryDirectory(prefix='ki-') as directory:
@@ -58,6 +63,13 @@ def setup(postgres, monkeypatch, tmp_path):
     monkeypatch.setattr(store, 'CONFIG', config)
     monkeypatch.setattr(sources, 'CONFIG', config)
     store.initialize()
+    with connect() as conn:
+        conn.execute("CREATE TABLE strategyos_tenants(id integer primary key,slug text)")
+        conn.execute("CREATE TABLE strategyos_source_systems(id integer primary key,tenant_id integer,source_key text)")
+        conn.execute("CREATE TABLE strategyos_source_access_policies(source_system_id integer,allowed_roles text[],allowed_purposes text[],allowed_business_units text[],storage_allowed boolean,export_allowed boolean,effective_to timestamptz)")
+        conn.execute("INSERT INTO strategyos_tenants VALUES(1,'intent-tenant')")
+        conn.execute("INSERT INTO strategyos_source_systems VALUES(1,1,'intent-proof')")
+        conn.execute("INSERT INTO strategyos_source_access_policies VALUES(1,%s,ARRAY['analysis','export'],ARRAY[]::text[],true,true,NULL)", (list(store.READ_ROLES),))
     pack = 'owned-pack'
     root = config.output_root / 'source_packs' / pack
     (root / 'raw').mkdir(parents=True)
@@ -68,7 +80,7 @@ def setup(postgres, monkeypatch, tmp_path):
     p['period'], a['period'] = deepcopy(period), deepcopy(period)
     p['effective_from'], p['effective_to'] = period['start'], f'{TODAY.year-1}-12-31'
     a['recorded_on'] = period['end']
-    manifest = {'source_pack_id': pack, 'tenant_context': {'tenant_id': config.tenant_slug},
+    manifest = {'source_contract': {'source_key': 'intent-proof'}, 'source_pack_id': pack, 'tenant_context': {'tenant_id': config.tenant_slug},
                 'manifest': [{'relative_path': 'evidence.csv', 'supported': True,
                               'sha256': p['cells'][0]['source']['sha256'], 'source_disposition': 'current_evidence'}]}
     (root / 'summary.json').write_text(json.dumps(manifest))
@@ -415,3 +427,35 @@ def test_reviewer_can_open_proposal_evidence_before_ratification(setup):
     result = s['client'].get(path, params={'cell_id': 'regional'})
     assert result.status_code == 200
     assert result.content == (s['root'] / 'raw' / 'evidence.csv').read_bytes()
+
+
+def test_live_source_policy_revocation_and_export_are_enforced(setup):
+    s=setup
+    plan=import_pair(s)
+    with s['connect']() as conn:
+        conn.execute("UPDATE strategyos_source_access_policies SET export_allowed=false")
+    store.read_plan(s['operator'], s['p']['plan_id'], 1)
+    with pytest.raises(PermissionError):
+        store.plan_evidence_bytes(s['operator'], s['p']['plan_id'], 1, s['p']['cells'][0]['id'])
+    with s['connect']() as conn:
+        conn.execute("UPDATE strategyos_source_access_policies SET allowed_roles=ARRAY[]::text[]")
+    with pytest.raises(PermissionError):
+        store.read_plan(s['operator'], s['p']['plan_id'], 1)
+    assert store.catalog(s['operator'])['plans']==[]
+
+
+def test_intent_rls_blocks_unscoped_and_other_tenant_reads(setup):
+    s=setup
+    import_pair(s)
+    role='intent_reader_'+uuid4().hex
+    with s['connect']() as conn:
+        conn.execute(sql.SQL('CREATE ROLE {} NOLOGIN').format(sql.Identifier(role)))
+        conn.execute(sql.SQL('GRANT SELECT ON strategyos_intent_plan_versions TO {}').format(sql.Identifier(role)))
+        conn.execute(sql.SQL('SET ROLE {}').format(sql.Identifier(role)))
+        assert conn.execute('SELECT count(*) FROM strategyos_intent_plan_versions').fetchone()[0]==0
+        conn.execute("SELECT set_config('strategyos.tenant_key','another-tenant',true)")
+        assert conn.execute('SELECT count(*) FROM strategyos_intent_plan_versions').fetchone()[0]==0
+        conn.execute("SELECT set_config('strategyos.tenant_key','intent-tenant',true)")
+        assert conn.execute('SELECT count(*) FROM strategyos_intent_plan_versions').fetchone()[0]==1
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            conn.execute('DELETE FROM strategyos_intent_plan_versions')

@@ -163,6 +163,8 @@ def test_all_governed_tenant_tables_have_rls_enabled(isolated_roles):
     expected={
         'strategyos_tenants','strategyos_source_systems','strategyos_ingestion_batches',
         'strategyos_ingestion_batch_claims',
+        'strategyos_intent_plan_versions', 'strategyos_intent_actual_versions',
+        'strategyos_intent_ratifier_events', 'strategyos_intent_ratifications', 'strategyos_intent_analyses',
         'strategyos_evidence_documents','strategyos_ingestion_batch_documents',
         'strategyos_source_access_policies','strategyos_source_registration_versions',
         'strategyos_evidence_occurrences','strategyos_claim_families','strategyos_claim_revisions',

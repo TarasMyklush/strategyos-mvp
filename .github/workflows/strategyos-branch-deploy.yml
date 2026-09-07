@@ -80,7 +80,7 @@ jobs:
           done
           sudo find /etc/apt/ -type f \( -name '*microsoft*' -o -name '*azure*' \) -delete 2>/dev/null || true
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends poppler-utils tesseract-ocr tesseract-ocr-eng
+          sudo apt-get install -y --no-install-recommends poppler-utils tesseract-ocr tesseract-ocr-eng postgresql
 
       - name: Install package and test runner
         run: |

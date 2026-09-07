@@ -17,7 +17,8 @@ from . import state_store
 def auxiliary_scripts():
     from . import board_memory, conversation_state, decision_lifecycle, inference_audit
     return [board_memory.SCHEMA, conversation_state.SCHEMA,
-            decision_lifecycle.SCHEMA, inference_audit.SCHEMA]
+            decision_lifecycle.SCHEMA, inference_audit.SCHEMA,
+            Path(__file__).with_name('sql').joinpath('dimensional_intent.sql').read_text()]
 
 
 _LANGGRAPH_CHECKPOINT_TABLES = (
@@ -308,6 +309,11 @@ def provision_preview_runtime(conn, destination: Path, *, role='strategyos_previ
         cur.execute(sql.SQL('GRANT SELECT ON '+projector_read_tables+' TO {}').format(sql.Identifier(projector_role)))
         cur.execute(sql.SQL('GRANT UPDATE ON strategyos_claim_projection_outbox TO {}').format(sql.Identifier(projector_role)))
         cur.execute(sql.SQL('GRANT INSERT,UPDATE,DELETE ON strategyos_claim_projection_cache TO {}').format(sql.Identifier(projector_role)))
+        intent_tables=','.join('strategyos_intent_' + name for name in (
+            'plan_versions','actual_versions','ratifier_events','ratifications','analyses'))
+        for login in (request_role,worker_role,projector_role):
+            cur.execute(sql.SQL('REVOKE ALL PRIVILEGES ON '+intent_tables+' FROM {}').format(sql.Identifier(login)))
+        cur.execute(sql.SQL('GRANT SELECT,INSERT ON '+intent_tables+' TO {}').format(sql.Identifier(request_role)))
         checkpoint_tables=','.join(_LANGGRAPH_CHECKPOINT_TABLES)
         checkpoint_data_tables=','.join(_LANGGRAPH_CHECKPOINT_DATA_TABLES)
         for login in (request_role,projector_role):

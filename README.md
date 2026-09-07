@@ -33,3 +33,5 @@ Use the deployment runbook for authenticated hosted operation. Local OCR require
 Update requirements, affected code/tests and the gap record together. Do not add dated duplicate implementation plans or alternate “canonical” documents. `docs/assessment/gap-register.json` is the gap source; regenerate its readable view with `python scripts/render_gap_analysis.py`. Test outputs and runtime state stay outside tracked source. Never commit credentials.
 
 The consolidation brought local main forward from `9fa5316` to reviewed baseline `c03e958` before applying cleanup. A local consolidation does not prove GitHub main, deployed images or selected live run data are synchronized; see the release gaps.
+
+Development delivery: deploy each end-to-end-ready chunk to the existing preview as part of development, preserving the latest hosted changes and verifying the hosted workflow. See [incremental delivery policy](docs/operations.md#incremental-delivery-policy).

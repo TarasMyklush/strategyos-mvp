@@ -122,8 +122,10 @@ The module performs no network calls or writes. Targeted acceptance:
 
 The next local increment adds `/api/intent/dimensional` to the application. It uses
 PostgreSQL exclusively; no file or in-memory fallback is used when persistence is
-unavailable. Install its additive schema as an explicit release/migration step in
-the configured application environment:
+unavailable. The hosted preview migration job installs its additive schema before startup and
+includes it in the release fingerprint. API credentials receive only SELECT/INSERT
+on the tenant-isolated Intent tables; worker/projector roles receive no access.
+For a standalone operator environment with migration-owner authority:
 
 ```sh
 .venv/bin/python -m strategyos_mvp.dimensional_intent_store --initialize
@@ -161,7 +163,7 @@ Allowed whole-company readers are operator, tenant operator, reviewer, auditor,
 executive and tenant admin. They see eligible tenant-wide evidence, so this API
 must not be used to serve restricted BU/persona slices. Cell owners are business
 metadata, not access grants. The plan-specific ratifier register is an explicit
-backend approval policy; integration into the existing visual Authority Matrix
+approval policy surfaced in the Intent Vault; integration into the existing visual Authority Matrix
 and finer permissions are still outstanding.
 
 Workflow:
@@ -221,3 +223,16 @@ Run the isolated service proof (requires local `initdb` and `pg_ctl`):
 The tests create and destroy their own socket-only PostgreSQL cluster and databases;
 they never use an existing database or inherited credentials. On machines without
 those binaries this proof is explicitly skipped, not counted as passing.
+
+### Incremental delivery policy
+
+Ship end-to-end-ready chunks to the existing preview (`https://new.strategyos.live`)
+as part of development. Integrate with its latest deployed revision, run the release
+checks, use the migration/runtime separation and verify the hosted workflow. Do not
+leave a verified chunk local-only unless a concrete deployment blocker remains.
+
+Intent evidence now rechecks the current registered database source policy on every
+read, including storage rights, allowed roles/purposes and whole-company scope.
+Downloads additionally require export permission. File metadata alone cannot override
+a revoked source policy. This does not create common-ledger claim revisions from the
+manually imported dimensional values; exact value/locator certification remains open.

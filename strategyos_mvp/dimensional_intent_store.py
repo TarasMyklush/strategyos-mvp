@@ -103,10 +103,11 @@ def _actuals(conn, tenant, revision):
         WHERE tenant_key=%s AND revision=%s''', (tenant, revision)))
 
 
-def _sources(tenant, row, *, kind, verify_bytes=True):
+def _sources(principal, row, *, kind, verify_bytes=True):
+    tenant, _ = _scope(principal)
     value = Plan.model_validate(row['payload']) if kind == 'plan' else Actuals.model_validate(row['payload'])
     references = [c.source for c in value.cells] if kind == 'plan' else [o.source for o in value.observations]
-    return registered_sources(tenant, row['source_pack_id'], references, verify_bytes=verify_bytes)
+    return registered_sources(tenant, row['source_pack_id'], references, verify_bytes=verify_bytes, principal=principal)
 
 
 def _public(row):
@@ -132,7 +133,7 @@ def import_plan(principal, plan: Plan, source_pack_id: str):
     payload = _plan_payload(plan)
     encoded = _encode(payload)
     digest = fingerprint(payload)
-    _sources(tenant, {'payload': payload, 'source_pack_id': source_pack_id}, kind='plan')
+    _sources(principal, {'payload': payload, 'source_pack_id': source_pack_id}, kind='plan')
     with _connection() as conn:
         _lock(conn, tenant, plan.plan_id)
         existing = _row(conn, '''SELECT * FROM strategyos_intent_plan_versions
@@ -174,7 +175,7 @@ def import_actuals(principal, actuals: Actuals, source_pack_id: str):
     payload = actuals.model_dump(mode='json')
     payload['observations'].sort(key=lambda o: cell_key(o['metric'], o['dimensions']))
     encoded, digest = _encode(payload), fingerprint(payload)
-    _sources(tenant, {'payload': payload, 'source_pack_id': source_pack_id}, kind='actuals')
+    _sources(principal, {'payload': payload, 'source_pack_id': source_pack_id}, kind='actuals')
     with _connection() as conn:
         conn.execute('''INSERT INTO strategyos_intent_actual_versions
             (tenant_key,revision,source_pack_id,payload,digest,imported_by)
@@ -196,7 +197,7 @@ def read_plan(principal, plan_id, version):
         approval = _row(conn, '''SELECT approved_by, approved_at, plan_digest, grant_revision, note
             FROM strategyos_intent_ratifications WHERE tenant_key=%s AND plan_id=%s AND version=%s''',
             (tenant, plan_id, version))
-    _sources(tenant, row, kind='plan')
+    _sources(principal, row, kind='plan')
     return {**_public(row), 'governance_status': 'ratified' if approval else 'proposed',
             'ratification': _public(approval) if approval else None,
             'permissions': {'can_ratify': principal['role'] in RATIFY_ROLES and bool(grant and grant['enabled'])
@@ -207,7 +208,7 @@ def read_actuals(principal, revision):
     tenant, _ = _scope(principal)
     with _connection() as conn:
         row = _actuals(conn, tenant, revision)
-    _sources(tenant, row, kind='actuals')
+    _sources(principal, row, kind='actuals')
     return _public(row)
 
 
@@ -254,7 +255,7 @@ def ratify(principal, plan_id, version, expected_digest, note):
             (tenant, plan_id, actor))
         if not grant or not grant['enabled'] or row['imported_by'] == actor:
             raise PermissionError('A separately authorized ratifier is required.')
-        _sources(tenant, row, kind='plan')
+        _sources(principal, row, kind='plan')
         existing = _row(conn, '''SELECT * FROM strategyos_intent_ratifications
             WHERE tenant_key=%s AND plan_id=%s AND version=%s''', (tenant, plan_id, version))
         if existing:
@@ -294,8 +295,8 @@ def create_analysis(principal, plan_id, version, actual_revision, as_of):
             (tenant, plan_id, version, as_of, json.dumps(plan_row['payload']['period']))).fetchone()
         if newer:
             raise Conflict('A newer ratified version applies to this reporting period.')
-        plan_root, plan_receipt = _sources(tenant, plan_row, kind='plan')
-        actual_root, actual_receipt = _sources(tenant, actual_row, kind='actuals')
+        plan_root, plan_receipt = _sources(principal, plan_row, kind='plan')
+        actual_root, actual_receipt = _sources(principal, actual_row, kind='actuals')
         # Evaluate with separately resolved roots; no copying evidence between packs.
         result = evaluate(Plan.model_validate(plan_row['payload']), Actuals.model_validate(actual_row['payload']),
                           source_root=plan_root, actual_source_root=actual_root, company_id=tenant, as_of=as_of)
@@ -325,8 +326,8 @@ def read_analysis(principal, analysis_id):
         plan_row = _plan(conn, tenant, row['plan_id'], row['plan_version'])
         actual_row = _actuals(conn, tenant, row['actual_revision'])
     # Eligibility can be revoked; stored historical numbers do not follow changed live bytes.
-    _sources(tenant, plan_row, kind='plan', verify_bytes=False)
-    _sources(tenant, actual_row, kind='actuals', verify_bytes=False)
+    _sources(principal, plan_row, kind='plan', verify_bytes=False)
+    _sources(principal, actual_row, kind='actuals', verify_bytes=False)
     result = row['payload']
     if result.get('analysis_hash') != analysis_id or fingerprint({k:v for k,v in result.items() if k != 'analysis_hash'}) != analysis_id:
         raise Unavailable('Stored analysis failed its integrity check.')
@@ -352,7 +353,7 @@ def catalog(principal, offset=0, limit=25):
         for row in records[:limit]:
             _checked(row)
             try:
-                _sources(tenant, row, kind=kind, verify_bytes=False)
+                _sources(principal, row, kind=kind, verify_bytes=False)
             except (PermissionError, SourceUnavailable):
                 continue  # Do not disclose names from revoked/unavailable sources.
             item = {'period': row['payload']['period'], 'imported_at': row['imported_at'].isoformat()}
@@ -377,7 +378,7 @@ def plan_evidence_bytes(principal, plan_id, version, cell_id):
         raise NotFound('Cell evidence not found.')
     from .strategy_compiler import SourceReference
     source = SourceReference.model_validate(cell['source'])
-    root, _ = registered_sources(tenant, record['source_pack_id'], [source])
+    root, _ = registered_sources(tenant, record['source_pack_id'], [source], principal=principal, purpose='export')
     return _evidence_content(root, source)
 
 
@@ -403,7 +404,7 @@ def evidence_bytes(principal, analysis_id, cell_id, side):
         raise NotFound('Cell evidence not found.')
     from .strategy_compiler import SourceReference
     source = SourceReference.model_validate(reference)
-    root, _ = registered_sources(tenant, result['source_receipts'][side]['source_pack_id'], [source])
+    root, _ = registered_sources(tenant, result['source_receipts'][side]['source_pack_id'], [source], principal=principal, purpose='export')
     return _evidence_content(root, source)
 
 

@@ -50,5 +50,9 @@ DO $$ DECLARE table_name text; BEGIN
    EXECUTE format('CREATE TRIGGER %I BEFORE TRUNCATE ON %I FOR EACH STATEMENT EXECUTE FUNCTION strategyos_intent_reject_change()',
      table_name || '_no_truncate', table_name);
   END IF;
+  EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', table_name);
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename=table_name AND policyname=table_name || '_tenant') THEN
+   EXECUTE format($policy$CREATE POLICY %I ON %I USING (tenant_key = nullif(current_setting('strategyos.tenant_key', true), '')) WITH CHECK (tenant_key = nullif(current_setting('strategyos.tenant_key', true), ''))$policy$, table_name || '_tenant', table_name);
+  END IF;
  END LOOP;
 END $$;
