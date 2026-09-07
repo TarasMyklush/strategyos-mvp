@@ -829,6 +829,8 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .vault-table th, .vault-table td { padding: 12px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
 .vault-table th { background: var(--surface-alt); position: sticky; top: 0; }
 .vault-table a { color: var(--accent); }
+.vault-table input { min-width: 112px; padding: 8px; }
+.vault-table input[data-field="owner"] { min-width: 160px; }
 .vault-metadata { display: flex; gap: 12px 24px; flex-wrap: wrap; margin-bottom: 20px; }
 .vault-metadata p { font-size: 13px; margin: 0; overflow-wrap: anywhere; }
 .vault-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
@@ -875,13 +877,21 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   </div>
   <div id="decomposition-panel" class="vault-panel" hidden>
     <h2>Decompose an approved target</h2>
-    <p>Split one approved cell into accountable detail. The engine calculates exact targets from positive weights; the result is a new proposal and still needs an independent ratifier.</p>
-    <form id="decomposition-form">
+    <p>Start from a completed actual snapshot, disclose any planning adjustments, and create accountable targets that reconcile exactly. Missing history blocks the proposal instead of becoming zero.</p>
+    <form id="history-form">
       <div class="vault-controls">
         <label class="vault-field">Approved parent cell<select id="decomposition-cell" required></select></label>
         <label class="vault-field">Dimension to split<select id="decomposition-dimension" required></select></label>
+        <label class="vault-field">Prior actual snapshot<select id="history-actual" required><option value="">Choose prior actuals</option></select></label>
         <label class="vault-field">Decimal places<input id="decomposition-precision" type="number" value="2" min="0" max="12" required></label>
       </div>
+      <div class="vault-actions"><button id="history-load" type="button" class="secondary">Load historical mix</button></div>
+      <p id="history-status" class="vault-note" role="status" aria-live="polite">Choose a prior snapshot to inspect the recorded mix.</p>
+      <div id="history-allocations" class="vault-table" hidden tabindex="0" role="region" aria-label="Historical allocation adjustments"></div>
+      <button id="history-create" type="submit" hidden>Create history-based proposal</button>
+    </form>
+    <details style="margin-top:24px"><summary>Use approved explicit weights</summary>
+    <form id="decomposition-form">
       <label class="vault-field" style="margin-top:16px">Allocation rows (JSON)<textarea id="decomposition-rows" rows="10" required spellcheck="false" aria-describedby="decomposition-help">[
   {"cell_id":"north-retail","member":"retail","weight":"60","owner":"Sales North","tolerance":"0","basis":{"path":"evidence.csv","locator":"approved allocation basis","sha256":"replace-with-source-sha256"}},
   {"cell_id":"north-institutional","member":"institutional","weight":"40","owner":"Key Accounts","tolerance":"0","basis":{"path":"evidence.csv","locator":"approved allocation basis","sha256":"replace-with-source-sha256"}}
@@ -889,6 +899,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
       <p id="decomposition-help" class="vault-note">Use decimal strings for weights and amounts. Each row needs a unique cell ID, member, owner, tolerance and registered evidence reference. The final cell in ID order receives the disclosed rounding remainder.</p>
       <button id="decomposition-button" type="submit">Create decomposition proposal</button>
     </form>
+    </details>
   </div>
   <div id="drift-panel" class="vault-panel" hidden>
     <h2>Compare with actuals</h2>

@@ -1,5 +1,6 @@
 from copy import deepcopy
 from datetime import date
+from decimal import Decimal
 import json
 from pathlib import Path
 import shutil
@@ -9,7 +10,9 @@ import sys
 import pytest
 
 from strategyos_mvp.dimensional_plan import Actuals, Plan, evaluate, fingerprint
-from strategyos_mvp.plan_decomposition import DecompositionRequest, decompose
+from strategyos_mvp.plan_decomposition import (
+    DecompositionRequest, HistoricalDecompositionRequest, decompose, decompose_from_history,
+)
 
 FIXTURE = Path(__file__).parent / 'fixtures' / 'dimensional_plan'
 
@@ -251,3 +254,70 @@ def test_decomposition_lineage_cannot_disagree_with_result_cells(bundle):
     next(cell for cell in payload['cells'] if cell['id'] == 'regional-hospital')['owner'] = 'other-owner'
     with pytest.raises(ValueError, match='differs'):
         Plan.model_validate(payload)
+
+
+def historical_request(plan, **changes):
+    payload = {
+        'parent_digest': fingerprint(Plan.model_validate(plan).model_dump(mode='json')),
+        'parent_cell_id': 'regional',
+        'split_dimension': 'client',
+        'historical_actual_revision': 'history-may',
+        'decimal_places': 2,
+        'allocations': [
+            {'cell_id': 'regional-hospital', 'member': 'hospital', 'owner': 'hospital-owner',
+             'tolerance': '1', 'adjustment_percent': '50'},
+            {'cell_id': 'regional-pharmacy', 'member': 'pharmacy', 'owner': 'pharmacy-owner',
+             'tolerance': '1', 'adjustment_percent': '0'},
+        ],
+    }
+    payload.update(changes)
+    return HistoricalDecompositionRequest.model_validate(payload)
+
+
+def historical_actuals(bundle):
+    source = deepcopy(bundle[0]['cells'][0]['source'])
+    source['locator'] = 'historical mix rows'
+    payload = {
+        'schema_version': 1, 'company_id': bundle[0]['company_id'], 'kind': 'actual',
+        'revision': 'history-may', 'period': {'start': '2026-05-01', 'end': '2026-05-31'},
+        'recorded_on': '2026-05-31', 'observations': [
+            {'metric': 'revenue', 'dimensions': {'product': 'item-a', 'region': 'north', 'client': 'hospital'},
+             'unit': 'SAR', 'value': '40', 'source': source},
+            {'metric': 'revenue', 'dimensions': {'product': 'item-a', 'region': 'north', 'client': 'pharmacy'},
+             'unit': 'SAR', 'value': '60', 'source': source},
+        ],
+    }
+    return payload
+
+
+def test_history_decomposition_discloses_mix_adjustments_and_reconciles(bundle):
+    parent = Plan.model_validate(bundle[0])
+    actuals = Actuals.model_validate(historical_actuals(bundle))
+    request = historical_request(bundle[0])
+    proposal = decompose_from_history(parent, actuals, request, next_version=2,
+                                      historical_digest='a' * 64, historical_source_pack_id='history-pack')
+    children = {cell.id: str(cell.target) for cell in proposal.cells}
+    assert children['regional-hospital'] == children['regional-pharmacy'] == '50.00'
+    lineage = {item.member: item for item in proposal.derivation.allocations}
+    assert proposal.derivation.engine_version == 'history-adjusted-allocation.v1'
+    assert proposal.derivation.historical_actual_revision == 'history-may'
+    assert lineage['hospital'].historical_value == Decimal('40')
+    assert lineage['hospital'].adjustment_percent == Decimal('50')
+    assert lineage['hospital'].effective_weight == lineage['hospital'].weight == Decimal('60')
+    assert lineage['hospital'].basis != lineage['hospital'].target_source
+    assert sum(cell.target for cell in proposal.cells) == Decimal('200')
+
+
+@pytest.mark.parametrize('mutation,match', [
+    (lambda value: value['observations'].__setitem__(0, {**value['observations'][0], 'value': None}), 'missing, not zero'),
+    (lambda value: value['observations'].__setitem__(0, {**value['observations'][0], 'value': '0'}), 'must be positive'),
+    (lambda value: value.update(period={'start': '2026-06-01', 'end': '2026-06-30'}, recorded_on='2026-06-30'), 'completed snapshot'),
+    (lambda value: value['observations'][0].update(unit='USD'), 'unit differs'),
+])
+def test_history_decomposition_blocks_invalid_or_missing_history(bundle, mutation, match):
+    history = historical_actuals(bundle)
+    mutation(history)
+    with pytest.raises(ValueError, match=match):
+        decompose_from_history(Plan.model_validate(bundle[0]), Actuals.model_validate(history),
+                               historical_request(bundle[0]), next_version=2,
+                               historical_digest='a' * 64, historical_source_pack_id='history-pack')

@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var base = '/api/intent/dimensional';
-  var state = { plans: [], actuals: [], record: null, grant: null, next: null, busy: false, permissions: {} };
+  var state = { plans: [], actuals: [], record: null, grant: null, history: null, next: null, busy: false, permissions: {} };
   var $ = function (id) { return document.getElementById(id); };
   function node(tag, text) { var n = document.createElement(tag); if (text !== undefined) n.textContent = String(text); return n; }
   function show(id, visible) { $(id).hidden = !visible; }
@@ -22,6 +22,13 @@
       { cell_id: prefix + '-' + safeId(original), member: original, weight: '1', owner: cell.owner, tolerance: String(cell.tolerance), basis: cell.source },
       { cell_id: prefix + '-new-member', member: original + '-new', weight: '1', owner: cell.owner, tolerance: String(cell.tolerance), basis: cell.source }
     ], null, 2);
+    resetHistory();
+  }
+  function resetHistory() {
+    state.history = null;
+    if ($('history-allocations')) $('history-allocations').replaceChildren();
+    show('history-allocations', false); show('history-create', false);
+    if ($('history-status')) $('history-status').textContent = 'Choose a prior snapshot to inspect the recorded mix.';
   }
   function table(target, headings, rows) {
     var t = node('table'), h = node('thead'), tr = node('tr'), b = node('tbody');
@@ -59,20 +66,23 @@
     finally { state.busy = false; controls(); }
   }
   function resetSelection() {
-    state.record = null; state.grant = null;
+    state.record = null; state.grant = null; resetHistory();
     window.dispatchEvent(new CustomEvent('kyvern-analysis', { detail: null }));
     ['selected-plan', 'ratifier-panel', 'decomposition-panel', 'decomposition-lineage', 'drift-panel', 'analysis-panel', 'grant-form', 'ratify-form'].forEach(function (id) { show(id, false); });
     ['plan-cells', 'decomposition-allocations', 'analysis-cells', 'analysis-rollups', 'analysis-findings', 'plan-metadata'].forEach(function (id) { $(id).replaceChildren(); });
     $('reviewed').checked = false; $('review-note').value = ''; $('grant-status').textContent = '';
   }
   function options() {
-    var previous = $('plan-select').value, actual = $('actual-select').value;
+    var previous = $('plan-select').value, actual = $('actual-select').value, history = $('history-actual').value;
     $('plan-select').replaceChildren(new Option('Choose a version', ''));
     state.plans.forEach(function (p) { $('plan-select').add(new Option(p.plan_id + ' · v' + p.version + ' · ' + label(p.governance_status), p.plan_id + ':' + p.version)); });
     $('plan-select').value = previous;
     $('actual-select').replaceChildren(new Option('Choose actuals', ''));
     state.actuals.forEach(function (a) { $('actual-select').add(new Option(a.revision + ' · ' + a.period.start + ' to ' + a.period.end, a.revision)); });
     $('actual-select').value = actual;
+    $('history-actual').replaceChildren(new Option('Choose prior actuals', ''));
+    state.actuals.forEach(function (a) { $('history-actual').add(new Option(a.revision + ' · ' + a.period.start + ' to ' + a.period.end, a.revision)); });
+    $('history-actual').value = history;
     show('empty-plans', !state.plans.length); show('more', state.next !== null);
   }
   async function loadCatalog(append) {
@@ -101,9 +111,10 @@
     }));
     if (plan.derivation) {
       var d = plan.derivation;
-      $('decomposition-summary').textContent = 'Created from ' + d.parent_plan_id + ' v' + d.parent_version + ', cell ' + d.parent_cell_id + ', split by ' + d.split_dimension + '. Engine ' + d.engine_version + '; remainder: ' + d.remainder_rule + '. Parent fingerprint: ' + d.parent_digest + '.';
-      table('decomposition-allocations', ['Result cell', 'Member', 'Weight', 'Owner / tolerance', 'Evidence'], d.allocations.map(function (a) {
-        return [a.cell_id, a.member, a.weight, a.owner + ' / ' + a.tolerance, a.basis.locator + ' · SHA-256 ' + a.basis.sha256];
+      var historical = d.engine_version === 'history-adjusted-allocation.v1';
+      $('decomposition-summary').textContent = 'Created from ' + d.parent_plan_id + ' v' + d.parent_version + ', cell ' + d.parent_cell_id + ', split by ' + d.split_dimension + '. Engine ' + d.engine_version + '; remainder: ' + d.remainder_rule + '. Parent fingerprint: ' + d.parent_digest + '.' + (historical ? ' Historical actuals: ' + d.historical_actual_revision + ' (' + d.historical_actual_digest + ').' : '');
+      table('decomposition-allocations', historical ? ['Result cell', 'Member', 'Historical', 'Adjustment', 'Effective weight', 'Owner / tolerance', 'Historical evidence'] : ['Result cell', 'Member', 'Weight', 'Owner / tolerance', 'Evidence'], d.allocations.map(function (a) {
+        return historical ? [a.cell_id, a.member, a.historical_value, a.adjustment_percent + '%', a.effective_weight, a.owner + ' / ' + a.tolerance, a.basis.locator + ' · SHA-256 ' + a.basis.sha256] : [a.cell_id, a.member, a.weight, a.owner + ' / ' + a.tolerance, a.basis.locator + ' · SHA-256 ' + a.basis.sha256];
       }));
       show('decomposition-lineage', true);
     }
@@ -143,6 +154,7 @@
   $('actual-select').addEventListener('change', function () { show('analysis-panel', false); window.dispatchEvent(new CustomEvent('kyvern-analysis', { detail: null })); controls(); });
   $('decomposition-cell').addEventListener('change', seedDecomposition);
   $('decomposition-dimension').addEventListener('change', seedDecomposition);
+  $('history-actual').addEventListener('change', resetHistory);
   $('as-of').addEventListener('change', function () { show('analysis-panel', false); window.dispatchEvent(new CustomEvent('kyvern-analysis', { detail: null })); });
   $('review-note').addEventListener('input', controls); $('reviewed').addEventListener('change', controls);
   $('refresh').addEventListener('click', function () { action(async function () { resetSelection(); await loadCatalog(false); await loadPlan(); }); });
@@ -169,6 +181,41 @@
     $('plan-select').value = result.plan_id + ':' + result.version;
     await loadPlan();
     message('Decomposition proposal created as version ' + result.version + '. An independently authorized reviewer must ratify it.');
+  });
+  $('history-load').addEventListener('click', function () { action(async function () {
+    if (!$('history-actual').value) throw new Error('Choose a prior actual snapshot.');
+    var query = '?parent_cell_id=' + encodeURIComponent($('decomposition-cell').value) +
+      '&split_dimension=' + encodeURIComponent($('decomposition-dimension').value) +
+      '&actual_revision=' + encodeURIComponent($('history-actual').value);
+    state.history = await request(planPath() + '/history-candidates' + query);
+    var rows = state.history.candidates.map(function (candidate) {
+      var cell = safeId($('decomposition-cell').value + '-' + candidate.member);
+      function input(field, value, type) { var n = document.createElement('input'); n.dataset.field = field; n.value = value; n.type = type || 'text'; n.required = true; return n; }
+      var adjustment = input('adjustment_percent', '0', 'number'); adjustment.step = 'any'; adjustment.min = '-99.999999999999';
+      var tolerance = input('tolerance', String(state.record.payload.cells.find(function (item) { return item.id === $('decomposition-cell').value; }).tolerance), 'number'); tolerance.step = 'any'; tolerance.min = '0';
+      return [input('cell_id', cell), candidate.member, candidate.historical_value, adjustment,
+              input('owner', state.record.payload.cells.find(function (item) { return item.id === $('decomposition-cell').value; }).owner), tolerance,
+              candidate.source.locator, candidate.readiness];
+    });
+    table('history-allocations', ['Result cell', 'Member', 'Historical value', 'Adjustment %', 'Owner', 'Tolerance', 'Evidence', 'Readiness'], rows);
+    show('history-allocations', true); show('history-create', state.history.readiness === 'ready');
+    $('history-status').textContent = state.history.readiness === 'ready' ? 'Historical mix is complete. Adjustments are disclosed and applied before exact allocation.' : 'This snapshot is blocked because at least one matched value is missing or nonpositive.';
+  }); });
+  bind('history-form', async function () {
+    if (!state.history || state.history.readiness !== 'ready') throw new Error('Load a complete historical mix first.');
+    var rows = Array.from($('history-allocations').querySelectorAll('tbody tr'));
+    var allocations = rows.map(function (row, index) {
+      function value(field) { return row.querySelector('[data-field="' + field + '"]').value.trim(); }
+      return { cell_id: value('cell_id'), member: state.history.candidates[index].member,
+        owner: value('owner'), tolerance: value('tolerance'), adjustment_percent: value('adjustment_percent') };
+    });
+    var result = await request(planPath() + '/decompose-from-history', {
+      parent_digest: state.history.parent_digest, parent_cell_id: state.history.parent_cell_id,
+      split_dimension: state.history.split_dimension, historical_actual_revision: state.history.historical_actual_revision,
+      decimal_places: Number($('decomposition-precision').value), allocations: allocations
+    });
+    await loadCatalog(false); $('plan-select').value = result.plan_id + ':' + result.version; await loadPlan();
+    message('History-based proposal created as version ' + result.version + '. An independently authorized reviewer must ratify it.');
   });
   $('ratifier-subject').addEventListener('input', function () { state.grant = null; show('grant-form', false); });
   bind('grant-read-form', async function () {

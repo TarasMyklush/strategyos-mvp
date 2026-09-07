@@ -21,7 +21,7 @@ from strategyos_mvp import auth, dimensional_intent_sources as sources
 from strategyos_mvp import dimensional_intent_store as store
 from strategyos_mvp.dimensional_intent_api import router
 from strategyos_mvp.dimensional_plan import Actuals, Plan
-from strategyos_mvp.plan_decomposition import DecompositionRequest
+from strategyos_mvp.plan_decomposition import DecompositionRequest, HistoricalDecompositionRequest
 
 FIXTURE = Path(__file__).parent / 'fixtures' / 'dimensional_plan'
 TODAY = datetime.now(timezone.utc).date()
@@ -704,3 +704,81 @@ def test_concurrent_identical_decomposition_creates_one_version(setup):
     with s['connect']() as conn:
         assert conn.execute('''SELECT count(*) FROM strategyos_intent_plan_versions
             WHERE plan_id=%s''', (s['p']['plan_id'],)).fetchone()[0] == 2
+
+
+def history_body(s, digest):
+    return {
+        'parent_digest': digest, 'parent_cell_id': 'regional', 'split_dimension': 'client',
+        'historical_actual_revision': 'history-prior', 'decimal_places': 2,
+        'allocations': [
+            {'cell_id': 'regional-hospital', 'member': 'hospital', 'owner': 'Hospital lead',
+             'tolerance': '2', 'adjustment_percent': '50'},
+            {'cell_id': 'regional-pharmacy', 'member': 'pharmacy', 'owner': 'Pharmacy lead',
+             'tolerance': '2', 'adjustment_percent': '0'},
+        ],
+    }
+
+
+def import_history(s):
+    source = deepcopy(s['p']['cells'][0]['source'])
+    source['locator'] = 'historical mix rows'
+    year = TODAY.year - 2
+    history = {
+        'schema_version': 1, 'company_id': s['p']['company_id'], 'kind': 'actual',
+        'revision': 'history-prior',
+        'period': {'start': f'{year}-12-01', 'end': f'{year}-12-31'}, 'recorded_on': f'{year}-12-31',
+        'observations': [
+            {'metric': 'revenue', 'dimensions': {'product': 'item-a', 'region': 'north', 'client': 'hospital'},
+             'unit': 'SAR', 'value': '40', 'source': source},
+            {'metric': 'revenue', 'dimensions': {'product': 'item-a', 'region': 'north', 'client': 'pharmacy'},
+             'unit': 'SAR', 'value': '60', 'source': source},
+        ],
+    }
+    return store.import_actuals(s['operator'], Actuals.model_validate(history), s['pack'])
+
+
+def test_history_candidates_and_governed_decomposition_api(setup):
+    s = setup
+    parent = import_pair(s)
+    approve(s, parent)
+    history = import_history(s)
+    preview = store.history_candidates(s['operator'], s['p']['plan_id'], 1, 'regional', 'client', 'history-prior')
+    assert preview['readiness'] == 'ready'
+    assert [row['historical_value'] for row in preview['candidates']] == ['40', '60']
+    assert preview['historical_actual_digest'] == history['digest']
+    request = HistoricalDecompositionRequest.model_validate(history_body(s, parent['digest']))
+    proposal = store.create_history_decomposition(s['operator'], s['p']['plan_id'], 1, request)
+    assert store.create_history_decomposition(s['operator'], s['p']['plan_id'], 1, request)['digest'] == proposal['digest']
+    assert proposal['payload']['derivation']['historical_actual_digest'] == history['digest']
+    children = {cell['id']: cell['target'] for cell in proposal['payload']['cells']}
+    assert children['regional-hospital'] == children['regional-pharmacy'] == '50.00'
+    prefix = f"/api/intent/dimensional/plans/{s['p']['plan_id']}/versions/1"
+    params = {'parent_cell_id': 'regional', 'split_dimension': 'client', 'actual_revision': 'history-prior'}
+    assert s['client'].get(prefix + '/history-candidates', params=params).json()['readiness'] == 'ready'
+    assert s['client'].post(prefix + '/decompose-from-history', json=history_body(s, parent['digest'])).status_code == 200
+    s['current']['principal'] = s['executive']
+    assert s['client'].get(prefix + '/history-candidates', params=params).status_code == 403
+    assert s['client'].post(prefix + '/decompose-from-history', json=history_body(s, parent['digest'])).status_code == 403
+    ratified = store.ratify(s['executive'], s['p']['plan_id'], 2, proposal['digest'],
+                            'Reviewed the historical mix, adjustments, owners and evidence lineage.')
+    assert ratified['plan_digest'] == proposal['digest']
+
+
+def test_history_decomposition_blocks_missing_history_and_stale_parent(setup):
+    s = setup
+    parent = import_pair(s)
+    approve(s, parent)
+    import_history(s)
+    body = history_body(s, parent['digest'])
+    body['allocations'][1]['member'] = 'missing-member'
+    with pytest.raises(ValueError, match='No historical observation'):
+        store.create_history_decomposition(s['operator'], s['p']['plan_id'], 1,
+                                           HistoricalDecompositionRequest.model_validate(body))
+    direct = deepcopy(s['p'])
+    direct['version'] = 2
+    newer = store.import_plan(s['operator'], Plan.model_validate(direct), s['pack'])
+    store.ratify(s['executive'], s['p']['plan_id'], 2, newer['digest'],
+                  'Reviewed this newer direct plan and its complete evidence set.')
+    with pytest.raises(store.Conflict, match='newer ratified'):
+        store.create_history_decomposition(s['operator'], s['p']['plan_id'], 1,
+                                           HistoricalDecompositionRequest.model_validate(history_body(s, parent['digest'])))

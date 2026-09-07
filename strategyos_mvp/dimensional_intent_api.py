@@ -11,7 +11,7 @@ import os
 
 from .auth import require_role
 from .dimensional_plan import Actuals, Contract, Name, Plan
-from .plan_decomposition import DecompositionRequest
+from .plan_decomposition import DecompositionRequest, HistoricalDecompositionRequest
 from . import dimensional_intent_store as store
 from .dimensional_intent_sources import SourceUnavailable
 
@@ -111,6 +111,21 @@ def read_plan(plan_id: str, version: Annotated[int, Path(ge=1)],
 def decompose_plan(plan_id: str, version: Annotated[int, Path(ge=1)], body: DecompositionRequest,
                    principal: dict[str, Any] = require_role('operator')):
     return perform(lambda: store.create_decomposition(principal, plan_id, version, body))
+
+
+@router.get('/plans/{plan_id}/versions/{version}/history-candidates')
+def history_candidates(plan_id: str, version: Annotated[int, Path(ge=1)],
+                       parent_cell_id: Key, split_dimension: Key, actual_revision: Key,
+                       principal: dict[str, Any] = require_role('operator')):
+    return perform(lambda: store.history_candidates(principal, plan_id, version, parent_cell_id,
+                                                    split_dimension, actual_revision))
+
+
+@router.post('/plans/{plan_id}/versions/{version}/decompose-from-history')
+def decompose_plan_from_history(plan_id: str, version: Annotated[int, Path(ge=1)],
+                                body: HistoricalDecompositionRequest,
+                                principal: dict[str, Any] = require_role('operator')):
+    return perform(lambda: store.create_history_decomposition(principal, plan_id, version, body))
 
 
 @router.put('/plans/{plan_id}/ratifier')

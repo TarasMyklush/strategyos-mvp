@@ -67,11 +67,15 @@ class DecompositionAllocation(Contract):
     owner: Name
     tolerance: Amount = Field(ge=0)
     basis: SourceReference
+    target_source: SourceReference | None = None
+    historical_value: Amount | None = None
+    adjustment_percent: Amount | None = None
+    effective_weight: Amount | None = None
 
 
 class PlanDerivation(Contract):
     kind: Literal["decomposition"]
-    engine_version: Literal["weighted-allocation.v1"]
+    engine_version: Literal["weighted-allocation.v1", "history-adjusted-allocation.v1"]
     parent_plan_id: Name
     parent_version: int = Field(ge=1, strict=True)
     parent_digest: str = Field(pattern=r"^[a-f0-9]{64}$")
@@ -81,6 +85,9 @@ class PlanDerivation(Contract):
     remainder_rule: Literal["final_lexicographic_cell"]
     allocations: list[DecompositionAllocation] = Field(min_length=2, max_length=500)
     request_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+    historical_actual_revision: Name | None = None
+    historical_actual_digest: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    historical_source_pack_id: Name | None = None
 
 
 class Plan(Contract):
@@ -131,9 +138,14 @@ class Plan(Contract):
         if self.derivation:
             if self.derivation.parent_plan_id != self.plan_id or self.derivation.parent_version >= self.version:
                 raise ValueError("Decomposition lineage must reference an earlier version of this plan.")
-            basis = self.derivation.model_dump(mode="json", exclude={"request_hash"})
+            basis = self.derivation.model_dump(mode="json", exclude={"request_hash"}, exclude_none=True)
             if fingerprint(basis) != self.derivation.request_hash:
                 raise ValueError("Decomposition lineage hash mismatch.")
+            history = self.derivation.engine_version == "history-adjusted-allocation.v1"
+            if history != all((self.derivation.historical_actual_revision,
+                               self.derivation.historical_actual_digest,
+                               self.derivation.historical_source_pack_id)):
+                raise ValueError("Historical decomposition requires a complete actual-snapshot binding.")
             derived = {item.cell_id for item in self.derivation.allocations}
             cells = {cell.id: cell for cell in self.cells}
             if not derived.issubset(cells):
@@ -141,8 +153,12 @@ class Plan(Contract):
             for item in self.derivation.allocations:
                 cell = cells[item.cell_id]
                 if (cell.dimensions.get(self.derivation.split_dimension) != item.member or
-                        cell.owner != item.owner or cell.tolerance != item.tolerance or cell.source != item.basis):
+                        cell.owner != item.owner or cell.tolerance != item.tolerance or
+                        cell.source != (item.target_source or item.basis)):
                     raise ValueError("Decomposition lineage differs from its result cells.")
+                if history and not all(value is not None for value in
+                                       (item.historical_value, item.adjustment_percent, item.effective_weight)):
+                    raise ValueError("Historical allocation lineage is incomplete.")
         return self
 
 

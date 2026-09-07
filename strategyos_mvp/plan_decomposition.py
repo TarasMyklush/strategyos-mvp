@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from .dimensional_plan import Amount, Contract, Name, Plan, SourceReference, fingerprint
+from .dimensional_plan import Actuals, Amount, Contract, Name, Plan, SourceReference, fingerprint
 
 
 class Allocation(Contract):
@@ -29,6 +29,31 @@ class DecompositionRequest(Contract):
         members = [item.member for item in self.allocations]
         if len(ids) != len(set(ids)) or len(members) != len(set(members)):
             raise ValueError("Allocation cell IDs and split members must be unique.")
+        return self
+
+
+class HistoricalAllocation(Contract):
+    cell_id: Name
+    member: Name
+    owner: Name
+    tolerance: Amount = Field(ge=0)
+    adjustment_percent: Amount = Field(default=0, gt=-100, le=100000)
+
+
+class HistoricalDecompositionRequest(Contract):
+    parent_digest: str = Field(pattern=r"^[a-f0-9]{64}$")
+    parent_cell_id: Name
+    split_dimension: Name
+    historical_actual_revision: Name
+    decimal_places: int = Field(default=2, ge=0, le=12, strict=True)
+    allocations: list[HistoricalAllocation] = Field(min_length=2, max_length=500)
+
+    @model_validator(mode="after")
+    def unique_outputs(self):
+        ids = [item.cell_id for item in self.allocations]
+        members = [item.member for item in self.allocations]
+        if len(ids) != len(set(ids)) or len(members) != len(set(members)):
+            raise ValueError("Historical allocation cell IDs and members must be unique.")
         return self
 
 
@@ -105,9 +130,91 @@ def decompose(parent: Plan, request: DecompositionRequest, *, next_version: int)
                 "owner": item.owner,
                 "tolerance": str(item.tolerance),
                 "basis": item.basis.model_dump(mode="json"),
+                "target_source": item.basis.model_dump(mode="json"),
             }
             for item in ordered
         ],
     }
     payload["derivation"]["request_hash"] = fingerprint(payload["derivation"])
+    return Plan.model_validate(payload)
+
+
+def matching_history(parent: Plan, actuals: Actuals, *, parent_cell_id: str, split_dimension: str):
+    if actuals.company_id != parent.company_id:
+        raise ValueError("Historical actual company scope differs from the plan.")
+    if actuals.period.end >= parent.period.start or actuals.recorded_on >= parent.period.start:
+        raise ValueError("Historical weights require a completed snapshot before the plan period.")
+    parent_cell = next((cell for cell in parent.cells if cell.id == parent_cell_id), None)
+    if parent_cell is None:
+        raise ValueError("Parent cell not found.")
+    if split_dimension not in parent.dimensions:
+        raise ValueError("The split dimension is not configured on the parent plan.")
+    fixed = {key: value for key, value in parent_cell.dimensions.items() if key != split_dimension}
+    matched = {}
+    for observation in actuals.observations:
+        if (observation.metric != parent_cell.metric or set(observation.dimensions) != set(parent.dimensions) or
+                any(observation.dimensions.get(key) != value for key, value in fixed.items())):
+            continue
+        if observation.unit != parent.metrics[parent_cell.metric].unit:
+            raise ValueError("Historical actual unit differs from the plan metric.")
+        member = observation.dimensions[split_dimension]
+        if member in matched:
+            raise ValueError("Historical snapshot has duplicate members for this parent cell.")
+        matched[member] = observation
+    return parent_cell, matched
+
+
+def decompose_from_history(parent: Plan, actuals: Actuals, request: HistoricalDecompositionRequest, *,
+                           next_version: int, historical_digest: str, historical_source_pack_id: str) -> Plan:
+    if actuals.revision != request.historical_actual_revision:
+        raise ValueError("Historical actual revision differs from the selected snapshot.")
+    parent_cell, history = matching_history(parent, actuals, parent_cell_id=request.parent_cell_id,
+                                            split_dimension=request.split_dimension)
+    explicit = []
+    lineage = []
+    for item in request.allocations:
+        observation = history.get(item.member)
+        if observation is None:
+            raise ValueError(f"No historical observation exists for member {item.member}.")
+        if observation.value is None:
+            raise ValueError(f"Historical observation for member {item.member} is missing, not zero.")
+        if observation.value <= 0:
+            raise ValueError(f"Historical observation for member {item.member} must be positive for mix allocation.")
+        with localcontext() as context:
+            context.prec = 80
+            effective = observation.value * (Decimal(1) + item.adjustment_percent / Decimal(100))
+        if effective <= 0:
+            raise ValueError("Historical adjustment must leave every effective weight positive.")
+        explicit.append(Allocation(cell_id=item.cell_id, member=item.member, weight=effective,
+                                   owner=item.owner, tolerance=item.tolerance, basis=parent_cell.source))
+        lineage.append({
+            "cell_id": item.cell_id,
+            "member": item.member,
+            "weight": str(effective),
+            "owner": item.owner,
+            "tolerance": str(item.tolerance),
+            "basis": observation.source.model_dump(mode="json"),
+            "target_source": parent_cell.source.model_dump(mode="json"),
+            "historical_value": str(observation.value),
+            "adjustment_percent": str(item.adjustment_percent),
+            "effective_weight": str(effective),
+        })
+    proposal = decompose(parent, DecompositionRequest(
+        parent_digest=request.parent_digest,
+        parent_cell_id=request.parent_cell_id,
+        split_dimension=request.split_dimension,
+        decimal_places=request.decimal_places,
+        allocations=explicit,
+    ), next_version=next_version)
+    payload = proposal.model_dump(mode="json")
+    derivation = payload["derivation"]
+    derivation.update({
+        "engine_version": "history-adjusted-allocation.v1",
+        "allocations": sorted(lineage, key=lambda value: value["cell_id"]),
+        "historical_actual_revision": actuals.revision,
+        "historical_actual_digest": historical_digest,
+        "historical_source_pack_id": historical_source_pack_id,
+    })
+    derivation.pop("request_hash")
+    derivation["request_hash"] = fingerprint(derivation)
     return Plan.model_validate(payload)

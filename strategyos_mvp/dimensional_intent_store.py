@@ -107,7 +107,12 @@ def _sources(principal, row, *, kind, verify_bytes=True):
     tenant, _ = _scope(principal)
     value = Plan.model_validate(row['payload']) if kind == 'plan' else Actuals.model_validate(row['payload'])
     references = [c.source for c in value.cells] if kind == 'plan' else [o.source for o in value.observations]
-    return registered_sources(tenant, row['source_pack_id'], references, verify_bytes=verify_bytes, principal=principal)
+    primary = registered_sources(tenant, row['source_pack_id'], references, verify_bytes=verify_bytes, principal=principal)
+    if kind == 'plan' and value.derivation and value.derivation.historical_source_pack_id:
+        history_references = [item.basis for item in value.derivation.allocations]
+        registered_sources(tenant, value.derivation.historical_source_pack_id, history_references,
+                           verify_bytes=verify_bytes, principal=principal)
+    return primary
 
 
 def _public(row):
@@ -201,6 +206,95 @@ def create_decomposition(principal, plan_id, version, request):
             raise Conflict('A newer ratified plan version exists; decompose that version instead.')
         encoded, digest = _encode(payload), fingerprint(payload)
         _sources(principal, {'payload': payload, 'source_pack_id': parent['source_pack_id']}, kind='plan')
+        conn.execute('''INSERT INTO strategyos_intent_plan_versions
+            (tenant_key,plan_id,version,source_pack_id,payload,digest,imported_by)
+            VALUES (%s,%s,%s,%s,%s::jsonb,%s,%s)''',
+            (tenant, plan_id, proposal.version, parent['source_pack_id'], encoded, digest, actor))
+        created = _plan(conn, tenant, plan_id, proposal.version)
+        return {**_public(created), 'governance_status': 'proposed', 'created_from': {
+            'plan_id': plan_id, 'version': version, 'digest': parent['digest']}}
+
+
+def history_candidates(principal, plan_id, version, parent_cell_id, split_dimension, actual_revision):
+    """Preview the disclosed historical observations used to seed a decomposition."""
+    from .plan_decomposition import matching_history
+    tenant, _ = _scope(principal, IMPORT_ROLES)
+    _key(plan_id)
+    _key(actual_revision)
+    with _connection() as conn:
+        parent = _plan(conn, tenant, plan_id, version)
+        actual_row = _actuals(conn, tenant, actual_revision)
+        approval = conn.execute('''SELECT 1 FROM strategyos_intent_ratifications
+            WHERE tenant_key=%s AND plan_id=%s AND version=%s''', (tenant, plan_id, version)).fetchone()
+        newest = conn.execute('''SELECT COALESCE(MAX(version),0) FROM strategyos_intent_ratifications
+            WHERE tenant_key=%s AND plan_id=%s''', (tenant, plan_id)).fetchone()[0]
+        if not approval or newest != version:
+            raise Conflict('Historical decomposition requires the latest ratified plan version.')
+    _sources(principal, parent, kind='plan')
+    _sources(principal, actual_row, kind='actuals')
+    parent_cell, matched = matching_history(Plan.model_validate(parent['payload']),
+                                            Actuals.model_validate(actual_row['payload']),
+                                            parent_cell_id=parent_cell_id, split_dimension=split_dimension)
+    candidates = []
+    for member in sorted(matched):
+        observation = matched[member]
+        candidates.append({
+            'member': member,
+            'historical_value': str(observation.value) if observation.value is not None else None,
+            'unit': observation.unit,
+            'source': observation.source.model_dump(mode='json'),
+            'readiness': 'ready' if observation.value is not None and observation.value > 0 else 'blocked',
+        })
+    return {
+        'plan_id': plan_id, 'version': version, 'parent_digest': parent['digest'],
+        'parent_cell_id': parent_cell.id, 'split_dimension': split_dimension,
+        'historical_actual_revision': actual_revision, 'historical_actual_digest': actual_row['digest'],
+        'historical_source_pack_id': actual_row['source_pack_id'], 'candidates': candidates,
+        'readiness': 'ready' if len(candidates) >= 2 and all(c['readiness'] == 'ready' for c in candidates) else 'blocked',
+    }
+
+
+def create_history_decomposition(principal, plan_id, version, request):
+    """Create one immutable proposal from a prior actual mix plus explicit adjustments."""
+    from .plan_decomposition import decompose_from_history
+    tenant, actor = _scope(principal, IMPORT_ROLES)
+    _key(plan_id)
+    _key(request.historical_actual_revision)
+    with _connection() as conn:
+        _lock(conn, tenant, plan_id)
+        parent = _plan(conn, tenant, plan_id, version)
+        actual_row = _actuals(conn, tenant, request.historical_actual_revision)
+        if parent['digest'] != request.parent_digest:
+            raise Conflict('Parent plan fingerprint differs from the version reviewed.')
+        approval = conn.execute('''SELECT 1 FROM strategyos_intent_ratifications
+            WHERE tenant_key=%s AND plan_id=%s AND version=%s''', (tenant, plan_id, version)).fetchone()
+        if not approval:
+            raise Conflict('Only a ratified plan version can be decomposed.')
+        newest_ratified = conn.execute('''SELECT COALESCE(MAX(version),0) FROM strategyos_intent_ratifications
+            WHERE tenant_key=%s AND plan_id=%s''', (tenant, plan_id)).fetchone()[0]
+        if newest_ratified != version:
+            raise Conflict('A newer ratified plan version exists; decompose that version instead.')
+        latest = conn.execute('''SELECT COALESCE(MAX(version),0) FROM strategyos_intent_plan_versions
+            WHERE tenant_key=%s AND plan_id=%s''', (tenant, plan_id)).fetchone()[0]
+        _sources(principal, parent, kind='plan')
+        _sources(principal, actual_row, kind='actuals')
+        proposal = decompose_from_history(
+            Plan.model_validate(parent['payload']), Actuals.model_validate(actual_row['payload']), request,
+            next_version=latest + 1, historical_digest=actual_row['digest'],
+            historical_source_pack_id=actual_row['source_pack_id'])
+        payload = _plan_payload(proposal)
+        existing = _row(conn, '''SELECT * FROM strategyos_intent_plan_versions
+            WHERE tenant_key=%s AND plan_id=%s AND payload->'derivation'->>'request_hash'=%s''',
+            (tenant, plan_id, payload['derivation']['request_hash']))
+        if existing:
+            _checked(existing)
+            _sources(principal, existing, kind='plan')
+            existing_approval = conn.execute('''SELECT 1 FROM strategyos_intent_ratifications
+                WHERE tenant_key=%s AND plan_id=%s AND version=%s''',
+                (tenant, plan_id, existing['version'])).fetchone()
+            return {**_public(existing), 'governance_status': 'ratified' if existing_approval else 'proposed',
+                    'created_from': {'plan_id': plan_id, 'version': version, 'digest': parent['digest']}}
+        encoded, digest = _encode(payload), fingerprint(payload)
         conn.execute('''INSERT INTO strategyos_intent_plan_versions
             (tenant_key,plan_id,version,source_pack_id,payload,digest,imported_by)
             VALUES (%s,%s,%s,%s,%s::jsonb,%s,%s)''',
@@ -321,6 +415,12 @@ def ratify(principal, plan_id, version, expected_digest, note):
                 (tenant, derivation['parent_plan_id'])).fetchone()[0]
             if newest_parent != derivation['parent_version']:
                 raise Conflict('This decomposition is stale because a newer plan version was ratified.')
+            if derivation.get('historical_actual_revision'):
+                historical = _actuals(conn, tenant, derivation['historical_actual_revision'])
+                if (historical['digest'] != derivation['historical_actual_digest'] or
+                        historical['source_pack_id'] != derivation['historical_source_pack_id']):
+                    raise Conflict('The historical actual snapshot failed its lineage integrity check.')
+                _sources(principal, historical, kind='actuals')
         newest = conn.execute('''SELECT COALESCE(MAX(version),0) FROM strategyos_intent_ratifications
             WHERE tenant_key=%s AND plan_id=%s''', (tenant, plan_id)).fetchone()[0]
         if version <= newest:
