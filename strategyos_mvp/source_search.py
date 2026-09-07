@@ -1,6 +1,7 @@
 """Index approved source rows/pages with exact citations into the scoped collection."""
 from pathlib import Path
 from itertools import islice
+import hashlib
 import logging
 logger = logging.getLogger(__name__)
 from . import semantic_embeddings, vector_store
@@ -8,6 +9,165 @@ from .evidence import sha256_file
 
 MAX_FILE_ROWS = 10000
 MAX_CHUNKS = 50000
+CACHE_POINT_TYPE = 'source_embedding_cache'
+CACHE_BATCH_SIZE = 64
+CACHE_BOOTSTRAP_SCROLL_SIZE = 32
+
+
+def _embedding_text(relative, text):
+    return Path(relative).stem + ': ' + text
+
+
+def _embedding_cache_identity(tenant_slug, embedding_text):
+    content_hash = hashlib.sha256(
+        ('passage: ' + embedding_text).encode('utf-8')
+    ).hexdigest()
+    point_id = vector_store._point_id(
+        tenant_slug,
+        CACHE_POINT_TYPE,
+        semantic_embeddings.MODEL_REVISION,
+        content_hash,
+    )
+    return point_id, content_hash
+
+
+def _valid_cache_point(point, *, tenant_slug, content_hash):
+    payload = point.get('payload') or {}
+    vector = point.get('vector')
+    return (
+        payload.get('tenant_slug') == tenant_slug
+        and payload.get('point_type') == CACHE_POINT_TYPE
+        and payload.get('model_revision') == semantic_embeddings.MODEL_REVISION
+        and payload.get('content_hash') == content_hash
+        and isinstance(vector, list)
+        and len(vector) == semantic_embeddings.DIMENSIONS
+    )
+
+
+def _cache_point(*, point_id, tenant_slug, content_hash, vector):
+    return {
+        'id': point_id,
+        'vector': vector,
+        'payload': {
+            'tenant_slug': tenant_slug,
+            'point_type': CACHE_POINT_TYPE,
+            'model_revision': semantic_embeddings.MODEL_REVISION,
+            'content_hash': content_hash,
+        },
+    }
+
+
+def _retrieve_cache_vectors(descriptors, *, tenant_slug):
+    """Return only exact, tenant-local vectors for this pinned model revision."""
+    if not descriptors:
+        return {}
+    result = {}
+    by_id = {item['cache_id']: item for item in descriptors}
+    all_ids = list(by_id)
+    for offset in range(0, len(all_ids), CACHE_BATCH_SIZE):
+        ids = all_ids[offset:offset + CACHE_BATCH_SIZE]
+        response = vector_store._qdrant_request(
+            'POST',
+            f'/collections/{vector_store.COLLECTION_NAME}/points',
+            {
+                'ids': ids,
+                'with_payload': ['tenant_slug', 'point_type', 'model_revision', 'content_hash'],
+                'with_vector': True,
+            },
+        )
+        for point in response.get('result', []):
+            point_id = str(point.get('id') or '')
+            descriptor = by_id.get(point_id)
+            if descriptor and _valid_cache_point(
+                point,
+                tenant_slug=tenant_slug,
+                content_hash=descriptor['content_hash'],
+            ):
+                result[point_id] = point['vector']
+    return result
+
+
+def _bootstrap_embedding_cache(*, tenant_slug, descriptors):
+    """Adopt compatible historical vectors into the persistent cache once.
+
+    Older releases stored the same pinned-model vector only on run-scoped
+    source points. Scanning those points is bounded by Qdrant pagination and
+    writes no source text to the cache; it prevents a release from needlessly
+    recomputing tens of thousands of unchanged embeddings.
+    """
+    needed = {item['cache_id']: item for item in descriptors}
+    if not needed:
+        return 0
+    already_cached = _retrieve_cache_vectors(list(needed.values()), tenant_slug=tenant_slug)
+    for point_id in already_cached:
+        needed.pop(point_id, None)
+    if not needed:
+        return 0
+
+    seeded = 0
+    pending = []
+    page_offset = None
+    while needed:
+        payload = {
+            'limit': CACHE_BOOTSTRAP_SCROLL_SIZE,
+            'filter': {
+                'must': [
+                    {'key': 'tenant_slug', 'match': {'value': tenant_slug}},
+                    {'key': 'point_type', 'match': {'value': 'source_chunk'}},
+                ]
+            },
+            'with_payload': ['source_path', 'title', 'text'],
+            'with_vector': True,
+        }
+        if page_offset is not None:
+            payload['offset'] = page_offset
+        response = vector_store._qdrant_request(
+            'POST',
+            f'/collections/{vector_store.COLLECTION_NAME}/points/scroll',
+            payload,
+        ).get('result', {})
+        points = response.get('points') or []
+        for point in points:
+            source_payload = point.get('payload') or {}
+            text = source_payload.get('text')
+            source_path = source_payload.get('source_path')
+            if not isinstance(text, str) or not isinstance(source_path, str):
+                continue
+            embedding_text = str(source_payload.get('title') or Path(source_path).stem) + ': ' + text
+            cache_id, content_hash = _embedding_cache_identity(tenant_slug, embedding_text)
+            descriptor = needed.get(cache_id)
+            vector = point.get('vector')
+            if (
+                descriptor
+                and descriptor['content_hash'] == content_hash
+                and isinstance(vector, list)
+                and len(vector) == semantic_embeddings.DIMENSIONS
+            ):
+                pending.append(_cache_point(
+                    point_id=cache_id,
+                    tenant_slug=tenant_slug,
+                    content_hash=content_hash,
+                    vector=vector,
+                ))
+                needed.pop(cache_id, None)
+                seeded += 1
+                if len(pending) >= CACHE_BATCH_SIZE:
+                    vector_store._qdrant_request(
+                        'PUT',
+                        f'/collections/{vector_store.COLLECTION_NAME}/points?wait=true',
+                        {'points': pending},
+                    )
+                    pending = []
+        page_offset = response.get('next_page_offset')
+        if page_offset is None or not points:
+            break
+    if pending:
+        vector_store._qdrant_request(
+            'PUT',
+            f'/collections/{vector_store.COLLECTION_NAME}/points?wait=true',
+            {'points': pending},
+        )
+    return seeded
 
 
 def source_records(evidence):
@@ -78,6 +238,23 @@ def sync_sources(*, run_id, tenant_slug, evidence):
     records = list(islice(source_records(evidence), MAX_CHUNKS + 1))
     if len(records) > MAX_CHUNKS:
         raise ValueError('Source pack exceeds reviewed semantic indexing capacity.')
+    descriptors = []
+    for relative, digest, locator, text in records:
+        embedding_text = _embedding_text(relative, text)
+        cache_id, content_hash = _embedding_cache_identity(tenant_slug, embedding_text)
+        descriptors.append({
+            'relative': relative,
+            'digest': digest,
+            'locator': locator,
+            'text': text,
+            'embedding_text': embedding_text,
+            'cache_id': cache_id,
+            'content_hash': content_hash,
+        })
+    cache_seeded = _bootstrap_embedding_cache(
+        tenant_slug=tenant_slug,
+        descriptors=descriptors,
+    )
     allowed_paths = sorted({record[0] for record in records})
     obsolete_filter = {'must': [{'key':key, 'match':{'value':value}} for key,value in
                        (('run_id',run_id),('tenant_slug',tenant_slug),('point_type','source_chunk'))]}
@@ -85,27 +262,66 @@ def sync_sources(*, run_id, tenant_slug, evidence):
         obsolete_filter['must_not'] = [{'key':'source_path','match':{'any':allowed_paths}}]
     vector_store._qdrant_request('POST', f'/collections/{vector_store.COLLECTION_NAME}/points/delete?wait=true', {'filter':obsolete_filter})
     reused = 0
-    for offset in range(0, len(records), 64):
+    cache_hits = 0
+    embedded = 0
+    for offset in range(0, len(descriptors), CACHE_BATCH_SIZE):
         batch = []
-        for relative, digest, locator, text in records[offset:offset + 64]:
-            batch.append({'id': vector_store._point_id(run_id, 'source_chunk', relative, locator, text),
+        descriptor_by_point = {}
+        for descriptor in descriptors[offset:offset + CACHE_BATCH_SIZE]:
+            relative = descriptor['relative']
+            digest = descriptor['digest']
+            locator = descriptor['locator']
+            text = descriptor['text']
+            point_id = vector_store._point_id(run_id, 'source_chunk', relative, locator, text)
+            batch.append({'id': point_id,
                           'payload': {'run_id': run_id, 'tenant_slug': tenant_slug, 'point_type': 'source_chunk',
                                       'source_path': relative, 'source_hash': digest, 'locator': locator,
                                       'title': Path(relative).stem, 'text': text, 'excerpt': text[:700]}})
+            descriptor_by_point[point_id] = descriptor
         stored = vector_store._qdrant_request('POST', f'/collections/{vector_store.COLLECTION_NAME}/points',
                     {'ids': [point['id'] for point in batch], 'with_payload': ['run_id', 'tenant_slug', 'source_hash'], 'with_vector': False})
         existing = {str(point['id']): point.get('payload', {}) for point in stored.get('result', [])}
         missing = [point for point in batch if not all(existing.get(point['id'], {}).get(key) == point['payload'][key]
                    for key in ('run_id', 'tenant_slug', 'source_hash'))]
         reused += len(batch) - len(missing)
-        vectors = semantic_embeddings.embed_many([point['payload']['title'] + ': ' + point['payload']['text'] for point in missing])
-        for point, vector in zip(missing, vectors):
-            point['vector'] = vector
+        missing_descriptors = [descriptor_by_point[point['id']] for point in missing]
+        cached_vectors = _retrieve_cache_vectors(missing_descriptors, tenant_slug=tenant_slug)
+        uncached = []
+        for point in missing:
+            descriptor = descriptor_by_point[point['id']]
+            vector = cached_vectors.get(descriptor['cache_id'])
+            if vector is None:
+                uncached.append((point, descriptor))
+            else:
+                point['vector'] = vector
+                reused += 1
+                cache_hits += 1
+        if uncached:
+            vectors = semantic_embeddings.embed_many([
+                descriptor['embedding_text'] for _, descriptor in uncached
+            ])
+            cache_points = []
+            for (point, descriptor), vector in zip(uncached, vectors):
+                point['vector'] = vector
+                cache_points.append(_cache_point(
+                    point_id=descriptor['cache_id'],
+                    tenant_slug=tenant_slug,
+                    content_hash=descriptor['content_hash'],
+                    vector=vector,
+                ))
+            embedded += len(cache_points)
+            vector_store._qdrant_request(
+                'PUT',
+                f'/collections/{vector_store.COLLECTION_NAME}/points?wait=true',
+                {'points': cache_points},
+            )
         if missing:
             vector_store._qdrant_request('PUT', f'/collections/{vector_store.COLLECTION_NAME}/points?wait=true', {'points': missing})
         if offset % 1024 == 0:
             logger.info('Semantic source index: %s/%s records, %s reused', min(offset + 64, len(records)), len(records), reused)
     return {'status': 'ready', 'point_count': len(records), 'reused_points': reused,
+            'embedding_cache_hits': cache_hits, 'embedding_cache_seeded': cache_seeded,
+            'embedded_points': embedded,
             'collection': vector_store.COLLECTION_NAME, 'model_revision': semantic_embeddings.MODEL_REVISION}
 
 

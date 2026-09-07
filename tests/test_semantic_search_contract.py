@@ -72,7 +72,70 @@ def test_reindex_reuses_only_matching_scope_and_hash(monkeypatch):
     result=source_search.sync_sources(run_id='run',tenant_slug='tenant',evidence=object())
     assert result['reused_points']==1 and not embedded and not writes
     result=source_search.sync_sources(run_id='run',tenant_slug='other',evidence=object())
-    assert result['reused_points']==0 and len(embedded)==1 and len(writes)==1
+    assert result['reused_points']==0 and len(embedded)==1 and len(writes)==2
+    assert writes[0]['points'][0]['payload']['point_type']=='source_embedding_cache'
+    assert writes[1]['points'][0]['payload']['point_type']=='source_chunk'
+
+
+def test_reindex_reuses_tenant_scoped_persistent_embedding_cache(monkeypatch):
+    monkeypatch.setattr('strategyos_mvp.access_scope.source_index_allowed',lambda *args:True)
+    monkeypatch.setattr(semantic_embeddings,'configured',lambda:True)
+    monkeypatch.setattr(source_search,'source_records',lambda evidence:iter([('a.xlsx','hash','Sheet!Excel row 2','A: 0')]))
+    monkeypatch.setattr(vector_store,'_run_filter',lambda run:None)
+    monkeypatch.setattr(vector_store,'_ensure_collection',lambda:None)
+    descriptor_text=source_search._embedding_text('a.xlsx','A: 0')
+    cache_id,content_hash=source_search._embedding_cache_identity('tenant',descriptor_text)
+    embedded=[];writes=[]
+    monkeypatch.setattr(semantic_embeddings,'embed_many',lambda texts:embedded.extend(texts) or [[9.0] for _ in texts])
+    def request(method,path,payload):
+        if method=='POST' and path.endswith('/points') and payload.get('with_vector') is True:
+            return {'result':[{'id':cache_id,'vector':[1.0]*semantic_embeddings.DIMENSIONS,
+                'payload':{'tenant_slug':'tenant','point_type':source_search.CACHE_POINT_TYPE,
+                           'model_revision':semantic_embeddings.MODEL_REVISION,'content_hash':content_hash}}]}
+        if method=='POST' and path.endswith('/points'):
+            return {'result':[]}
+        if method=='PUT':writes.append(payload)
+        return {}
+    monkeypatch.setattr(vector_store,'_qdrant_request',request)
+    result=source_search.sync_sources(run_id='new-run',tenant_slug='tenant',evidence=object())
+    assert result['embedding_cache_hits']==1
+    assert result['embedded_points']==0
+    assert result['reused_points']==1
+    assert not embedded
+    assert len(writes)==1
+    assert writes[0]['points'][0]['payload']['point_type']=='source_chunk'
+    assert writes[0]['points'][0]['vector']==[1.0]*semantic_embeddings.DIMENSIONS
+
+
+def test_cache_bootstrap_adopts_only_matching_tenant_source_vectors(monkeypatch):
+    embedding_text=source_search._embedding_text('a.xlsx','A: 0')
+    cache_id,content_hash=source_search._embedding_cache_identity('tenant',embedding_text)
+    descriptor={'cache_id':cache_id,'content_hash':content_hash}
+    writes=[];scroll_filters=[]
+    def request(method,path,payload):
+        if method=='POST' and path.endswith('/points'):
+            return {'result':[]}
+        if method=='POST' and path.endswith('/points/scroll'):
+            scroll_filters.append(payload['filter'])
+            return {'result':{'points':[{
+                'id':'historical',
+                'vector':[0.5]*semantic_embeddings.DIMENSIONS,
+                'payload':{'tenant_slug':'tenant','point_type':'source_chunk',
+                           'source_path':'a.xlsx','title':'a','text':'A: 0'},
+            }], 'next_page_offset':None}}
+        if method=='PUT':writes.extend(payload['points'])
+        return {}
+    monkeypatch.setattr(vector_store,'_qdrant_request',request)
+    seeded=source_search._bootstrap_embedding_cache(tenant_slug='tenant',descriptors=[descriptor])
+    assert seeded==1
+    assert scroll_filters==[{'must':[
+        {'key':'tenant_slug','match':{'value':'tenant'}},
+        {'key':'point_type','match':{'value':'source_chunk'}},
+    ]}]
+    assert writes==[source_search._cache_point(
+        point_id=cache_id,tenant_slug='tenant',content_hash=content_hash,
+        vector=[0.5]*semantic_embeddings.DIMENSIONS,
+    )]
 
 
 def test_source_index_includes_text_briefings_and_office_paragraphs(tmp_path):

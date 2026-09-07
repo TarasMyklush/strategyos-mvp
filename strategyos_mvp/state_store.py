@@ -128,7 +128,9 @@ def create_run_job(
             cur.execute("select pg_advisory_xact_lock(hashtext(%s))", (request_hash,))
             cur.execute(
                 """
-                select id, status
+                select id, created_at, updated_at, execution_mode, status, request_hash, request_json,
+                       submitted_by, hatchet_run_id, strategyos_run_id, retry_count, failure_reason,
+                       metadata_json, started_at, finished_at
                 from strategyos_run_jobs
                 where request_hash = %s and status in ('queued', 'running')
                 order by created_at desc
@@ -138,9 +140,9 @@ def create_run_job(
             )
             active = fetchone_dict(cur)
             if active is not None:
-                raise ValueError(
-                    f"Analysis is already {active.get('status') or 'running'} for this dataset."
-                )
+                record = normalize_run_job_record(active)
+                record['reused_active'] = True
+                return record
             cur.execute(
                 """
                 insert into strategyos_run_jobs

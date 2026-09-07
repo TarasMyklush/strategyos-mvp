@@ -6,7 +6,10 @@ TARGET_HOST="${TARGET_HOST:-}"
 SSH_OPTS="${SSH_OPTS:-}"
 RUN_AUTH_HEADER="${RUN_AUTH_HEADER:-}"
 RUN_POLL_JOB="${RUN_POLL_JOB:-true}"
-RUN_POLL_TIMEOUT_SECONDS="${RUN_POLL_TIMEOUT_SECONDS:-900}"
+# A first governed run may index the full reviewed 50,000-chunk ceiling with a
+# cold pinned embedding model. Keep the acceptance window aligned with that
+# supported workload; subsequent runs reuse the persistent embedding cache.
+RUN_POLL_TIMEOUT_SECONDS="${RUN_POLL_TIMEOUT_SECONDS:-3600}"
 RUN_POLL_INTERVAL_SECONDS="${RUN_POLL_INTERVAL_SECONDS:-5}"
 RUN_PAYLOAD="${RUN_PAYLOAD:-}"
 if [ -n "${RUN_PAYLOAD}" ]; then

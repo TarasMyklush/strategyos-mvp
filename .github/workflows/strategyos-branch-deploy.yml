@@ -221,6 +221,7 @@ jobs:
       STRATEGYOS_LLM_MODEL: ${{ vars.STRATEGYOS_LLM_MODEL || 'deepseek-v4-pro' }}
       STRATEGYOS_LLM_TIMEOUT_SECONDS: ${{ vars.STRATEGYOS_LLM_TIMEOUT_SECONDS || '30' }}
       STRATEGYOS_EMBEDDING_MODEL_PATH: ${{ vars.STRATEGYOS_EMBEDDING_MODEL_PATH || '' }}
+      STRATEGYOS_EMBEDDING_THREADS: ${{ vars.STRATEGYOS_EMBEDDING_THREADS || '4' }}
       STRATEGYOS_CLAIM_PROJECTOR_REPLICAS: '3'
       HATCHET_CLIENT_TLS_STRATEGY: ${{ vars.HATCHET_CLIENT_TLS_STRATEGY || 'none' }}
       HATCHET_CLIENT_HOST_PORT: ${{ vars.HATCHET_CLIENT_HOST_PORT || 'hatchet-lite:7077' }}
@@ -340,6 +341,7 @@ jobs:
               "STRATEGYOS_LLM_MODEL": os.environ["STRATEGYOS_LLM_MODEL"],
               "STRATEGYOS_LLM_TIMEOUT_SECONDS": os.environ["STRATEGYOS_LLM_TIMEOUT_SECONDS"],
               "STRATEGYOS_EMBEDDING_MODEL_PATH": os.environ["STRATEGYOS_EMBEDDING_MODEL_PATH"],
+              "STRATEGYOS_EMBEDDING_THREADS": os.environ["STRATEGYOS_EMBEDDING_THREADS"],
               "STRATEGYOS_CLAIM_PROJECTOR_REPLICAS": os.environ["STRATEGYOS_CLAIM_PROJECTOR_REPLICAS"],
               "HATCHET_CLIENT_TLS_STRATEGY": os.environ["HATCHET_CLIENT_TLS_STRATEGY"],
               "HATCHET_CLIENT_HOST_PORT": os.environ["HATCHET_CLIENT_HOST_PORT"],
@@ -584,12 +586,14 @@ jobs:
           if [ "${STRATEGYOS_AUTH_MODE}" = "proxy_oidc" ]; then
             test -n "${STRATEGYOS_RUN_AUTH_HEADER}"
             RUN_AUTH_HEADER="${STRATEGYOS_RUN_AUTH_HEADER}" \
+            RUN_POLL_TIMEOUT_SECONDS=3600 \
             TARGET_URL="${STRATEGYOS_PROBE_URL}" \
             bash deploy/scripts/run_remote_workflow.sh
           else
             token="$(TARGET_HOST="${TARGET_HOST}" TARGET_DIR="${TARGET_DIR}" SSH_OPTS="${SSH_OPTS}" ROLE=operator bash deploy/scripts/remote_idp_token.sh)"
             echo "::add-mask::${token}"
             RUN_AUTH_HEADER="Authorization: Bearer ${token}" \
+            RUN_POLL_TIMEOUT_SECONDS=3600 \
             TARGET_URL="${STRATEGYOS_PROBE_URL}" \
             bash deploy/scripts/run_remote_workflow.sh
           fi

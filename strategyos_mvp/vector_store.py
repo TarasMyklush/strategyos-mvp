@@ -990,8 +990,12 @@ def _qdrant_request(
         data = json.dumps(payload).encode("utf-8")
         headers["Content-Type"] = "application/json"
     req = request.Request(url, data=data, headers=headers, method=method)
+    # Qdrant's synchronous mutation endpoints may legitimately wait for an
+    # optimizer/segment flush on a full reviewed source index. Interactive
+    # reads keep the tighter bound; acknowledged writes get a bounded minute.
+    timeout = 60 if method in {"PUT", "DELETE"} or "wait=true" in path else 10
     try:
-        with request.urlopen(req, timeout=10) as response:
+        with request.urlopen(req, timeout=timeout) as response:
             text = response.read().decode("utf-8")
     except error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")

@@ -39,3 +39,28 @@ def test_shared_database_run_and_bu_isolation(monkeypatch, tmp_path):
             state_store.get_run_detail(runs[0])
     finally:
         access_scope.principal_scope.reset(token)
+
+
+def test_matching_active_run_job_is_idempotently_reused(monkeypatch):
+    url = os.getenv("STRATEGYOS_POSTGRES_E2E_DATABASE_URL")
+    if not url:
+        pytest.skip("Dedicated Postgres proof endpoint required.")
+    import psycopg
+    import uuid
+
+    monkeypatch.setattr(state_store, "database_connection", lambda: (psycopg.connect(url), None))
+    tenant = "job-reuse-" + uuid.uuid4().hex
+    monkeypatch.setattr(state_store, "CONFIG", replace(state_store.CONFIG, tenant_slug=tenant))
+    payload = {
+        "dataset": f"dataset-{uuid.uuid4().hex}",
+        "run_dir": "runs",
+        "skip_prepare": True,
+        "sync_artifacts": True,
+    }
+
+    first = state_store.create_run_job(payload, submitted_by="operator")
+    second = state_store.create_run_job(payload, submitted_by="operator")
+
+    assert first["job_id"] == second["job_id"]
+    assert second["status"] == "queued"
+    assert second["reused_active"] is True

@@ -137,6 +137,49 @@ def test_hatchet_execution_mode_creates_job_and_enqueues(monkeypatch, tmp_path: 
     assert updates[0][1]["hatchet_run_id"] == "hatchet-1"
 
 
+def test_hatchet_execution_mode_reuses_matching_active_job_without_reenqueue(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(
+        run_executor.state_store,
+        "create_run_job",
+        lambda *args, **kwargs: {
+            "job_id": "job-active",
+            "status": "running",
+            "request_hash": "hash-active",
+            "hatchet_run_id": "hatchet-active",
+            "strategyos_run_id": None,
+            "reused_active": True,
+        },
+    )
+    monkeypatch.setattr(
+        hatchet_runtime,
+        "enqueue_strategyos_run",
+        lambda payload: (_ for _ in ()).throw(AssertionError("must not enqueue twice")),
+    )
+
+    result = run_executor.submit_run(
+        dataset=tmp_path / "dataset",
+        source_pack_id=None,
+        run_dir=tmp_path / "runs",
+        skip_prepare=True,
+        sync_artifacts=True,
+        allow_partial_source_pack=False,
+        submitted_by="operator",
+        config=SimpleNamespace(run_execution_mode="hatchet"),
+        sync_runner=lambda **_: {"status": "unexpected"},
+    )
+
+    assert result == {
+        "status": "running",
+        "execution_mode": "hatchet",
+        "job_id": "job-active",
+        "hatchet_run_id": "hatchet-active",
+        "strategyos_run_id": None,
+        "request_hash": "hash-active",
+        "reused_active": True,
+        "detail": "The matching governed Kyvern run is already in progress.",
+    }
+
+
 def test_hatchet_worker_task_updates_job_lifecycle(monkeypatch, tmp_path: Path):
     updates = []
 

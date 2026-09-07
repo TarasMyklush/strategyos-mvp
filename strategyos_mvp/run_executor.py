@@ -99,6 +99,17 @@ def submit_hatchet_run(
             "Hatchet mode requires a configured Postgres job store: "
             f"{job.get('reason') or job.get('status')}"
         )
+    if job.get("reused_active"):
+        return {
+            "status": job.get("status") or "queued",
+            "execution_mode": "hatchet",
+            "job_id": job.get("job_id"),
+            "hatchet_run_id": job.get("hatchet_run_id"),
+            "strategyos_run_id": job.get("strategyos_run_id"),
+            "request_hash": job.get("request_hash"),
+            "reused_active": True,
+            "detail": "The matching governed Kyvern run is already in progress.",
+        }
 
     try:
         from .hatchet_runtime import enqueue_strategyos_run
