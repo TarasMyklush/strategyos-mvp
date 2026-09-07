@@ -228,11 +228,21 @@ def discover_run_history(limit: int = 12) -> list[dict[str, Any]]:
     if not output_root.exists():
         return []
 
+    # Authorisation of a historical run is deliberately evidence-aware and can
+    # require a database policy check. Select newest candidates first and stop
+    # once the requested number of authorised points is collected; scanning and
+    # authorising the entire retained archive made a six-point CEO trend perform
+    # hundreds of redundant policy queries.
+    candidates = [
+        (_run_timestamp(path.parent.name), path)
+        for path in output_root.glob("*/run_summary.json")
+        if _looks_timestamped(path.parent.name)
+    ]
+    candidates.sort(key=lambda item: item[0], reverse=True)
+
     entries: list[tuple[str, dict[str, Any]]] = []
-    for summary_path in output_root.glob("*/run_summary.json"):
+    for timestamp, summary_path in candidates:
         run_dir = summary_path.parent
-        if not _looks_timestamped(run_dir.name):
-            continue
         try:
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -244,7 +254,6 @@ def discover_run_history(limit: int = 12) -> list[dict[str, Any]]:
             guard_summary(summary)
         except PermissionError:
             continue
-        timestamp = _run_timestamp(run_dir.name)
         acceptance = summary.get("acceptance") if isinstance(summary.get("acceptance"), dict) else {}
         recoverable = _safe_float(
             summary.get("total_recoverable_sar")
@@ -269,12 +278,11 @@ def discover_run_history(limit: int = 12) -> list[dict[str, Any]]:
                 },
             )
         )
+        if limit and len(entries) >= limit:
+            break
 
     entries.sort(key=lambda item: item[0])
-    history = [entry for _, entry in entries]
-    if limit and len(history) > limit:
-        history = history[-limit:]
-    return history
+    return [entry for _, entry in entries]
 
 
 def _safe_float(value: Any) -> float | None:

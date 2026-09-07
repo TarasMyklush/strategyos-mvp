@@ -98,6 +98,38 @@ def test_discover_run_history_limit_keeps_most_recent(tmp_path):
         _restore_env(original)
 
 
+def test_discover_run_history_authorizes_only_enough_newest_candidates(tmp_path, monkeypatch):
+    original = _apply_env({"STRATEGYOS_OUTPUT_ROOT": str(tmp_path)})
+    checked = []
+    try:
+        for day in range(1, 21):
+            _write_run(
+                tmp_path,
+                f"Run-202606{day:02d}T100000Z",
+                recoverable=100000 * day,
+                findings=day,
+            )
+
+        monkeypatch.setattr(
+            "strategyos_mvp.access_scope.guard_summary",
+            lambda summary: checked.append(summary["run_id"]),
+        )
+        history = run_registry.discover_run_history(limit=3)
+
+        assert [row["period"] for row in history] == [
+            "20260618T100000Z",
+            "20260619T100000Z",
+            "20260620T100000Z",
+        ]
+        assert checked == [
+            "Run-20260620T100000Z",
+            "Run-20260619T100000Z",
+            "Run-20260618T100000Z",
+        ]
+    finally:
+        _restore_env(original)
+
+
 def test_runs_history_endpoint_returns_history(tmp_path):
     original = _apply_env(
         {"STRATEGYOS_OUTPUT_ROOT": str(tmp_path), "STRATEGYOS_API_AUTH_ENABLED": "false"}
