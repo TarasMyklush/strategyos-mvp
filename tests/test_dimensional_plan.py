@@ -222,6 +222,19 @@ def test_price_volume_mix_discloses_missing_actual_basis(bundle):
     assert not any(item['finding_type'] == 'price_volume_mix' for item in result['findings'])
 
 
+@pytest.mark.parametrize('side', ['plan', 'actuals'])
+def test_incomplete_bridge_still_verifies_every_declared_source(bundle, side):
+    price_volume_mix_bundle(bundle)
+    if side == 'plan':
+        bundle[1]['price_volume_mix'] = []
+        bundle[0]['price_volume_mix_policies'][0]['rows'][0]['price_source']['sha256'] = '0' * 64
+    else:
+        bundle[1]['observations'][0]['value'] = None
+        bundle[1]['price_volume_mix'][0]['rows'][0]['volume_source']['sha256'] = '0' * 64
+    with pytest.raises(ValueError, match='Evidence hash differs'):
+        run(bundle)
+
+
 def test_cli_is_read_only_and_errors_have_no_partial_result(bundle):
     p, a, root = bundle
     for name, data in [('plan', p), ('actuals', a)]:

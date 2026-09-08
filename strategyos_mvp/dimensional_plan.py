@@ -371,6 +371,9 @@ def _price_volume_mix_bridges(plan, actuals, rows, check_plan, check_actual):
         basis = actual_by_id.get(policy.bridge_id)
         scope_cell = next(cell for cell in plan.cells if cell.id == policy.rows[0].cell_id)
         scope = {key: value for key, value in scope_cell.dimensions.items() if key != policy.mix_dimension}
+        for planned in policy.rows:
+            check_plan(planned.price_source)
+            check_plan(planned.volume_source)
         if basis is None:
             bridges.append({
                 "bridge_id": policy.bridge_id, "metric": policy.metric, "status": "missing_actual_basis",
@@ -387,6 +390,9 @@ def _price_volume_mix_bridges(plan, actuals, rows, check_plan, check_actual):
         actual_by_member = {row.member: row for row in basis.rows}
         if set(plan_by_member) != set(actual_by_member):
             raise ValueError("Actual price/volume/mix members must exactly match the approved policy.")
+        for actual in basis.rows:
+            check_actual(actual.price_source)
+            check_actual(actual.volume_source)
         missing_revenue = sorted(row.cell_id for row in policy.rows
                                  if row_by_cell[row.cell_id]["actual"] is None)
         if missing_revenue:
@@ -404,10 +410,6 @@ def _price_volume_mix_bridges(plan, actuals, rows, check_plan, check_actual):
             price_effect_raw = Decimal(0)
             for member in sorted(plan_by_member):
                 planned, actual = plan_by_member[member], actual_by_member[member]
-                check_plan(planned.price_source)
-                check_plan(planned.volume_source)
-                check_actual(actual.price_source)
-                check_actual(actual.volume_source)
                 row = row_by_cell[planned.cell_id]
                 calculated_actual = actual.actual_price * actual.actual_volume
                 if Decimal(row["actual"]) != calculated_actual:
