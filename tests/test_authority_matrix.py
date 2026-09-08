@@ -142,3 +142,23 @@ def test_unreadable_policy_returns_service_unavailable_before_loading(authority_
     response = TestClient(app).post(endpoint, json={"persona": "ceo", "question": "Show revenue"})
     assert response.status_code == 503
     assert "Access remains closed" in response.json()["detail"]
+
+
+@pytest.mark.parametrize("operation", ["read", "write"])
+@pytest.mark.parametrize("failure", [{"status": "failed"}, {"status": "skipped", "reason": "driver unavailable"}])
+def test_database_policy_outage_cannot_switch_to_local_permissions(authority_store, monkeypatch, operation, failure):
+    from dataclasses import replace
+    from strategyos_mvp import state_store
+    monkeypatch.setattr(state_store, "CONFIG", replace(state_store.CONFIG, database_url="postgresql://configured"))
+    monkeypatch.setattr(authority_module, "database_connection", lambda: (None, failure))
+    def forbidden(*args, **kwargs):
+        pytest.fail("Database authority was replaced by local-file permissions")
+    monkeypatch.setattr(authority_module, "_read_file", forbidden)
+    monkeypatch.setattr(authority_module, "_write_file", forbidden)
+    with pytest.raises(authority_module.AuthorityPolicyUnavailable):
+        if operation == "read":
+            authority_module.get_authority_matrix("tenant-a")
+        else:
+            # Simulate failure on the second connection, after a valid read.
+            monkeypatch.setattr(authority_module, "get_authority_matrix", lambda _: authority_module.default_authority_matrix())
+            authority_module.save_authority_matrix("tenant-a", authority_module.default_authority_matrix(), actor="qa")

@@ -167,8 +167,20 @@ def _write_file(
     return normalized
 
 
-def get_authority_matrix(tenant_id: str) -> dict[str, Any]:
+def _policy_connection():
+    from . import state_store
     connection, skipped = database_connection()
+    if connection is None and (
+        skipped is None or skipped.get("status") == "failed" or state_store.CONFIG.database_url
+    ):
+        # A configured database is authoritative. An outage or missing driver
+        # must never switch permission reads/writes to a separate local policy.
+        raise AuthorityPolicyUnavailable("Authority database is unavailable; access remains closed.")
+    return connection, skipped
+
+
+def get_authority_matrix(tenant_id: str) -> dict[str, Any]:
+    connection, skipped = _policy_connection()
     if skipped is None and connection is not None:
         with connection as conn:
             ensure_data_schema(conn)
@@ -194,7 +206,7 @@ def save_authority_matrix(tenant_id: str, matrix: Mapping[str, Any], *, actor: s
     normalized["version"] = int(current.get("version") or 1) + 1
     normalized["updated_at"] = datetime.now(UTC).isoformat()
     normalized["updated_by"] = actor
-    connection, skipped = database_connection()
+    connection, skipped = _policy_connection()
     if skipped is None and connection is not None:
         with connection as conn:
             ensure_data_schema(conn)
