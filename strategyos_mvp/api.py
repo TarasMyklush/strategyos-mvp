@@ -11615,9 +11615,15 @@ def _resolve_qa_context(run_id: str | None) -> dict[str, Any]:
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No completed run is available to answer questions yet. Start a run first.",
         )
-    detail = state_store.get_run_detail(str(resolved_run_id))
-    persisted = list(detail.get("findings") or []) if isinstance(detail, Mapping) else []
-    kg_nodes, kg_edges = _load_kg_snapshot(summary)
+    from .assistant_scope import current_scope
+    from .authority_matrix import DOMAINS
+    scope = current_scope.get()
+    if scope is not None and scope.domains != frozenset(DOMAINS):
+        persisted, kg_nodes, kg_edges = [], [], []
+    else:
+        detail = state_store.get_run_detail(str(resolved_run_id))
+        persisted = list(detail.get("findings") or []) if isinstance(detail, Mapping) else []
+        kg_nodes, kg_edges = _load_kg_snapshot(summary)
     return {
         "bundle": None,
         "findings": persisted_findings(persisted),
@@ -11671,6 +11677,13 @@ def _hydrate_governed_qa_context(
         )
     records = [record for record in list(snapshot.get("records") or []) if isinstance(record, Mapping)]
     context["bundle"] = claim_backed_bundle(records)
+    from .assistant_scope import current_scope
+    if current_scope.get() is not None:
+        # Rebuild presentation from this filtered snapshot; legacy display copy
+        # has no domain classification and must not enter assistant context.
+        context["summary"] = {**summary, "finance_kpi": finance_payload_from_claim_snapshot({}, snapshot)}
+    from .assistant_scope import restrict_legacy_context
+    context = restrict_legacy_context(context)
     context["governed_claim_record_count"] = len(records)
     context["governed_claim_denied_count"] = int(snapshot.get("denied_count") or 0)
     context["data_boundary"] = "authorized_claim_snapshot"
@@ -15277,7 +15290,8 @@ async def _assistant_chat_response(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Assistant mode must be 'auto', 'deterministic', or 'llm'.",
         )
-    persona = (request.persona or "ceo").strip().lower() or "ceo"
+    from .assistant_scope import request_persona
+    persona = request_persona(request)
     request_context = dict(getattr(request, "context", None) or {})
     assistant_context = {
         **request_context,
@@ -15303,7 +15317,11 @@ async def _assistant_chat_response(
             detail=f"Unsupported assistant persona '{persona}'.",
         )
 
-    if not public_safe and _assistant_question_is_challenge_closure(question):
+    from .assistant_scope import current_scope
+    from .authority_matrix import DOMAINS
+    scope = current_scope.get()
+    if (not public_safe and _assistant_question_is_challenge_closure(question)
+            and (scope is None or scope.domains == frozenset(DOMAINS))):
         summary = _latest_summary()
         result = _authenticated_challenge_closure_result(summary)
         challenge_context = {
@@ -16386,6 +16404,12 @@ def data_qa(
     denied = _assistant_authority_refusal(request, _)
     if denied is not None:
         return denied
+    from .assistant_scope import bind_assistant
+    with bind_assistant(request, _, get_authority_matrix(_principal_tenant_id(_))):
+        return _data_qa_scoped(request, _)
+
+
+def _data_qa_scoped(request: QaRequest, _: dict[str, Any]) -> dict[str, Any]:
     question = (request.question or "").strip()
     if not question:
         raise HTTPException(
@@ -17045,7 +17069,8 @@ def _assistant_authority_refusal(
     from .authority_matrix import classify_requests
 
     context = getattr(request, "assistant_context", None) or request.context or {}
-    persona = str(request.persona or context.get("active_persona") or context.get("persona") or "ceo").lower()
+    from .assistant_scope import request_persona
+    persona = request_persona(request)
     role = str(principal.get("role") or "anonymous")
     allowed_personas = principal.get("personas")
     if (allowed_personas is not None and persona not in allowed_personas) or (
@@ -17055,6 +17080,8 @@ def _assistant_authority_refusal(
     tenant_id = _principal_tenant_id(principal)
     matrix = get_authority_matrix(tenant_id)
     requests = [("board_materials", "view")] if persona == "board" else classify_requests(request.question, context)
+    rows = {row["id"]: row for row in matrix.get("subjects", [])}
+    human = rows.get("user:" + str(principal.get("subject") or ""))
     for domain, required_right in requests:
         decision = authority_decision(
             matrix, subject_id=assistant_subject(persona),
@@ -17062,6 +17089,11 @@ def _assistant_authority_refusal(
         )
         if not decision["allowed"]:
             return refusal_payload(decision)
+        if human is not None:
+            human_decision = authority_decision(matrix, subject_id=human["id"],
+                domain=domain, required_right=required_right)
+            if not human_decision["allowed"]:
+                return refusal_payload(human_decision)
     if persona == "board":
         from . import board_memory
         if not principal.get("auth_disabled") and not principal_has_any_role(role, "executive"):
@@ -17085,47 +17117,24 @@ async def assistant_chat(
     request: AssistantChatRequest,
     principal: dict[str, Any] = Depends(authenticate_optional_request),
 ) -> dict[str, Any]:
+    from .assistant_scope import bind_assistant, request_persona
     role = str(principal.get("role") or "anonymous")
     authenticated = bool(principal.get("authenticated"))
     if CONFIG.login_required:
         _require_login_if_enabled(principal)
-        denied = _assistant_authority_refusal(request, principal)
-        if denied is not None:
-            return denied
-        return await _assistant_chat_response(
-            request,
-            public_safe=False,
-            authenticated_role=role,
-            authenticated_principal=principal,
-        )
-    persona = (request.persona or "ceo").strip().lower() or "ceo"
-    if not authenticated:
-        if persona not in EXECUTIVE_PERSONA_IDS:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="A valid identity token is required.",
-            )
-        denied = _assistant_authority_refusal(request, principal)
-        if denied is not None:
-            return denied
-        return await _assistant_chat_response(request, public_safe=True)
-
-    if not principal_has_any_role(role, *PRODUCT_READ_ROLES):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This identity is not permitted for this endpoint.",
-        )
-
+    if authenticated and not principal_has_any_role(role, *PRODUCT_READ_ROLES):
+        raise HTTPException(403, "This identity is not permitted for this endpoint.")
+    if not authenticated and not CONFIG.login_required and request_persona(request) not in EXECUTIVE_PERSONA_IDS:
+        raise HTTPException(401, "A valid identity token is required.")
     denied = _assistant_authority_refusal(request, principal)
     if denied is not None:
         return denied
-
-    return await _assistant_chat_response(
-        request,
-        public_safe=False,
-        authenticated_role=role,
-        authenticated_principal=principal,
-    )
+    public_safe = not authenticated and not CONFIG.login_required
+    with bind_assistant(request, principal, get_authority_matrix(_principal_tenant_id(principal))):
+        if public_safe:
+            return await _assistant_chat_response(request, public_safe=True)
+        return await _assistant_chat_response(request, public_safe=False,
+            authenticated_role=role, authenticated_principal=principal)
 
 
 @app.post("/inputs/prepare")

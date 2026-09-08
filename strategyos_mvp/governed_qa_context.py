@@ -20,6 +20,25 @@ _FINDING_CONFIDENCE = frozenset({"HIGH", "MEDIUM", "LOW"})
 _FINDING_STATUS = frozenset({"draft", "challenged", "locked", "disputed", "approved", "rejected", "blocked"})
 
 
+
+_FINANCE_COLUMNS = frozenset({
+    'Invoice_ID', 'Invoice_Date', 'Due_Date', 'Payment_Date', 'Vendor_ID', 'Vendor_Name',
+    'Customer_ID', 'Customer_Name', 'PO_ID', 'PO_Reference', 'PO_Date', 'Status',
+    'Currency', 'Amount', 'Amount_SAR', 'Paid_Amount', 'Outstanding_Amount',
+    'Business_Unit', 'Entity', 'Segment', 'Customer_Segment', 'Account', 'Account_Code',
+    'Account_Name', 'Debit', 'Credit', 'Net', 'Date', 'Period', 'Balance_SAR',
+    'Week', 'Scenario', 'SKU', 'Quantity', 'Unit_Price', 'Line_ID',
+})
+
+
+def _finance_record(dimensions):
+    raw = dimensions.get('record')
+    raw = dict(raw) if isinstance(raw, Mapping) else {}
+    from .assistant_scope import current_scope
+    if current_scope.get() is not None:
+        return {key: value for key,value in raw.items() if key in _FINANCE_COLUMNS}
+    return raw
+
 def _finding_confidence(value: Any) -> str:
     normalized = str(value or "LOW").upper()
     return normalized if normalized in _FINDING_CONFIDENCE else "LOW"
@@ -52,7 +71,7 @@ def claim_backed_bundle(records: Iterable[Mapping[str, Any]]) -> DataBundle:
             role = _TRANSACTION_ROLE.get(transaction_type)
             if role is None:
                 continue
-            item = dict(dimensions.get("record") or {}) if isinstance(dimensions.get("record"), Mapping) else {}
+            item = _finance_record(dimensions)
             item["Amount_SAR"] = _number(record)
             subject = record.get("subject") if isinstance(record.get("subject"), Mapping) else {}
             if transaction_type == "ap_invoice":
@@ -73,12 +92,12 @@ def claim_backed_bundle(records: Iterable[Mapping[str, Any]]) -> DataBundle:
                     "origin_category": source.get("origin_category"),
                 }
         elif record.get("metric_key") == "finance.trial_balance.net":
-            item = dict(dimensions.get("record") or {}) if isinstance(dimensions.get("record"), Mapping) else {}
+            item = _finance_record(dimensions)
             item["Net"] = _number(record)
             item.setdefault("Account", dimensions.get("account"))
             trial_balance.append(item)
         elif record.get("metric_key") == "finance.cash_forecast.balance":
-            item = dict(dimensions.get("record") or {}) if isinstance(dimensions.get("record"), Mapping) else {}
+            item = _finance_record(dimensions)
             item["Balance_SAR"] = _number(record)
             sheet = str(dimensions.get("sheet_name") or "forecast")
             cash_forecast.setdefault(sheet, []).append(item)

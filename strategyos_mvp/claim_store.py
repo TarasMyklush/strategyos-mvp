@@ -816,6 +816,11 @@ class ClaimRepository:
     def query(self, query: ClaimQuery, *, context: PolicyContext,
               revision_ids: Iterable[str] | None = None,
               subject_scopes: Iterable[tuple[str,str]] | None = None) -> list[dict[str, Any]]:
+        from .assistant_scope import metric_allowed
+        if not metric_allowed(query.metric_key, context.allowed_domains):
+            return []
+        from .assistant_scope import domain_read_predicate, domain_read_parameters
+        domain_clause = domain_read_predicate()
         scopes = None
         if subject_scopes is not None:
             from itertools import islice
@@ -843,12 +848,13 @@ class ClaimRepository:
                 query = replace(query, tenant_id=str(tenant_id))
                 context = replace(context, tenant_id=str(principal_tenant_id))
                 cur.execute(
-                    """
+                    f"""
                     select r.*, f.family_key, f.assertion_namespace, f.subject_type, f.subject_key, f.metric_key,
                            f.business_unit, f.dimensions, f.period_start, f.period_end, f.scenario_key
                     from strategyos_claim_revisions r
                     join strategyos_claim_families f on f.id = r.claim_family_id
                     where r.tenant_id = %s and f.metric_key = %s
+                      and {domain_clause}
                       and r.recorded_at <= %s
                       and f.business_unit is not distinct from %s
                       and f.scenario_key is not distinct from %s
@@ -865,7 +871,7 @@ class ClaimRepository:
                       )
                     order by f.period_end desc nulls last, r.recorded_at desc
                     """,
-                    (tenant_id, query.metric_key, query.as_of_at,query.business_unit,query.scenario_key,
+                    (tenant_id, query.metric_key, *domain_read_parameters(context.allowed_domains), query.as_of_at,query.business_unit,query.scenario_key,
                      sorted(str(kind) for kind in query.allowed_claim_kinds),query.period_start,
                      query.period_start,query.period_end,query.fiscal_calendar,query.fiscal_calendar,
                      query.subject_type,query.subject_type,query.subject_key,scopes,scopes,query.as_of_at),
@@ -996,6 +1002,8 @@ class ClaimRepository:
             {str(value).strip() for value in (metric_keys or ()) if str(value).strip()}
         )
         fetch_limit = limit + 1 if limit is not None else None
+        from .assistant_scope import domain_read_predicate, domain_read_parameters
+        domain_clause = domain_read_predicate()
         connection = self._require_connection()
         with connection as conn:
             self._ensure_schema(conn)
@@ -1015,7 +1023,7 @@ class ClaimRepository:
                     raise KeyError("Analysis snapshot not found.")
                 snapshot = _record(cur, snapshot_row)
                 cur.execute(
-                    """
+                    f"""
                     select r.*, f.family_key, f.assertion_namespace, f.subject_type,
                            f.subject_key, f.metric_key, f.business_unit, f.dimensions,
                            f.period_start, f.period_end, f.scenario_key,
@@ -1024,6 +1032,7 @@ class ClaimRepository:
                     join strategyos_claim_revisions r on r.id = sc.claim_revision_id
                     join strategyos_claim_families f on f.id = sc.claim_family_id
                     where sc.snapshot_id = %s
+                      and {domain_clause}
                       and (
                           cardinality(%s::text[]) = 0
                           or f.metric_key = any(%s::text[])
@@ -1033,6 +1042,7 @@ class ClaimRepository:
                     """,
                     (
                         snapshot["id"],
+                        *domain_read_parameters(context.allowed_domains),
                         selected_metric_keys,
                         selected_metric_keys,
                         fetch_limit,
@@ -1519,8 +1529,10 @@ class ClaimRepository:
             validate_persisted_calculation(cur, claim.draft)
         except ValueError:
             return False
+        from .assistant_scope import FINANCE_METRICS, metric_domain_sql
+        domain_clause = metric_domain_sql()
         cur.execute(
-            """
+            f"""
             with recursive inputs(id) as (
                 select input_claim_revision_id from strategyos_claim_dependencies
                 where derived_claim_revision_id = %s
@@ -1532,10 +1544,11 @@ class ClaimRepository:
                 select 1 from inputs i
                 join strategyos_claim_revisions r on r.id = i.id
                 join strategyos_claim_families f on f.id = r.claim_family_id
-                where r.tenant_id::text <> %s or r.recorded_at > %s
+                where (%s::text[] is not null and not (({domain_clause}) = any(%s::text[])))
+                  or r.tenant_id::text <> %s or r.recorded_at > %s
                   or r.as_of_at > %s or r.valid_until <= %s
                   or r.traceability_state <> 'present'
-                  or (%s::text[] <> '{}'::text[] and
+                  or (%s::text[] <> '{{}}'::text[] and
                       (f.business_unit is null or not f.business_unit = any(%s::text[])))
                   or exists (select 1 from strategyos_claim_assessments a
                       where a.claim_revision_id = r.id and a.assessment_type = 'lifecycle'
@@ -1547,7 +1560,11 @@ class ClaimRepository:
                       and not exists (select 1 from strategyos_claim_dependencies d where d.derived_claim_revision_id = r.id))
             )
             """,
-            (claim.revision_id, context.tenant_id, query.as_of_at, query.as_of_at,
+            (claim.revision_id,
+             None if context.allowed_domains is None else sorted(context.allowed_domains),
+             sorted(FINANCE_METRICS),
+             None if context.allowed_domains is None else sorted(context.allowed_domains),
+             context.tenant_id, query.as_of_at, query.as_of_at,
              query.as_of_at, sorted(context.business_units), sorted(context.business_units)),
         )
         return bool(cur.fetchone()[0])

@@ -419,8 +419,18 @@ class PolicyContext:
     roles: frozenset[str]
     purpose: UsePurpose | str
     business_units: frozenset[str] = frozenset()
+    allowed_domains: frozenset[str] | None = None
 
     def __post_init__(self) -> None:
+        from .assistant_scope import current_scope
+        from .authority_matrix import DOMAINS
+        scope = current_scope.get()
+        domains = self.allowed_domains
+        if domains is not None and not set(domains).issubset(DOMAINS):
+            raise ValueError("Unknown authority domain.")
+        if scope is not None:
+            domains = scope.domains if domains is None else scope.domains.intersection(domains)
+        object.__setattr__(self, "allowed_domains", domains)
         if not _text(self.tenant_id) or not _text(self.principal_id):
             raise ValueError("Tenant and principal identity are required.")
         if not self.roles:
@@ -493,6 +503,10 @@ def policy_allows(
     source_policies: Iterable[SourceAccessPolicy],
 ) -> EligibilityResult:
     reasons: list[str] = []
+    from .assistant_scope import metric_allowed
+    if not metric_allowed(claim.draft.metric_key, context.allowed_domains):
+        reasons.append("assistant_domain_denied")
+
     if context.tenant_id != claim.draft.tenant_id:
         reasons.append("tenant_mismatch")
     if (
