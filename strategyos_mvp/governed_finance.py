@@ -102,8 +102,9 @@ def _validate_presentation_record(record: Mapping[str, Any], currency: str) -> d
     if expected_kind is None or record.get("claim_kind") != expected_kind:
         raise ValueError("Financial presentation series does not match its governed claim kind.")
     unit = str(record.get("unit") or "")
-    if unit not in {"SAR", "percent"}:
-        raise ValueError("Financial presentation claim has an unsupported unit.")
+    expected_unit = "percent" if component != "cost_component" and dimensions.get("driver_key") == "ebitda_margin" else "SAR"
+    if unit != expected_unit:
+        raise ValueError("Financial presentation unit does not match its driver or cost component.")
     if unit == "SAR" and record.get("currency") != currency:
         raise ValueError("Financial presentation currency does not match the reporting currency.")
     if unit == "percent" and record.get("currency") not in {None, ""}:
@@ -136,9 +137,18 @@ def _presentation_projection(
     contributor_rows: dict[tuple[str, str], dict[str, tuple[Decimal, dict[str, Any], dict[str, Any]]]] = {}
     component_rows: dict[tuple[str, str], dict[str, tuple[Decimal, dict[str, Any], dict[str, Any]]]] = {}
     seen: set[tuple[Any, ...]] = set()
+    comparison_periods: dict[tuple[str, ...], dict[str, Any]] = {}
     for record in records:
         dimensions = _validate_presentation_record(record, currency)
         component = str(dimensions["presentation_component"])
+        # Monthly trend points compare within one label; all BU contributor and
+        # cost rows used in a bridge must describe the same reporting period.
+        comparison_key = (("trend", str(dimensions.get("driver_key") or ""), str(dimensions.get("label") or ""))
+            if component == "trend" else ("business_unit", str(record.get("business_unit") or dimensions.get("business_unit") or dimensions.get("label") or "")))
+        period = record["period"]
+        if comparison_key in comparison_periods and comparison_periods[comparison_key] != period:
+            raise ValueError("Financial presentation comparison periods do not align.")
+        comparison_periods[comparison_key] = period
         series = str(dimensions.get("series") or record.get("claim_kind") or "")
         value = Decimal(_normalized_value(record))
         if component == "trend":
@@ -393,6 +403,26 @@ def finance_payload_from_claim_snapshot(
                         nested.get("end", record.get("period_end")))
             if None in period(actual) or None in period(plan) or period(actual) != period(plan):
                 raise ValueError("Actual and plan claim periods do not align.")
+
+    flow_periods = set()
+    for key in ("revenue_actual", "revenue_plan", "ebitda_actual", "ebitda_plan", "operating_cost_actual", "operating_cost_plan", "cogs_actual"):
+        record = component_claims.get(key)
+        if record:
+            nested = record.get("period") or {}
+            flow_periods.add((nested.get("start", record.get("period_start")), nested.get("end", record.get("period_end"))))
+    if len(flow_periods) > 1:
+        raise ValueError("Group financial flow periods do not align.")
+
+    if len(flow_periods) == 1:
+        group_period = next(iter(flow_periods))
+        for record in presentation_records:
+            dimensions = record.get("dimensions") or {}
+            if dimensions.get("presentation_component") == "trend":
+                continue  # Monthly chart points can sit inside the group period.
+            if dimensions.get("presentation_component") == "cost_component" or dimensions.get("driver_key") in {"revenue", "operating_cost", "ebitda_margin"}:
+                period = record.get("period") or {}
+                if (period.get("start"), period.get("end")) != group_period:
+                    raise ValueError("Business-unit and group financial periods do not align.")
 
     trend, dynamics, cost_components = _presentation_projection(presentation_records, currency)
     legacy_evidence = dict(payload.get("evidence") or {})

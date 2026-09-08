@@ -92,7 +92,7 @@ def _presentation_claim(
         "unit": unit,
         "currency": "SAR" if unit == "SAR" else None,
         "business_unit": business_unit,
-        "period": {"start": "2026-01-01", "end": "2026-01-31"},
+        "period": {"start": "2026-01-01", "end": "2026-01-31" if component == "trend" else "2026-06-30"},
         "traceability": "present",
         "dimensions": {
             "presentation_component": component,
@@ -357,3 +357,36 @@ def test_unknown_periods_are_not_assumed_to_be_comparable():
         record.pop("period_end")
     with pytest.raises(ValueError, match="periods"):
         finance_payload_from_claim_snapshot({}, {"records": records})
+
+
+@pytest.mark.parametrize('component',['trend','contributor','cost_component'])
+def test_presentation_comparisons_require_aligned_periods(component):
+    records=[_presentation_claim(component,driver='operating_cost',series=series,label='January',
+        value='100',business_unit='East',extra_dimensions={'component':'COGS'}) for series in ('actual','plan')]
+    records[1]['period']['end']='2026-12-31'
+    with pytest.raises(ValueError,match='periods'):
+        finance_payload_from_claim_snapshot({}, {'records':records})
+
+
+@pytest.mark.parametrize('component,driver,unit',[
+    ('cost_component','operating_cost','percent'),('contributor','revenue','percent'),
+    ('trend','ebitda_margin','SAR')])
+def test_presentation_does_not_relabel_percentages_as_money_or_money_as_margin(component,driver,unit):
+    record=_presentation_claim(component,driver=driver,series='actual',label='East',value='10',unit=unit,
+        business_unit='East',extra_dimensions={'component':'COGS'})
+    with pytest.raises(ValueError,match='unit'):
+        finance_payload_from_claim_snapshot({}, {'records':[record]})
+
+
+def test_group_financial_identity_cannot_mix_periods_across_metrics():
+    records=[_claim('revenue_actual','100'),_claim('ebitda_actual','20')]
+    records[1]['period_end']='2026-12-31'
+    with pytest.raises(ValueError,match='periods'):
+        finance_payload_from_claim_snapshot({}, {'records':records})
+
+
+def test_business_unit_bridge_cannot_use_a_different_period_than_group():
+    row=_presentation_claim('contributor',driver='revenue',series='actual',label='East',value='10',business_unit='East')
+    row['period']['end']='2026-12-31'
+    with pytest.raises(ValueError,match='periods'):
+        finance_payload_from_claim_snapshot({}, {'records':[_claim('revenue_actual','100'),row]})
