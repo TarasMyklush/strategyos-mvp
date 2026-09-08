@@ -37,7 +37,7 @@ def main() -> int:
     if not args.base_url:
         parser.error("--base-url or STRATEGYOS_PUBLIC_URL is required")
 
-    from playwright.sync_api import BrowserContext, Page, sync_playwright
+    from playwright.sync_api import BrowserContext, Page, expect, sync_playwright
 
     base_url = args.base_url.rstrip("/") + "/"
     origin = f"{urlsplit(base_url).scheme}://{urlsplit(base_url).netloc}"
@@ -431,15 +431,11 @@ def main() -> int:
             operator_page.locator("#advisor-publish:not([hidden])").wait_for(timeout=20_000)
             operator_page.locator("#advisor-use-template:not([hidden])").wait_for()
             operator_page.locator("#advisor-use-template").click()
-            operator_page.wait_for_function(
-                "document.querySelector('#advisor-readiness').textContent.includes('board template registered')",
-                timeout=20_000,
-            )
+            expect(operator_page.locator("#advisor-readiness")).to_contain_text(
+                "board template registered", timeout=20_000)
             operator_page.locator("#advisor-publish").click()
-            operator_page.wait_for_function(
-                "document.querySelector('#advisor-readiness').textContent.includes('Published as plan proposal v2')",
-                timeout=20_000,
-            )
+            expect(operator_page.locator("#advisor-readiness")).to_contain_text(
+                "Published as plan proposal v2", timeout=20_000)
             operator_page.screenshot(path=output_dir / "10-advisor-published.png", full_page=True)
             published_config = api(operator_context, "get", f"api/intent/dimensional/advisor/configurations/{advisor_id}/versions/1").json()
             assert published_config["publication"]["plan_version"] == 2
