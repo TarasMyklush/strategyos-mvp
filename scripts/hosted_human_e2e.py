@@ -68,6 +68,7 @@ def main() -> int:
         "mode": "read-only Chromium walkthrough",
         "steps": [],
     }
+    page = None
 
     def pass_step(name: str, evidence: dict[str, object] | None = None) -> None:
         report["steps"].append({"name": name, "status": "passed", "evidence": evidence or {}})
@@ -95,7 +96,7 @@ def main() -> int:
                 page.locator("#username").fill("executive.tester")
             page.locator("#password").fill("deliberately-wrong")
             page.get_by_role("button", name="Sign in").click()
-            assert page.get_by_text("Invalid credentials for this role.").is_visible()
+            page.get_by_text("Invalid credentials for this role.").wait_for(timeout=10_000)
             assert re.search(r"/login(?:\?.*)?$", page.url)
             pass_step("Invalid password is rejected without leaving sign-in")
 
@@ -182,13 +183,19 @@ def main() -> int:
             page.screenshot(path=output_dir / "05-mobile-catalog.png", full_page=True)
             pass_step("Catalog remains usable at a 390px mobile viewport")
 
-            logout_response = page.goto(urljoin(base_url, "auth/logout"), wait_until="domcontentloaded")
-            assert logout_response and logout_response.ok
+            page.get_by_role("button", name="Sign out").click()
+            page.wait_for_url(re.compile(r"/login(?:\?.*)?$"))
             page.goto(urljoin(base_url, "plan"), wait_until="domcontentloaded")
             page.wait_for_url(re.compile(r"/login(?:\?.*)?$"))
             pass_step("Sign-out clears the session and protects direct /plan access")
             browser.close()
     except Exception as exc:
+        if page is not None:
+            report["failure_url"] = page.url
+            try:
+                page.screenshot(path=output_dir / "failure.png", full_page=True)
+            except Exception:
+                pass
         report["status"] = "failed"
         report["error"] = f"{type(exc).__name__}: {exc}"
         report["finished_at"] = datetime.now(UTC).isoformat()

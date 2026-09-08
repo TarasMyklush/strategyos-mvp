@@ -8,6 +8,11 @@ on:
         required: false
         type: boolean
         default: false
+      e2e_only:
+        description: Run the hosted browser walkthrough without rebuilding or deploying
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -25,6 +30,7 @@ env:
 
 jobs:
   tests:
+    if: ${{ !inputs.e2e_only }}
     name: Run test suite
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -609,6 +615,13 @@ jobs:
 
   hosted-human-e2e:
     name: Walk the deployed executive story
+    if: ${{ !inputs.e2e_only }}
     needs: deploy
+    uses: ./.github/workflows/strategyos-hosted-human-e2e.yml
+    secrets: inherit
+
+  hosted-human-e2e-only:
+    name: Walk the current hosted executive story
+    if: ${{ inputs.e2e_only }}
     uses: ./.github/workflows/strategyos-hosted-human-e2e.yml
     secrets: inherit

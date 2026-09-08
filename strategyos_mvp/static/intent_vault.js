@@ -285,6 +285,18 @@
     var result = event.detail; await loadCatalog(false); $('plan-select').value = result.plan_id + ':' + result.version;
     await loadPlan(); message('Whole-objective proposal created as version ' + result.version + '. An independently authorized reviewer must ratify it.');
   }); });
+  $('sign-out').addEventListener('click', async function () {
+    this.disabled = true;
+    try {
+      var response = await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' });
+      if (!response.ok) throw new Error('Sign out failed.');
+      var payload = await response.json();
+      window.location.assign(payload.redirect || '/login');
+    } catch (error) {
+      this.disabled = false;
+      window.alert(error.message || 'Sign out failed.');
+    }
+  });
   action(async function () {
     await loadCatalog(false);
     var hash = new URL(window.location.href).searchParams.get('analysis');

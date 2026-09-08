@@ -116,3 +116,5 @@ def test_intent_surface_loads_configured_pack_without_sector_copy_in_core():
     assert "Bilingual board-pack preview" in html
     assert "Open governed story" in js
     assert "entry.side.includes('price')" in js
+    assert 'id="sign-out"' in html
+    assert "fetch('/auth/logout', { method: 'POST'" in (root / "intent_vault.js").read_text(encoding="utf-8")
