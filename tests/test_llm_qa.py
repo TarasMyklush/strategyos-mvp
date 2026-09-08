@@ -2047,3 +2047,15 @@ def test_verified_citation_displays_source_text_not_provider_excerpt(monkeypatch
     assert citation["resolved"] is True
     assert "120" in citation["excerpt"] and "Amount_SAR" in citation["excerpt"]
     assert "999999" not in citation["excerpt"] and "Profit" not in citation["excerpt"]
+
+
+def test_claim_backed_qa_rejects_fabricated_citation_numbers(monkeypatch):
+    bundle = SimpleNamespace(evidence=None)
+    monkeypatch.setattr(llm_qa, "_build_evidence_payload", lambda **kwargs: {"amount_sar": 120})
+    monkeypatch.setattr(llm_qa, "_call_openai_compatible_chat", lambda **kwargs: json.dumps({
+        "matched": True, "answer": "SAR 120", "basis": "Authorized record", "citations": [{
+            "source_path": "ledger", "locator": "approved-row", "excerpt": "Profit SAR 999999"}]}))
+    result = llm_qa.answer_question("What amount?", bundle=bundle, findings=[], summary={}, config=_config())
+    assert result["matched"] is False
+    assert result["claim_validation"] == "rejected"
+    assert result["citations"] == []

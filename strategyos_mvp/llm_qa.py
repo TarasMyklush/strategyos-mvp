@@ -422,9 +422,18 @@ def answer_question(
                 errors.append('A factual answer needs at least one resolving source citation.')
             return verified, errors
         return values, []
+    def provider_claims(answer, citations):
+        fields = {key: answer.get(key) for key in ("answer", "basis", "suggestions")}
+        # File-backed excerpts have already been replaced with source content.
+        # Claim-backed QA has no raw-file resolver: its provider excerpts remain
+        # untrusted presentation fields and must pass the same numerical guard.
+        if not public_mode and getattr(bundle, 'evidence', None) is None:
+            fields["citation_excerpts"] = [item.get("excerpt") for item in citations]
+        return fields
+
     citations, citation_errors = checked_citations(parsed)
     approved_claims = approved_evidence_text(evidence)
-    visible_claims = {key: parsed.get(key) for key in ("answer", "basis", "suggestions")}
+    visible_claims = provider_claims(parsed, citations)
     if not claims_supported(visible_claims, approved_claims) or citation_errors:
         rejected = sorted((str(item.value), item.unit) for item in unsupported_quantities(visible_claims, approved_claims))
         location_hints = citation_location_hints(bundle, _normalize_citations(parsed.get('citations'))) if citation_errors and not public_mode and getattr(bundle, 'evidence', None) is not None else []
@@ -439,8 +448,8 @@ def answer_question(
             repaired = _parse_json_answer(_call_openai_compatible_chat(
                 config=config, messages=repair_messages,
                 response_format={"type": "json_object"}, transport_trace=transport_trace))
-            repaired_claims = {key: repaired.get(key) for key in ("answer", "basis", "suggestions")}
             repaired_citations, repaired_errors = checked_citations(repaired)
+            repaired_claims = provider_claims(repaired, repaired_citations)
             if claims_supported(repaired_claims, approved_claims) and not repaired_errors:
                 parsed = repaired
                 citations, citation_errors = repaired_citations, repaired_errors
@@ -466,7 +475,7 @@ def answer_question(
                 "citations": [], "suggestions": [], "citation_validation": "rejected",
                 "llm_status": status_payload, "model": status.get("model"),
                 "provider": status.get("provider"), "public_safe": public_mode}
-    visible_claims = {key: parsed.get(key) for key in ("answer", "basis", "suggestions")}
+    visible_claims = provider_claims(parsed, citations)
     if not claims_supported(visible_claims, approved_claims):
         return {"matched": False,
                 "answer": "The generated answer contained a number or unit that could not be verified against the supplied evidence. Please use the governed calculation or request the missing source.",
