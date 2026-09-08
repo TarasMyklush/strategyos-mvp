@@ -302,3 +302,31 @@ cell explanations and an executive Plan Health link into the Intent Vault.
 
 Evidence: [hosted acceptance](evidence/granular-drift-hosted-acceptance.json) and
 [workflow](https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34228253245).
+
+## Hosted synthetic provider outreach — 8 September 2026
+
+Release **1f24f15** is deployed to **https://new.strategyos.live/outreach**. It
+adds an authenticated provider-coverage and outreach lifecycle surface using a
+typed, sector-neutral synthetic configuration pack. Seven named provider threads
+cover drafted, awaiting approval, sent, replied and flagged states. Structured
+outcomes include a confirmed commitment, updated forecast and two review risks.
+
+- The hosted service gate passed **2,366 tests with zero skips**, including the
+  required PostgreSQL, Neo4j and Qdrant service proofs.
+- The immutable runtime image is
+  `sha256:e391342c19580afefc931853d553503b771ec5d5bb67afdb97a3fa3233c01602`.
+- The deployment backed up the preview database and passed worker health, protected
+  readiness, governed-surface, internal-edge and public HTTPS checks.
+- The hosted `outreach.js` exactly matches the committed asset at SHA-256
+  `bead0e2cd9d0954c8a88b0776008f13f1f9dfab08642f8e405b189c51365a5b3`.
+  Anonymous `/outreach` access redirects to sign-in; catalog, thread and knowledge
+  drill APIs return 401.
+- The complete local suite passed **2,212 tests**, with 154 service tests explicitly
+  skipped outside their dedicated environments. A focused browser walkthrough
+  verified people coverage, all-state filtering and structured risk drilldown.
+- This acceptance proves the connector-free product demonstration. It does not
+  prove external mail delivery, mailbox security, real reply parsing, a durable
+  Knowledge Graph write or any real-client authority effect.
+
+Evidence: [hosted acceptance](evidence/outreach-hosted-acceptance.json) and
+[workflow](https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34231325546).

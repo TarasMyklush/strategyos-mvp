@@ -1,0 +1,75 @@
+{
+  "recorded_at": "2026-09-08T13:37:27Z",
+  "environment": "preview",
+  "base_url": "https://new.strategyos.live",
+  "release": {
+    "commit": "1f24f156e3939556efd15540031c98775f3185bf",
+    "image": "ghcr.io/tarasmyklush/strategyos-mvp@sha256:e391342c19580afefc931853d553503b771ec5d5bb67afdb97a3fa3233c01602",
+    "workflow_run": 34231325546,
+    "workflow_url": "https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34231325546",
+    "conclusion": "success"
+  },
+  "service_gate": {
+    "passed": 2366,
+    "skipped": 0,
+    "warnings": 6,
+    "duration_seconds": 490.17,
+    "required_service_proof_gate": "passed"
+  },
+  "deployment": {
+    "database_backup_before_migration": "passed",
+    "compose_stack": "passed",
+    "worker_health": "passed",
+    "protected_readiness": "passed",
+    "governed_cloud_surface": "passed",
+    "internal_edge": "passed",
+    "public_https_edge": "passed"
+  },
+  "synthetic_catalog": {
+    "pack_sha256": "fbd52d8f0e25243a6be74bacd996bfc12d2b7cefdbffc267917371221e5fd3eb",
+    "catalog_digest": "1835a0a4ce78a3cdd09bf2f62ccc45455ea159892feb24582a4ca4175e003961",
+    "named_provider_count": 7,
+    "connected_count": 6,
+    "contacted_count": 6,
+    "responding_count": 2,
+    "flagged_count": 2,
+    "status_counts": {
+      "drafted": 1,
+      "awaiting_approval": 1,
+      "sent": 1,
+      "replied": 2,
+      "flagged": 2
+    },
+    "connector_enabled": false,
+    "raw_reply_stored": false,
+    "authority_effect": "none"
+  },
+  "hosted_checks": {
+    "outreach_javascript_sha256": "bead0e2cd9d0954c8a88b0776008f13f1f9dfab08642f8e405b189c51365a5b3",
+    "committed_javascript_sha256": "bead0e2cd9d0954c8a88b0776008f13f1f9dfab08642f8e405b189c51365a5b3",
+    "javascript_match": true,
+    "anonymous_outreach_status": 307,
+    "anonymous_outreach_redirect": "https://new.strategyos.live/login",
+    "anonymous_catalog_status": 401,
+    "anonymous_thread_status": 401,
+    "anonymous_knowledge_status": 401
+  },
+  "local_acceptance": {
+    "complete_suite_passed": 2212,
+    "complete_suite_skipped": 154,
+    "focused_browser": [
+      "provider coverage rendered",
+      "all lifecycle statuses rendered",
+      "flagged filter returned two threads",
+      "structured risk drill retained no reply body"
+    ],
+    "wheel_contains_pack_api_and_ui": true
+  },
+  "limitations": {
+    "external_delivery": false,
+    "live_mailbox_security": false,
+    "real_reply_parser": false,
+    "durable_knowledge_graph_write": false,
+    "real_client_authority": false
+  }
+}

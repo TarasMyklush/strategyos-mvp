@@ -9,23 +9,23 @@
 | Closed P0 | Granular plan completion | Deployed: whole-objective multidimensional decomposition, per-cell drift/explanation, offset and concentration findings | Hosted service and edge acceptance recorded |
 | Spec complete | Strategic Advisor console | Capture → configure → ratify workstreams, template outputs, gauges and missing-info routing are specified; implementation remains incremental | `strategic-advisor-console-spec.md` |
 | Closed P1 | Board template registry and pack history | Deployed: tenant template versions and generated pack records are durable, permissioned, downloadable and stale-aware | Hosted acceptance recorded |
-| P0 | Synthetic outreach surface | Full draft/approval/send/reply/flag lifecycle and people coverage work with the connector disabled | Typed outreach objects |
+| Closed P0 | Synthetic outreach surface | Deployed: typed draft/approval/send/reply/flag lifecycle, structured outcomes and named people coverage with connector disabled | Hosted service and edge acceptance recorded |
 | P1 | Healthcare/pharma demo pack | Three synthetic stories run from governed evidence through cell drift and board pack, with sector details confined to configuration | History-derived decomposition for the mix story |
 | P1 | Price/volume/mix bridge | Exact, unit-safe bridge reconciles price, volume and mix effects to the observed variance | Explicit price and volume source fields |
 | P2 | Executive adoption loop | One executive request creates an accountable owner task; reply proposes a governed update and closure remains reviewable | Advisor configuration and outreach workflow |
 | Blocked | Minimal email connector | Allowlisted test-domain draft/send/reply/commitment path passes security and retention acceptance | Test domain access and connector credentials |
 
-P0 should be built and deployed in the order shown. The connector can move into P1
-as soon as its dependency is available; the HTML demonstration remains the fallback.
+All currently unblocked P0 increments are deployed. The connector can move into P1
+as soon as its dependency is available; the synthetic surface remains available.
 
 ## 1. Plan decomposition: engine proposes, Vault records
 
-Status: explicit and history-derived slices are implemented and hosted. They
-create a new immutable plan proposal from the latest ratified parent, preserve
-the approved total exactly, record parent/engine/weight/evidence lineage, expose
-the result on `/plan`, reuse independent ratification and block ratification if
-the parent becomes stale. The proposal can then accept matching actuals, produce
-granular drift and feed the board composer.
+Status: explicit, history-derived and whole-objective multidimensional slices are
+implemented and hosted. They create a new immutable plan proposal from the latest
+ratified parent, preserve the approved total exactly, record complete lineage,
+expose the result on `/plan`, reuse independent ratification and block stale-parent
+approval. Matching actuals produce cell drift, offset/concentration findings and
+deterministic explanations for the board composer and executive Plan Health link.
 
 Keep the approved plan of record in the Intent Vault. Put split computation in a
 pure engine module so historical weights, seasonality and explicit adjustments
@@ -37,10 +37,7 @@ Remaining decomposition backlog, in order:
 
 1. Add seasonality as a separate governed input from the already disclosed
    historical mix and explicit adjustment bridge.
-2. Add whole-objective and multi-level decomposition across product, region,
-   channel and client, with bounded proposal size and an approval view that groups
-   the resulting cells without hiding any row.
-3. Add large realistic dataset acceptance and client terminology review; concurrency,
+2. Add large realistic dataset acceptance and client terminology review; concurrency,
    historical-unit mismatch and absent-history cases are already automated.
 
 Acceptance: the sum of approved children equals the approved parent; every child
@@ -95,6 +92,12 @@ Price/volume/mix requires explicit price, volume and mix inputs and a reconciled
 bridge. Current variance and offset detection do not implement that attribution.
 
 ## 5. Minimal permissioned outreach connector
+
+The connector-free `/outreach` surface is implemented and hosted. Its typed,
+sector-neutral read model covers named provider coverage and every required state,
+including approved send/re-ask events, structured commitment/forecast projections,
+and unparseable/no-response risk flags. It is explicitly synthetic, performs no
+external action, stores no raw reply text and has no business authority effect.
 
 Once the proposed test domain and access are available, implement one bounded
 outreach workflow: allowlisted test personas, draft, explicit approved send,
