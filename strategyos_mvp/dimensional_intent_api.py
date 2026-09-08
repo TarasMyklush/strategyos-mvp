@@ -260,7 +260,7 @@ def explain_analysis_cell(analysis_id: str, cell_id: Annotated[str, Query(min_le
 
 @router.get('/analyses/{analysis_id}/evidence')
 def evidence(analysis_id: str, cell_id: Annotated[str, Query(min_length=1, max_length=160)],
-             side: Literal['plan', 'actuals'],
+             side: Literal['plan', 'actuals', 'plan_price', 'plan_volume', 'actual_price', 'actual_volume'],
              principal: dict[str, Any] = require_role('operator', 'reviewer', 'executive')):
     filename, content = perform(lambda: store.evidence_bytes(principal, analysis_id, cell_id, side))
     return Response(content=content, media_type='application/octet-stream', headers={

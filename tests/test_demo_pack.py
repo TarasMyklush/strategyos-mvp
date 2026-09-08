@@ -57,6 +57,8 @@ def test_each_story_proves_its_intended_decision_pattern():
         "observed_variance": "33", "reconstructed_variance": "33.00",
     }
     assert effect["reconciles"] is True
+    assert {"plan_price", "plan_volume", "actual_price", "actual_volume"} <= {
+        item["side"] for item in bridge["board_pack"]["evidence"]}
     assert any("60.00" in line for page in bridge["board_pack"]["pages"] for line in page["lines"])
 
     constrained = demo_pack.story_detail("regional-credit-constraint")
@@ -95,6 +97,10 @@ def test_authenticated_demo_api_supports_catalog_story_and_evidence_drilldown():
         opened = api.get(evidence["path"])
         assert opened.status_code == 200
         assert opened.headers["x-kyvern-source-sha256"] == evidence["source"]["sha256"]
+        bridge = api.get("/api/demo-packs/current/stories/price-volume-mix").json()
+        bridge_input = next(item for item in bridge["board_pack"]["evidence"]
+                            if item["side"] == "actual_price")
+        assert api.get(bridge_input["path"]).status_code == 200
         assert api.get("/api/demo-packs/current/stories/missing").status_code == 404
     with client("bu") as api:
         assert api.get("/api/demo-packs/current").status_code == 403

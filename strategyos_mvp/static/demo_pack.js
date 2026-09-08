@@ -46,7 +46,7 @@
     document.getElementById('demo-pack-close').hidden = true; panel.hidden = false;
   }
   function evidenceLinks(detail, cell) {
-    var refs = el('div'), evidence = detail.board_pack.evidence.filter(function (item) { return item.cell_id === cell.cell_id; });
+    var refs = el('div'), evidence = detail.board_pack.evidence.filter(function (item) { return item.cell_id === cell.cell_id && (item.side === 'plan' || item.side === 'actuals'); });
     evidence.forEach(function (item, index) {
       if (index) refs.appendChild(el('span', ' · '));
       var link = el('a', item.side === 'plan' ? 'Plan' : 'Actuals'); link.href = item.path; refs.appendChild(link);

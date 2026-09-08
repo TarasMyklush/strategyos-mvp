@@ -1003,10 +1003,16 @@ def test_price_volume_mix_runs_through_durable_analysis_and_board_pack(setup):
     assert response.json()['price_volume_mix'][0]['formula_version'] == 'price-volume-mix.v1'
     pack = board_pack.compose(s['executive'], result['analysis_hash'], board_pack.PackRequest(language='bilingual'))
     assert pack['binding']['composer_version'] == 'board-pack.v3'
+    assert {'plan_price', 'plan_volume', 'actual_price', 'actual_volume'} <= {
+        item['side'] for item in pack['evidence']}
     bridge_page = next(page for page in pack['pages'] if 'Price / volume / mix bridge' in page['title'])
     assert any('60.00' in line for line in bridge_page['lines'])
     assert any('33.00' in line for line in bridge_page['lines'])
     assert any('[1]' in line for line in bridge_page['lines'])
+    for side in ['plan_price', 'plan_volume', 'actual_price', 'actual_volume']:
+        filename, content = store.evidence_bytes(s['executive'], result['analysis_hash'], 'item-a', side)
+        assert filename == 'evidence.csv'
+        assert content
 
 
 def test_multidimensional_decomposition_rejects_unconfigured_or_undeclared_members(setup):

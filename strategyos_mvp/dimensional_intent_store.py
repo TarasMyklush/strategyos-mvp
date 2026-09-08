@@ -717,16 +717,27 @@ def _evidence_content(root, source):
 
 def evidence_bytes(principal, analysis_id, cell_id, side):
     tenant, _ = _scope(principal)
-    if side not in {'plan', 'actuals'}:
-        raise ValueError('Choose plan or actuals evidence.')
+    bridge_sides = {
+        'plan_price': 'plan_price_source', 'plan_volume': 'plan_volume_source',
+        'actual_price': 'actual_price_source', 'actual_volume': 'actual_volume_source',
+    }
+    if side not in {'plan', 'actuals', *bridge_sides}:
+        raise ValueError('Choose a declared plan, actual, price or volume evidence input.')
     result = read_analysis(principal, analysis_id)
-    cell = next((c for c in result['cells'] if c['cell_id'] == cell_id), None)
-    reference = cell.get('plan_source' if side == 'plan' else 'actual_source') if cell else None
+    if side in {'plan', 'actuals'}:
+        cell = next((c for c in result['cells'] if c['cell_id'] == cell_id), None)
+        reference = cell.get('plan_source' if side == 'plan' else 'actual_source') if cell else None
+        pack_side = side
+    else:
+        row = next((row for bridge in result.get('price_volume_mix', []) for row in bridge.get('rows', [])
+                    if row.get('cell_id') == cell_id), None)
+        reference = row.get(bridge_sides[side]) if row else None
+        pack_side = 'plan' if side.startswith('plan_') else 'actuals'
     if not reference:
         raise NotFound('Cell evidence not found.')
     from .strategy_compiler import SourceReference
     source = SourceReference.model_validate(reference)
-    root, _ = registered_sources(tenant, result['source_receipts'][side]['source_pack_id'], [source], principal=principal, purpose='export')
+    root, _ = registered_sources(tenant, result['source_receipts'][pack_side]['source_pack_id'], [source], principal=principal, purpose='export')
     return _evidence_content(root, source)
 
 

@@ -144,18 +144,31 @@ def story_detail(story_id: str, pack: DemoPack | None = None, *, source_root: Pa
     }
 
 
-def evidence(story_id: str, side: Literal["plan", "actuals"], cell_id: str,
+def evidence(story_id: str, side: Literal[
+        "plan", "actuals", "plan_price", "plan_volume", "actual_price", "actual_volume"], cell_id: str,
              pack: DemoPack | None = None, *, source_root: Path = DEFAULT_ROOT):
     pack = pack or load_pack()
     story = _story(pack, story_id)
     if side == "plan":
         item = next((cell for cell in story.plan.cells if cell.id == cell_id), None)
-    else:
+        source = item.source if item else None
+    elif side == "actuals":
         plan_cell = next((cell for cell in story.plan.cells if cell.id == cell_id), None)
         item = next((row for row in story.actuals.observations
                      if plan_cell and row.metric == plan_cell.metric and row.dimensions == plan_cell.dimensions), None)
-    if item is None:
+        source = item.source if item else None
+    else:
+        plan_row = next((row for policy in story.plan.price_volume_mix_policies for row in policy.rows
+                         if row.cell_id == cell_id), None)
+        actual_row = next((row for bridge in story.actuals.price_volume_mix for row in bridge.rows
+                           if plan_row and row.member == plan_row.member), None)
+        source = {
+            "plan_price": plan_row.price_source if plan_row else None,
+            "plan_volume": plan_row.volume_source if plan_row else None,
+            "actual_price": actual_row.price_source if actual_row else None,
+            "actual_volume": actual_row.volume_source if actual_row else None,
+        }[side]
+    if source is None:
         raise KeyError(cell_id)
-    source = item.source
     verify_source(source_root.resolve(strict=True), source)
     return (source_root / source.path).resolve(), source

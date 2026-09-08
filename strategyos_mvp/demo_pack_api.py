@@ -27,7 +27,8 @@ def current_story(story_id: str, _: dict[str, Any] = require_role(*READ_ROLES)):
 
 
 @router.get("/current/stories/{story_id}/evidence")
-def story_evidence(story_id: str, side: Literal["plan", "actuals"] = Query(),
+def story_evidence(story_id: str, side: Literal[
+        "plan", "actuals", "plan_price", "plan_volume", "actual_price", "actual_volume"] = Query(),
                    cell_id: str = Query(min_length=1, max_length=160),
                    _: dict[str, Any] = require_role(*READ_ROLES)):
     try:

@@ -186,6 +186,19 @@ def compose_snapshot(result, request, *, analysis_id, plan_digest, actual_digest
             word('actual', lang) + ': ' + amount(c['actual']),
             word('variance', lang) + ': ' + amount(c['variance']),
             word('status', lang) + ': ' + word(c['status'], lang), word('evidence', lang) + ': ' + ' '.join(refs)])
+    for bridge in result.get('price_volume_mix', []):
+        if bridge.get('status') != 'reconciled':
+            continue
+        for row in bridge['rows']:
+            for side, key in [
+                ('plan_price', 'plan_price_source'), ('plan_volume', 'plan_volume_source'),
+                ('actual_price', 'actual_price_source'), ('actual_volume', 'actual_volume_source'),
+            ]:
+                source = row[key]
+                evidence.append({
+                    'number': len(evidence) + 1, 'cell_id': row['cell_id'], 'side': side,
+                    'source': source, 'path': evidence_url(side, row['cell_id']),
+                })
     evidence_numbers = {(item['cell_id'], item['side']): item['number'] for item in evidence}
     for finding in result.get('findings', []):
         finding_type = finding.get('finding_type')
@@ -197,6 +210,9 @@ def compose_snapshot(result, request, *, analysis_id, plan_digest, actual_digest
                     refs.append(number)
         if finding_type == 'price_volume_mix':
             effects = finding['effects']
+            refs = [number for cell in finding['cells'] for side in (
+                'plan', 'actuals', 'plan_price', 'plan_volume', 'actual_price', 'actual_volume')
+                if (number := evidence_numbers.get((cell['cell_id'], side))) is not None]
             lines = [
                 label(finding['metric']) + ' (' + finding['currency_unit'] + ')',
                 word('plan_revenue', lang) + ': ' + finding['plan']['revenue'],
