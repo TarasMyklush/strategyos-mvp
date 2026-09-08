@@ -16427,15 +16427,10 @@ def _data_qa_scoped(request: QaRequest, _: dict[str, Any]) -> dict[str, Any]:
             detail="Ask a question, e.g. 'What is the total amount of invoices?'.",
         )
     mode = (request.mode or "auto").strip().lower()
-    persona = (request.persona or "").strip().lower() or None
-    request_context = request.context or {}
-    if persona is None:
-        persona = (
-            str(request_context.get("active_persona") or request_context.get("persona") or "").strip().lower()
-            or None
-        )
-    if persona is None and str(_.get("role") or "") == "executive":
-        persona = "ceo"
+    from .assistant_scope import request_persona
+    request_context = {**(request.context or {}), **(request.assistant_context or {})}
+    selected_persona = request.persona or request_context.get("active_persona") or request_context.get("persona")
+    persona = request_persona(request) if selected_persona or str(_.get("role") or "") == "executive" else None
     if persona and persona not in set(list_supported_personas()):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

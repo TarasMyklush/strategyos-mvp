@@ -23,7 +23,7 @@ def test_assistant_domain_filters_snapshot_before_source_loading_and_checks_line
     derived=repo.record_claim(replace(base,metric_key='finance.derived',value_numeric=999,
         production_method='calculated',source_occurrence_keys=(),input_revision_ids=(hr,),formula_key='identity',formula_version='1'),
         traceability='present',context=context)['claim_revision_id']
-    snapshot='domain-'+uuid4().hex
+    snapshot='run:domain-'+uuid4().hex
     with psycopg.connect(ledger[1]) as conn:
         sid=conn.execute("insert into strategyos_analysis_snapshots(tenant_id,snapshot_key,as_of_at,policy_version,created_by) values (%s,%s,now(),'qa','qa') returning id",(context.tenant_id,snapshot)).fetchone()[0]
         conn.execute("insert into strategyos_analysis_snapshot_claims(snapshot_id,claim_family_id,claim_revision_id,selection_reason) select %s,claim_family_id,id,'qa' from strategyos_claim_revisions where id=any(%s::uuid[])",(sid,[finance,hr,derived]))
@@ -41,6 +41,22 @@ def test_assistant_domain_filters_snapshot_before_source_loading_and_checks_line
         assert repo.snapshot(snapshot,context=reader,revision_id=hr)['records']==[]
         selected=repo.snapshot(snapshot,context=reader,revision_id=finance)['records']
         assert len(selected)==1 and selected[0]['claim_revision_id']==finance
+        from strategyos_mvp import access_scope, api, claim_store
+        from strategyos_mvp.twins import source_scope, strategyos_data
+        monkeypatch.setattr(claim_store,'ClaimRepository',lambda:repo)
+        monkeypatch.setattr(api,'ClaimRepository',lambda:repo)
+        monkeypatch.setattr(api,'_latest_summary',lambda:{'run_id':snapshot.removeprefix('run:')})
+        monkeypatch.setattr(api,'_summary_with_governed_claim_snapshot',lambda summary,**kwargs:summary)
+        actor=access_scope.principal_scope.set({'tenant_id':context.tenant_id,'subject':'cfo',
+            'role':'executive','authenticated':True})
+        binding=source_scope.bound_surface.set(None)
+        try:
+            twin=strategyos_data.load_role_surface('cfo')
+            assert set(twin['fact_registry'])=={finance}
+            assert 'assistant_records' in source_scope.authorized_surface()
+        finally:
+            source_scope.bound_surface.reset(binding)
+            access_scope.principal_scope.reset(actor)
     monkeypatch.setattr(repo,'_source_details',original)
     reader=replace(context,roles=frozenset({'executive'}),purpose='executive_briefing')
     assert {r['claim_revision_id'] for r in repo.snapshot(snapshot,context=reader)['records']}=={finance,hr,derived}

@@ -47,7 +47,7 @@ def _payload() -> dict:
 
 def test_refresh_synthesis_is_grounded_substantive_and_cached(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("STRATEGYOS_EXECUTIVE_SYNTHESIS_CACHE_DIR", str(tmp_path))
-    monkeypatch.setattr(synthesis, "_provider_batch", lambda developments, threads: None)
+    monkeypatch.setattr(synthesis, "_provider_batch", lambda developments, threads, **kwargs: None)
 
     first = synthesis.synthesize_strategy_enrichment(_payload())
     second = synthesis.synthesize_strategy_enrichment(_payload())
@@ -70,7 +70,7 @@ def test_ungrounded_provider_numbers_are_rejected(tmp_path, monkeypatch) -> None
     monkeypatch.setattr(
         synthesis,
         "_provider_batch",
-        lambda developments, threads: {
+        lambda developments, threads, **kwargs: {
             "development_briefs": [
                 {"item_id": "revenue", "what": "Revenue reached 999%.", "why": "Because we guessed."}
             ]
@@ -91,10 +91,32 @@ def test_default_cache_uses_writable_workspace_root(tmp_path, monkeypatch) -> No
 
 def test_provider_cannot_relabel_existing_thread_figures(tmp_path, monkeypatch):
     monkeypatch.setenv("STRATEGYOS_EXECUTIVE_SYNTHESIS_CACHE_DIR", str(tmp_path))
-    monkeypatch.setattr(synthesis, "_provider_batch", lambda developments, threads: {
+    monkeypatch.setattr(synthesis, "_provider_batch", lambda developments, threads, **kwargs: {
         "thread_summaries": [{"thread_id": "a2a-1", "key_figures": ["Profit increased 16%", "Loss SAR 2.4M"]}]
     })
     result = synthesis.synthesize_strategy_enrichment(_payload())
     figures = result["assistant_threads"]["threads"][0]["key_figures"]
     assert "16%" in figures and "SAR 2.4M" in figures
     assert all("Profit" not in figure and "Loss" not in figure for figure in figures)
+
+
+def test_synthesis_cannot_send_unattributed_source_content_to_provider(monkeypatch):
+    import pytest
+    from strategyos_mvp import model_policy
+    monkeypatch.setattr(synthesis.llm_qa, '_call_openai_compatible_chat',
+        lambda **kwargs:pytest.fail('Unattributed source content reached provider'))
+    assert synthesis._provider_batch([{'secret':'source content'}],[]) is None
+
+
+def test_synthesis_cache_separates_identical_input_by_tenant_and_bu():
+    from strategyos_mvp.access_scope import principal_scope
+    token=principal_scope.set(None)
+    try:
+        keys=set()
+        for tenant in ('a','b'):
+            for unit in ('east','west'):
+                principal_scope.set({'tenant_id':tenant,'role':'bu','subject':'same-user','business_units':[unit]})
+                keys.add(synthesis._fingerprint(_payload()))
+        assert len(keys)==4
+    finally:
+        principal_scope.reset(token)

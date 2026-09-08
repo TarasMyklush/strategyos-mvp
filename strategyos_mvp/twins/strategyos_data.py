@@ -116,6 +116,17 @@ def load_role_surface(role: str) -> dict[str, Any] | None:
     if not isinstance(summary, dict):
         return None
 
+    if scope is not None and 'assistant_records' in scope:
+        from ..fact_rendering import fact_registry
+        facts = fact_registry(scope['assistant_records'])
+        # Cards are individual approved facts, never legacy aggregate counters.
+        cards = [{'card_id':ref,'label':fact['text'].rsplit(': ',1)[0],
+                  'value':fact['value'],'unit':fact['unit'],'trend_hint':'approved fact',
+                  'claim_revision_id':ref}
+                 for ref,fact in list(facts.items())[:12]]
+        return {'summary':summary,'report_contracts':[], 'fact_registry':facts,
+                'findings_payload':{'data_boundary':'authorized_claim_snapshot','findings':[],
+                    'kpi_cards':cards,'metrics':{},'publication':{},'plan_health':{}}}
     view_state = _view_state(role)
     findings_payload = strategyos_api._latest_run_findings_payload(
         summary,
@@ -213,12 +224,16 @@ def build_role_kpis(role: str) -> list[dict[str, Any]]:
         "plan_health": "ceo",
     }
     results: list[dict[str, Any]] = []
-    for card_id in _selected_kpi_ids(role):
+    selected_ids = ([card['card_id'] for card in payload.get('kpi_cards', [])]
+                    if payload.get('data_boundary') == 'authorized_claim_snapshot' else _selected_kpi_ids(role))
+    for card_id in selected_ids:
         card = cards_by_id.get(card_id)
         if not card:
             continue
         raw_value = card.get("value")
         status, health, gaps = _status_from_metric(card_id, raw_value)
+        if 'claim_revision_id' in card:
+            status, health, gaps = 'current', 'unassessed', []
         results.append({
             "node_id": card_id,
             "label": card.get("label") or card_id.replace("_", " ").title(),
@@ -232,7 +247,8 @@ def build_role_kpis(role: str) -> list[dict[str, Any]]:
             "trend_hint": card.get("trend_hint"),
             "owner": owner_map.get(card_id),
             "gaps": gaps,
-            "source": "strategyos",
+            "source": "authorized_claim_snapshot" if 'claim_revision_id' in card else "strategyos",
+            **({'claim_revision_id':card['claim_revision_id']} if 'claim_revision_id' in card else {}),
         })
     return results
 
@@ -308,6 +324,9 @@ def build_run_context(surface: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def build_board_context(surface: dict[str, Any] | None) -> dict[str, Any]:
+    if surface is not None and 'fact_registry' in surface:
+        return {'available':False,'status':'unavailable','report_count':None,'evidence_count':None,
+                'preview_route':None,'reason':'No domain-classified board projection supplied.'}
     if surface is None:
         return {
             "available": False,
@@ -412,6 +431,18 @@ def compose_investigation_payload(role: str, query: str) -> dict[str, Any]:
             "consistency": build_consistency_payload(None),
             "linked_finding_ids": [],
         }
+    if 'fact_registry' in surface:
+        from ..fact_rendering import select_candidates, render_selection
+        facts = select_candidates(surface['fact_registry'], query, limit=3, require_match=True)
+        rendered = render_selection({'matched':bool(facts),'fact_refs':list(facts)},facts,
+            run_id=surface['summary'].get('run_id'))
+        return {'data_source':'authorized_claim_snapshot','source_status':'current_run','bounded_fallback':False,
+                'response':{'summary':rendered['answer'],'mode':'governed_fact',
+                            'fact_cells':rendered.get('fact_cells',[])},
+                'run_context':build_run_context(surface),
+                'board':{'status':'unavailable','reason':'No domain-classified board projection supplied.'},
+                'evidence':rendered['citations'],'consistency':build_consistency_payload(surface),
+                'linked_finding_ids':[]}
     payload = surface["findings_payload"]
     metrics = payload.get("metrics") or {}
     publication = payload.get("publication") or {}

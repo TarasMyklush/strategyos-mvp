@@ -90,7 +90,7 @@ def render_selection(selection, registry, *, run_id):
             '_orchestrator_force_answer':True}
 
 
-def select_candidates(registry, question, *, limit=80):
+def select_candidates(registry, question, *, limit=80, require_match=False):
     """Bound provider input while keeping each chosen fact indivisible."""
     import re
     words = set(re.findall(r"[^\W_]+", question.casefold())) - {
@@ -99,4 +99,5 @@ def select_candidates(registry, question, *, limit=80):
         ref,fact=item
         tokens=set(re.findall(r"[^\W_]+", fact['text'].casefold()))
         return (-len(words & tokens), ref)
-    return dict(sorted(registry.items(),key=score)[:limit])
+    candidates = (item for item in registry.items() if not require_match or score(item)[0] < 0)
+    return dict(sorted(candidates,key=score)[:limit])

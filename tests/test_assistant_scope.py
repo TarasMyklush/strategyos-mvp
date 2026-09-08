@@ -100,3 +100,11 @@ def test_restricted_assistant_cannot_use_legacy_graph_or_vector_index(monkeypatc
     monkeypatch.setattr(claim_store,'ClaimRepository',lambda:pytest.fail('Bulk index source policy lookup must not run'))
     with bind_assistant(SimpleNamespace(persona='cfo'),{},default_authority_matrix()):
         assert source_index_allowed('run','tenant') is False
+
+
+def test_persona_context_is_merged_before_authority_and_answer_routing():
+    from strategyos_mvp.assistant_scope import request_persona
+    request=SimpleNamespace(persona=None,context={'active_persona':'cfo'},assistant_context={'entrypoint':'drawer'})
+    assert request_persona(request)=='cfo'
+    with bind_assistant(request,{},default_authority_matrix()):
+        assert current_scope.get().subject=='assistant:atlas'

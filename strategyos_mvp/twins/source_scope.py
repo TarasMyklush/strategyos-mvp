@@ -24,8 +24,11 @@ def authorized_surface() -> dict[str, Any] | None:
         return None  # Explicit isolated/offline runtime, not authenticated HTTP.
     if actor is None:
         raise PermissionError('Twin execution needs an authenticated source scope; background work cannot invent one.')
+    from ..assistant_scope import current_scope
+    assistant = current_scope.get()
     identity = (str(actor.get('tenant_id') or ''), str(actor.get('subject') or ''), str(actor.get('role') or ''),
-                tuple(sorted(actor.get('business_units') or ())))
+                tuple(sorted(actor.get('business_units') or ())),
+                assistant.subject if assistant else None, tuple(sorted(assistant.domains)) if assistant else None)
     if not all(identity[:3]):
         raise PermissionError('An authenticated, source-authorized twin workspace is required.')
     cached = bound_surface.get()
@@ -48,6 +51,13 @@ def authorized_surface() -> dict[str, Any] | None:
     summary = api._summary_with_governed_claim_snapshot(summary, principal={
         **actor, 'tenant_id':context.tenant_id})
     result = {'identity':identity,'tenant_id':context.tenant_id,'run_id':run,'summary':summary}
+    from ..authority_matrix import DOMAINS
+    if assistant is not None and assistant.domains != frozenset(DOMAINS):
+        governed = api._hydrate_governed_qa_context(
+            {'summary':summary,'run_id':run,'run_mode':summary.get('run_mode','full')}, principal=actor)
+        result['summary'] = governed['summary']
+        result['assistant_records'] = governed['bundle'].authorized_claim_records
+
     if principal_scope.get() is not None:
         bound_surface.set(result)  # Reset at the HTTP request boundary.
     return result
@@ -59,5 +69,9 @@ def scoped_directory(root: Path) -> Path:
         return root
     # Source scope and actor are part of cache identity; neither source roles nor
     # guesses about organization-wide sharing grant access to another inbox.
-    identity = json.dumps([scope['tenant_id'],scope['run_id'],scope['identity']], separators=(',',':'))
-    return root / 'governed-v1' / sha256(identity.encode()).hexdigest()
+    from ..authority_matrix import DOMAINS
+    bound_identity = scope['identity']
+    unrestricted = bound_identity[5] is None or set(bound_identity[5]) == set(DOMAINS)
+    saved_identity = bound_identity[:4] if unrestricted else bound_identity
+    identity = json.dumps([scope['tenant_id'],scope['run_id'],saved_identity], separators=(',',':'))
+    return root / ('governed-v1' if unrestricted else 'governed-v2') / sha256(identity.encode()).hexdigest()

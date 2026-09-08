@@ -47,8 +47,18 @@ def _jsonable(value: Any) -> Any:
 
 
 def _fingerprint(payload: dict[str, Any]) -> str:
+    from .access_scope import principal_scope
+    from .assistant_scope import current_scope
+    principal = principal_scope.get() or {}
+    assistant = current_scope.get()
     relevant = {
-        "claim_contract_version": 4,
+        "claim_contract_version": 5,
+        "tenant": principal.get("tenant_id") or (payload.get("tenant_context") or {}).get("tenant_id") or CONFIG.tenant_slug,
+        "principal": principal.get("subject"),
+        "role": principal.get("role"),
+        "business_units": sorted(principal.get("business_units") or []),
+        "assistant_domains": sorted(assistant.domains) if assistant else None,
+        "source_authority": payload.get("_claim_policy_context"),
         "plan_health": payload.get("plan_health"),
         "initiative_drifts": payload.get("initiative_drifts"),
         "milestone_drifts": payload.get("milestone_drifts"),
@@ -182,7 +192,11 @@ def _deterministic_thread_summary(thread: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _provider_batch(developments: list[dict[str, Any]], threads: list[dict[str, Any]]) -> dict[str, Any] | None:
+def _provider_batch(developments: list[dict[str, Any]], threads: list[dict[str, Any]],
+                    *, authorized_context: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    from .model_policy import evidence_model_access
+    if not evidence_model_access(authorized_context or {}):
+        return None
     if not llm_qa.chat_status(CONFIG).get("enabled"):
         return None
     evidence = {"developments": developments, "threads": threads}
@@ -251,7 +265,7 @@ def synthesize_strategy_enrichment(payload: dict[str, Any]) -> dict[str, Any]:
     development_fallbacks = [_deterministic_development(item) for item in _development_inputs(payload)]
     threads = list((payload.get("assistant_threads") or {}).get("threads") or [])
     thread_fallbacks = [_deterministic_thread_summary(thread) for thread in threads]
-    provider = _provider_batch(development_fallbacks, thread_fallbacks)
+    provider = _provider_batch(development_fallbacks, thread_fallbacks, authorized_context=payload)
     provider_developments = {
         str(item.get("item_id")): item
         for item in list((provider or {}).get("development_briefs") or [])

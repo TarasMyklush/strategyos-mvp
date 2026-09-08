@@ -7,7 +7,7 @@ import logging
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Header, status
+from fastapi import APIRouter, Depends, HTTPException, Header, Request, status
 from pydantic import BaseModel
 
 from strategyos_mvp.auth import authenticate_request, require_role
@@ -21,7 +21,26 @@ from strategyos_mvp.twins.strategyos_data import (
 )
 from strategyos_mvp.twins.tools import check_health as check_twin_health
 
-router = APIRouter(prefix="/twin/api", tags=["twins"])
+async def _bind_twin_authority(request: Request, principal: dict[str, Any] = Depends(authenticate_request)):
+    role = request.path_params.get("role")
+    if role is None or principal.get("auth_disabled"):
+        yield
+        return
+    _authorize_twin_access(role, principal, action="access this twin")
+    from types import SimpleNamespace
+    from strategyos_mvp import api
+    from strategyos_mvp.assistant_scope import bind_assistant
+    persona_id = "gm" if _canonical_role(role) == "group_manager" else _canonical_role(role)
+    selection = api.AssistantChatRequest(persona=persona_id,
+        question=request.query_params.get("query") or "Show current records")
+    denied = api._assistant_authority_refusal(selection, principal)
+    if denied is not None:
+        raise HTTPException(403, denied)
+    with bind_assistant(selection, principal, api.get_authority_matrix(api._principal_tenant_id(principal))):
+        yield
+
+
+router = APIRouter(prefix="/twin/api", tags=["twins"], dependencies=[Depends(_bind_twin_authority)])
 logger = logging.getLogger(__name__)
 
 EXECUTIVE_TWIN_ROLES = ("executive", "tenant_admin", "system")

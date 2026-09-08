@@ -20,7 +20,8 @@ current_scope: ContextVar[AssistantScope | None] = ContextVar('assistant_authori
 
 
 def request_persona(request) -> str:
-    context = getattr(request, 'assistant_context', None) or getattr(request, 'context', None) or {}
+    context = {**(getattr(request, 'context', None) or {}),
+               **(getattr(request, 'assistant_context', None) or {})}
     return str(request.persona or context.get('active_persona') or context.get('persona') or 'ceo').strip().lower()
 
 
