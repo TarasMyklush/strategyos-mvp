@@ -45,6 +45,14 @@ def test_two_tenants_two_units_cannot_resolve_each_others_fact_links(ledger,monk
     monkeypatch.setattr(state_store,'database_connection',lambda:(psycopg.connect(url),None))
     selected={}
     monkeypatch.setattr(auth,'authenticate_optional_request',lambda **kwargs:selected)
+    from strategyos_mvp import claim_read_batch
+    original_batch=claim_read_batch.load_leaf_batch
+    def checked_batch(cur,rows,**kwargs):
+        assert all(str(row['tenant_id'])==selected['tenant_id'] for row in rows)
+        assert all(row['business_unit'] in selected['business_units'] for row in rows), 'Foreign BU values reached provenance loading'
+        return original_batch(cur,rows,**kwargs)
+    monkeypatch.setattr(claim_read_batch,'load_leaf_batch',checked_batch)
+
     overrides=dict(api.app.dependency_overrides)
     api.app.dependency_overrides[auth.authenticate_request]=lambda:selected
     try:

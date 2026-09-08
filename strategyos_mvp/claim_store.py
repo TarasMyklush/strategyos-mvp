@@ -823,8 +823,9 @@ class ClaimRepository:
     def query(self, query: ClaimQuery, *, context: PolicyContext,
               revision_ids: Iterable[str] | None = None,
               subject_scopes: Iterable[tuple[str,str]] | None = None) -> list[dict[str, Any]]:
-        from .assistant_scope import domain_read_predicate, domain_read_parameters
+        from .assistant_scope import domain_read_predicate, domain_read_parameters, business_unit_read_predicate, business_unit_read_parameters
         domain_clause = domain_read_predicate()
+        unit_clause = business_unit_read_predicate()
         scopes = None
         if subject_scopes is not None:
             from itertools import islice
@@ -862,6 +863,7 @@ class ClaimRepository:
                     join strategyos_claim_families f on f.id = r.claim_family_id
                     where r.tenant_id = %s and f.metric_key = %s
                       and {domain_clause}
+                      and {unit_clause}
                       and r.recorded_at <= %s
                       and f.business_unit is not distinct from %s
                       and f.scenario_key is not distinct from %s
@@ -878,7 +880,7 @@ class ClaimRepository:
                       )
                     order by f.period_end desc nulls last, r.recorded_at desc
                     """,
-                    (tenant_id, query.metric_key, *domain_read_parameters(context.allowed_domains), query.as_of_at,query.business_unit,query.scenario_key,
+                    (tenant_id, query.metric_key, *domain_read_parameters(context.allowed_domains), *business_unit_read_parameters(context), query.as_of_at,query.business_unit,query.scenario_key,
                      sorted(str(kind) for kind in query.allowed_claim_kinds),query.period_start,
                      query.period_start,query.period_end,query.fiscal_calendar,query.fiscal_calendar,
                      query.subject_type,query.subject_type,query.subject_key,scopes,scopes,query.as_of_at),
@@ -1010,8 +1012,9 @@ class ClaimRepository:
             {str(value).strip() for value in (metric_keys or ()) if str(value).strip()}
         )
         fetch_limit = limit + 1 if limit is not None else None
-        from .assistant_scope import domain_read_predicate, domain_read_parameters
+        from .assistant_scope import domain_read_predicate, domain_read_parameters, business_unit_read_predicate, business_unit_read_parameters
         domain_clause = domain_read_predicate()
+        unit_clause = business_unit_read_predicate()
         connection = self._require_connection()
         with connection as conn:
             self._ensure_schema(conn)
@@ -1042,6 +1045,7 @@ class ClaimRepository:
                     where sc.snapshot_id = %s
                       and (%s::text is null or r.id::text = %s)
                       and {domain_clause}
+                      and {unit_clause}
                       and (
                           cardinality(%s::text[]) = 0
                           or f.metric_key = any(%s::text[])
@@ -1053,6 +1057,7 @@ class ClaimRepository:
                         snapshot["id"],
                         revision_id, revision_id,
                         *domain_read_parameters(context.allowed_domains),
+                        *business_unit_read_parameters(context),
                         selected_metric_keys,
                         selected_metric_keys,
                         fetch_limit,

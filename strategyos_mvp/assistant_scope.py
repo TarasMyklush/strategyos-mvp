@@ -115,3 +115,24 @@ def restrict_legacy_context(context: dict) -> dict:
     if 'finance' in scope.domains and summary.get('canonical_claim_status') in {'ready', 'ready_with_quarantined_inputs'}:
         result['finance_kpi'] = summary.get('finance_kpi')
     return {**context, 'summary': result, 'findings': [], 'kg_nodes': [], 'kg_edges': []}
+
+
+def business_unit_read_predicate():
+    """Exclude foreign BU roots and dependencies before values are selected."""
+    return """(%s::text[] is null or not exists (
+        with recursive unit_inputs(id) as (
+            select r.id
+            union
+            select d.input_claim_revision_id from strategyos_claim_dependencies d
+            join unit_inputs ui on ui.id=d.derived_claim_revision_id
+        )
+        select 1 from unit_inputs ui
+        join strategyos_claim_revisions ur on ur.id=ui.id
+        join strategyos_claim_families uf on uf.id=ur.claim_family_id
+        where uf.business_unit is null or not (uf.business_unit = any(%s::text[]))
+    ))"""
+
+
+def business_unit_read_parameters(context):
+    units = sorted(context.business_units) if context.business_units or 'bu' in context.roles else None
+    return units, units
