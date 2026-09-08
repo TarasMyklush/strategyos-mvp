@@ -431,9 +431,15 @@ def main() -> int:
             operator_page.locator("#advisor-publish:not([hidden])").wait_for(timeout=20_000)
             operator_page.locator("#advisor-use-template:not([hidden])").wait_for()
             operator_page.locator("#advisor-use-template").click()
-            operator_page.locator("#advisor-readiness").filter(has_text="board template registered").wait_for(timeout=20_000)
+            operator_page.wait_for_function(
+                "document.querySelector('#advisor-readiness').textContent.includes('board template registered')",
+                timeout=20_000,
+            )
             operator_page.locator("#advisor-publish").click()
-            operator_page.locator("#advisor-readiness").filter(has_text="Published as plan proposal v2").wait_for(timeout=20_000)
+            operator_page.wait_for_function(
+                "document.querySelector('#advisor-readiness').textContent.includes('Published as plan proposal v2')",
+                timeout=20_000,
+            )
             operator_page.screenshot(path=output_dir / "10-advisor-published.png", full_page=True)
             published_config = api(operator_context, "get", f"api/intent/dimensional/advisor/configurations/{advisor_id}/versions/1").json()
             assert published_config["publication"]["plan_version"] == 2
