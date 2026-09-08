@@ -257,3 +257,26 @@ The 76 skipped tests are not passing integration proof. Their exact skip reasons
 Evidence: [final pytest log](evidence/final-isolated-pytest.log), [JUnit result](evidence/final-isolated-pytest.xml), [focused checks](evidence/consolidation-focused.log), [packaging checks](evidence/packaging-check.json), [baseline live observations](evidence/live-access-checks.json).
 
 The prior gap-analysis observations remain baseline evidence. Workspace consolidation partially remediates G02, G11, G31 and G32; it does not close the broader product, security or hosted-release gaps.
+## Hosted tenant-structure configuration — 8 September 2026
+
+Release **347fad8** is deployed to **https://new.strategyos.live**. It adds the
+guided organization/dimension workstream, immutable configuration and approval
+tables, independent tenant-admin approval, registered-source mappings and current
+approved-structure enforcement for new plan imports and pending ratification.
+Pre-cutover plans remain readable with an explicit `legacy_unbound` status.
+
+- The hosted service gate passed **2,356 tests with zero skips**, including real
+  PostgreSQL, Neo4j and Qdrant proofs. The service-report checker accepted the run.
+- The immutable runtime image is
+  `sha256:cdec1c4673d97c34ae4f5ecb9e0b6254a2e418d0f676d204998f45256d341325`.
+- The deployment backed up the preview database before migration, applied the
+  additive stack, and passed worker health, protected readiness, governed-surface
+  and public-edge checks.
+- The hosted `structure_console.js` exactly matches the committed asset at SHA-256
+  `6f99fdfdac0a39d5665670bc9a4382de7516290cc6837f2037ffef767c8da0fd`.
+  Anonymous `/plan` access redirects to sign-in and the structure API returns 401.
+- The acceptance uses synthetic configurations. It does not represent approval of
+  a real client's organization, source mappings or plan.
+
+Evidence: [hosted acceptance](evidence/tenant-structure-hosted-acceptance.json) and
+[workflow](https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34224139354).

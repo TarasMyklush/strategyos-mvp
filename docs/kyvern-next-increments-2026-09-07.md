@@ -5,7 +5,7 @@
 | Priority | Deliverable | Definition of done | Dependency |
 | --- | --- | --- | --- |
 | Closed P0 | History-derived decomposition | Deployed: one selected prior snapshot produces disclosed weights; adjustments bridge from history to proposal; missing values never become zero | Hosted acceptance recorded |
-| P0 | Organization/dimension structure | Guided immutable versions, independent approval and plan bindings are deployed; finish hosted acceptance before closing | Registered source systems |
+| Closed P0 | Organization/dimension structure | Deployed: guided immutable versions, independent approval, registered-source mappings and current approved structure bindings govern new plans | Hosted service and edge acceptance recorded |
 | P0 | Granular plan completion | Whole-objective/multi-level decomposition, per-cell drift, concentration and assistant citation acceptance on realistic data | Approved structure contract |
 | Spec complete | Strategic Advisor console | Capture → configure → ratify workstreams, template outputs, gauges and missing-info routing are specified; implementation remains incremental | `strategic-advisor-console-spec.md` |
 | Closed P1 | Board template registry and pack history | Deployed: tenant template versions and generated pack records are durable, permissioned, downloadable and stale-aware | Hosted acceptance recorded |

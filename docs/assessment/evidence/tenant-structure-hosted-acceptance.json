@@ -1,0 +1,27 @@
+{
+  "accepted_at": "2026-09-08T12:23:13Z",
+  "environment": "https://new.strategyos.live",
+  "commit": "347fad81f8a1442b627c4bed1224f44326f221e0",
+  "workflow": "https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34224139354",
+  "service_gate": {
+    "passed": 2356,
+    "skipped": 0,
+    "status": "passed"
+  },
+  "image": "ghcr.io/tarasmyklush/strategyos-mvp@sha256:cdec1c4673d97c34ae4f5ecb9e0b6254a2e418d0f676d204998f45256d341325",
+  "deployment_checks": {
+    "database_backup_before_migration": "passed",
+    "compose_rollout": "passed",
+    "hatchet_worker_health": "passed",
+    "protected_readiness": "passed",
+    "governed_cloud_surface": "passed",
+    "public_https_edge": "passed"
+  },
+  "hosted_surface": {
+    "structure_console_sha256": "6f99fdfdac0a39d5665670bc9a4382de7516290cc6837f2037ffef767c8da0fd",
+    "local_structure_console_sha256": "6f99fdfdac0a39d5665670bc9a4382de7516290cc6837f2037ffef767c8da0fd",
+    "anonymous_plan_status": 307,
+    "anonymous_structure_api_status": 401
+  },
+  "scope": "Synthetic and service-backed acceptance; no real client structure or plan was approved."
+}
