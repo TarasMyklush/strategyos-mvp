@@ -12,6 +12,13 @@ def source_index_allowed(run_id: str, tenant_id: str) -> bool:
     Background jobs act as system/operations, not as an invented executive.
     Interactive indexing retains the initiating principal's source authority.
     """
+    from .assistant_scope import current_scope
+    from .authority_matrix import DOMAINS
+    assistant = current_scope.get()
+    if assistant is not None and assistant.domains != frozenset(DOMAINS):
+        # Legacy source chunks have no governed per-domain classification.
+        # Restricted assistants retrieve typed claims instead of bulk indexes.
+        return False
     from .claim_store import ClaimRepository
     from .source_claims import PolicyContext, UsePurpose
     principal = principal_scope.get() or {}

@@ -16520,9 +16520,11 @@ def _data_qa_scoped(request: QaRequest, _: dict[str, Any]) -> dict[str, Any]:
         extra_payload: dict[str, Any] | None = None,
         status_payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        if base_payload.get("policy_denied"):
+        from .fact_rendering import CONTRACT as FACT_CONTRACT
+        if base_payload.get("policy_denied") or base_payload.get("fact_contract") == FACT_CONTRACT:
             return _assistant_response_payload(
-                response_mode="policy", question=question, context=context,
+                response_mode="policy" if base_payload.get("policy_denied") else response_mode,
+                question=question, context=context,
                 requested_mode=mode, persona=persona, orchestrated=None,
                 base_result=base_payload, llm_status=status_payload,
             )

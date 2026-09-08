@@ -816,9 +816,6 @@ class ClaimRepository:
     def query(self, query: ClaimQuery, *, context: PolicyContext,
               revision_ids: Iterable[str] | None = None,
               subject_scopes: Iterable[tuple[str,str]] | None = None) -> list[dict[str, Any]]:
-        from .assistant_scope import metric_allowed
-        if not metric_allowed(query.metric_key, context.allowed_domains):
-            return []
         from .assistant_scope import domain_read_predicate, domain_read_parameters
         domain_clause = domain_read_predicate()
         scopes = None
@@ -837,6 +834,9 @@ class ClaimRepository:
             return []
         if candidates is not None and len(candidates) > 200:
             raise ValueError("At most 200 candidate revisions may be authorized at once.")
+        from .assistant_scope import metric_allowed
+        if not metric_allowed(query.metric_key, context.allowed_domains):
+            return []
         connection = self._require_connection()
         with connection as conn:
             self._ensure_schema(conn)

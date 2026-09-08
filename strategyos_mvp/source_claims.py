@@ -509,6 +509,8 @@ def policy_allows(
 
     if context.tenant_id != claim.draft.tenant_id:
         reasons.append("tenant_mismatch")
+    if "bu" in context.roles and not context.business_units:
+        reasons.append("principal_business_unit_missing")
     if (
         context.business_units
         and (not claim.draft.business_unit or claim.draft.business_unit not in context.business_units)

@@ -305,8 +305,8 @@ def answer_question(
     transport_trace: list[dict[str, Any]] = []
     authorized_records = getattr(bundle, "authorized_claim_records", None)
     if authorized_records is not None and not public_mode:
-        from .fact_rendering import fact_registry, render_selection
-        registry = fact_registry(authorized_records)
+        from .fact_rendering import fact_registry, render_selection, select_candidates
+        registry = select_candidates(fact_registry(authorized_records), question)
         run_id = str(summary.get("_backing_run_id") or summary.get("run_id") or "")
         if not registry or not run_id:
             return render_selection({"matched":False,"fact_refs":[]}, {}, run_id=run_id)

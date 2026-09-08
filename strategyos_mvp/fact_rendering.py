@@ -41,12 +41,19 @@ def fact_registry(records):
         unit = str(record.get('currency') or record['unit'])
         if record.get('currency') and record['unit'] not in {record['currency'], 'currency', 'money'}:
             unit = f"{record['currency']} {record['unit']}"
+        dimensions = record.get('dimensions') or {}
+        identity_dimensions = {key:dimensions[key] for key in (
+            'driver_key','component_key','presentation_component','series','label',
+            'transaction_type','counterparty_key','account','region','product','client')
+            if key in dimensions and isinstance(dimensions[key], (str,int,float))}
+        record['identity_dimensions'] = identity_dimensions
         parts = [str(record['metric_key']), f"{subject.get('type') or 'subject'}: {subject['key']}",
                  str(record.get('label') or record.get('claim_kind') or ''), when]
         if record.get('business_unit'):
             parts.append('business unit: ' + str(record['business_unit']))
         if record.get('scenario'):
             parts.append('scenario: ' + str(record['scenario']))
+        parts.extend(f'{key}: {value}' for key,value in identity_dimensions.items())
         result[ref] = {'ref':ref, 'text':' · '.join(parts) + f': {normalized} {unit}',
                        'record':record, 'value':normalized, 'unit':unit}
     return result
@@ -76,8 +83,20 @@ def render_selection(selection, registry, *, run_id):
                       'subject':record['subject'],'period':record.get('period'),
                       'value':fact['value'],'unit':fact['unit'],'claim_kind':record.get('claim_kind'),
                       'formula':record.get('formula'),'business_unit':record.get('business_unit'),
-                      'scenario':record.get('scenario')})
+                      'scenario':record.get('scenario'),'dimensions':record.get('identity_dimensions',{})})
     return {'matched':True,'answer':'\n\n'.join(registry[ref]['text'] for ref in refs),
             'basis':'Immutable facts from the authorized claim snapshot.', 'citations':citations,
             'suggestions':[], 'fact_contract':CONTRACT,'fact_cells':facts,
             '_orchestrator_force_answer':True}
+
+
+def select_candidates(registry, question, *, limit=80):
+    """Bound provider input while keeping each chosen fact indivisible."""
+    import re
+    words = set(re.findall(r"[^\W_]+", question.casefold())) - {
+        'what','which','how','the','is','are','our','for','and','of','in','to','a'}
+    def score(item):
+        ref,fact=item
+        tokens=set(re.findall(r"[^\W_]+", fact['text'].casefold()))
+        return (-len(words & tokens), ref)
+    return dict(sorted(registry.items(),key=score)[:limit])

@@ -92,3 +92,11 @@ def test_human_rights_limit_an_otherwise_permitted_assistant(monkeypatch):
         {'subject':'reader','tenant_id':'test','role':'executive'})
     assert result['response_mode']=='authority_refusal'
     assert result['authority_decision']['subject_id']=='user:reader'
+
+
+def test_restricted_assistant_cannot_use_legacy_graph_or_vector_index(monkeypatch):
+    from strategyos_mvp.access_scope import source_index_allowed
+    from strategyos_mvp import claim_store
+    monkeypatch.setattr(claim_store,'ClaimRepository',lambda:pytest.fail('Bulk index source policy lookup must not run'))
+    with bind_assistant(SimpleNamespace(persona='cfo'),{},default_authority_matrix()):
+        assert source_index_allowed('run','tenant') is False

@@ -81,3 +81,12 @@ def test_claim_citation_endpoint_reauthorizes_identity_and_hides_missing_fact(mo
     context=seen[0][1]['context']
     assert context.tenant_id=='tenant-b' and context.business_units==frozenset({'east'})
     assert seen[0][1]['revision_id']=='foreign-revision'
+
+
+def test_candidate_selection_is_bounded_and_preserves_the_fact(record):
+    from strategyos_mvp.fact_rendering import select_candidates
+    records=[{**record,'claim_revision_id':f'r-{i}','subject':{'type':'client','key':f'customer-{i}'}} for i in range(100)]
+    registry=fact_registry(records)
+    selected=select_candidates(registry,'Revenue for customer-99?',limit=5)
+    assert len(selected)==5 and 'r-99' in selected
+    assert selected['r-99']==registry['r-99']
