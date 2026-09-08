@@ -80,3 +80,33 @@ def test_legacy_scenario_cannot_bypass_authenticated_provenance(monkeypatch):
     result=scenario_parser.parse_scenario('profit',context())
     assert result.scenario_type=='missing_data'
     assert '999' not in result.answer
+
+
+@pytest.mark.parametrize('endpoint',['/qa','/assistant/chat'])
+def test_budget_bridge_reaches_http_with_immutable_calculation_inputs(monkeypatch,endpoint):
+    from fastapi.testclient import TestClient
+    from strategyos_mvp import api, auth, authority_matrix
+    from strategyos_mvp.governed_qa_context import claim_backed_bundle
+    principal={'tenant_id':'test','subject':'ceo','role':'executive','authenticated':True}
+    fixture=context()
+    fixture.update(run_mode='full',findings=[],kg_nodes=[],kg_edges=[])
+    fixture['bundle']=claim_backed_bundle(fixture['bundle'].authorized_claim_records)
+    monkeypatch.setattr(api,'_resolve_qa_context',lambda _:fixture)
+    monkeypatch.setattr(api,'_ceo_kpi_cards',lambda *args,**kwargs:[])
+    monkeypatch.setattr(api,'_summary_with_governed_claim_snapshot',lambda summary,**kwargs:summary)
+    monkeypatch.setattr(api,'get_authority_matrix',lambda _:authority_matrix.default_authority_matrix())
+    monkeypatch.setattr(auth,'authenticate_optional_request',lambda **kwargs:principal)
+    overrides=dict(api.app.dependency_overrides)
+    api.app.dependency_overrides[auth.authenticate_request]=lambda:principal
+    api.app.dependency_overrides[api.authenticate_optional_request]=lambda:principal
+    try:
+        response=TestClient(api.app).post(endpoint,json={'question':'Digital Health versus budget','persona':'ceo','mode':'deterministic'})
+        assert response.status_code==200,response.text
+        payload=response.json()
+        assert payload['scenario_id']=='governed_bu_budget_bridge',payload
+        assert payload['calculations'][0]['result']['ebitda_actual_sar']=='37.8'
+        assert len(payload['citations'])==28
+        assert all(c['href'].startswith('/api/claims/snapshots/approved-run/revisions/') for c in payload['citations'])
+    finally:
+        api.app.dependency_overrides.clear()
+        api.app.dependency_overrides.update(overrides)
