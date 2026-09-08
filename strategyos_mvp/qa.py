@@ -447,6 +447,8 @@ def _handle_distinct_parties(question: str, bundle: _DataBundle, findings: list[
 
 
 def _handle_recoverable(question: str, bundle: _DataBundle, findings: list[_Finding]) -> dict[str, _Any]:
+    if not findings:
+        return _needs('findings', 'authorized findings with complete run coverage')
     total = round(sum(float(f.recoverable_sar) for f in findings), 2)
     if _has_any(
         question,
@@ -515,6 +517,9 @@ def _handle_recoverable(question: str, bundle: _DataBundle, findings: list[_Find
 
 
 def _handle_findings(question: str, bundle: _DataBundle, findings: list[_Finding]) -> dict[str, _Any]:
+    # Missing/restricted findings do not establish a completed zero-result audit.
+    if not findings:
+        return _needs('findings', 'authorized findings with complete run coverage')
     if _has_any(question, "how many", "count", "number of"):
         if _has_any(question, "high", "medium", "low", "confidence"):
             counts = {c: sum(1 for f in findings if f.confidence == c) for c in ("HIGH", "MEDIUM", "LOW")}
@@ -726,7 +731,8 @@ INTENTS: tuple[_Intent, ...] = (
            _asks_for_recoverable_value,
            _handle_recoverable),
     _Intent("findings",
-           lambda q: _has(q, "finding") or _has(q, "findings"),
+           lambda q: (_has(q, "finding") or _has(q, "findings"))
+           and not _has_any(q, "data quality", "quality issues", "reliable", "wrong signs", "stored as text"),
            _handle_findings),
     _Intent("top_parties",
            lambda q: _has(q, "top") and _has_any(q, "vendor", "vendors", "supplier", "suppliers", "customer", "customers"),

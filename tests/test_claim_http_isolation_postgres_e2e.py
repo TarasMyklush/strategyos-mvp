@@ -5,7 +5,7 @@ import pytest
 import json
 from fastapi.testclient import TestClient
 
-from strategyos_mvp import api, auth, claim_api, claim_store, state_store
+from strategyos_mvp import api, auth, claim_api, claim_store, state_store, claim_retrieval
 from strategyos_mvp.source_claims import ClaimDraft, PolicyContext
 from tests.test_cross_source_postgres_e2e import ledger
 from tests.test_tabular_claims_postgres_e2e import setup_intake
@@ -43,6 +43,10 @@ def test_two_tenants_two_units_cannot_resolve_each_others_fact_links(ledger,monk
     monkeypatch.setattr(claim_api,'ClaimRepository',lambda:repo)
     monkeypatch.setattr(claim_store,'ClaimRepository',lambda:repo)
     monkeypatch.setattr(state_store,'database_connection',lambda:(psycopg.connect(url),None))
+    monkeypatch.setattr(claim_retrieval,'ClaimRepository',lambda:repo)
+    # Treat the ranking service as hostile: every tenant and BU ID is returned.
+    # PostgreSQL must still be the sole authority for returned facts.
+    monkeypatch.setattr(claim_retrieval,'vector_candidates',lambda *args,**kwargs:[item[3] for item in entries])
     selected={}
     monkeypatch.setattr(auth,'authenticate_optional_request',lambda **kwargs:selected)
     from strategyos_mvp import claim_read_batch
@@ -79,6 +83,10 @@ def test_two_tenants_two_units_cannot_resolve_each_others_fact_links(ledger,monk
                 assert response.status_code==200,response.text
                 found={row['claim_revision_id'] for row in response.json()['records']}
                 assert found==({revision} if requested_unit==unit else set())
+                search=client.get('/api/claims/search',params={'text':'revenue','metric_key':'finance.revenue','business_unit':requested_unit})
+                assert search.status_code==200,search.text
+                assert {row['claim_revision_id'] for row in search.json()['records']}==found
+
             # Export uses the same identity binding and cannot widen a BU.
             response=client.get('/api/claims',params={'metric_key':'finance.revenue',
                 'business_unit':'west' if unit=='east' else 'east','purpose':'export'})

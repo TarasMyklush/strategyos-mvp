@@ -17,6 +17,36 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def verify_source_manifest(source, run_dir):
+    """Verify either release-pack manifests or the ingestion-sealed run manifest."""
+    release = source / 'release-source-manifest.json'
+    if release.is_file():
+        manifest = json.loads(release.read_text())
+    else:
+        sealed = run_dir / 'source_hash_manifest.json'
+        receipt = json.loads((run_dir / 'StrategyOS Governed Release Receipt.json').read_text())
+        expected = ((receipt.get('source_artifacts') or {}).get('manifest') or {}).get('sha256')
+        if not expected or sha(sealed) != expected or not receipt.get('approved_checkpoint_fingerprint'):
+            raise ValueError('The source manifest is not bound to its governed checkpoint.')
+        entries = json.loads(sealed.read_text())
+        files = [{'pack_path':item['path'],'sha256':item['sha256']} for item in entries.values()]
+        manifest = {'files':files,
+            'digest':hashlib.sha256(json.dumps(sorted(files,key=lambda item:item['pack_path']),sort_keys=True,separators=(',',':')).encode()).hexdigest(),
+            'classification':'not_declared','period':None,
+            'identity_basis':'ingestion-sealed source_hash_manifest.json',
+            'sealed_manifest_sha256':expected}
+    if not manifest.get('files'):
+        raise ValueError('An empty source manifest cannot attest a release.')
+    seen=set()
+    for entry in manifest['files']:
+        relative=entry['pack_path']
+        path=(source / relative).resolve()
+        if relative in seen or not path.is_relative_to(source.resolve()) or not path.is_file() or sha(path)!=entry['sha256']:
+            raise ValueError('A selected source is duplicate, missing, changed or outside its pack.')
+        seen.add(relative)
+    return manifest
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--base', type=Path, required=True)
@@ -40,16 +70,25 @@ def main():
         if not result.is_relative_to(workspace):
             raise ValueError('Path escapes the governed workspace.')
         return result
-    pointer = json.loads((workspace / 'outputs/latest_run_pointer.json').read_text())
-    summary = json.loads(local(pointer['summary_path']).read_text())
-    if summary.get('approval_status') != 'approved' or summary.get('status') != 'completed':
+    # Use the application's publication gate, including recovery from an older
+    # pointer to a pending run. A raw latest pointer is not a published release.
+    selection_code = """
+import json
+from strategyos_mvp.config import CONFIG
+from strategyos_mvp.access_scope import principal_scope
+from strategyos_mvp.run_registry import load_latest_run_summary
+with_scope = principal_scope.set({'tenant_id':CONFIG.tenant_slug,'subject':'system:release-attestation','role':'system','authenticated':True})
+try:
+ print(json.dumps(load_latest_run_summary()))
+finally:
+ principal_scope.reset(with_scope)
+"""
+    summary = json.loads(subprocess.check_output(
+        ['docker','exec',args.container,'python','-c',selection_code]))
+    if not summary or summary.get('approval_status') != 'approved' or summary.get('status') != 'completed':
         raise SystemExit('Select an approved, completed run before attestation.')
     source = local(summary['dataset'])
-    manifest = json.loads((source / 'release-source-manifest.json').read_text())
-    for entry in manifest['files']:
-        path = (source / entry['pack_path']).resolve()
-        if not path.is_relative_to(source) or sha(path) != entry['sha256']:
-            raise SystemExit('A selected source is missing, changed or outside its pack.')
+    manifest = verify_source_manifest(source, local(summary['run_dir']))
     app = args.base.resolve() / 'app'
     schema_paths = ['deploy/postgres/schema.sql'] + [
         f'strategyos_mvp/{name}.py' for name in

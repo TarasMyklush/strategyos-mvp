@@ -212,3 +212,19 @@ def test_bare_outstanding_question_does_not_hit_exception_path(qa_context):
         assert r["matched"] is True, phrasing
         assert r["intent"] == "overdue", phrasing
         assert "raised:" not in str(r.get("basis")), phrasing
+
+
+@pytest.mark.parametrize('question',['How many findings are there?', 'Show top findings', 'What is total recoverable?'])
+def test_missing_findings_are_not_reported_as_a_completed_zero_audit(qa_context,question):
+    bundle,_=qa_context
+    result=qa.answer_question(question,bundle=bundle,findings=[])
+    assert result.get('available') is False
+    assert result.get('value') is None
+    assert 'Top 0' not in result['answer'] and 'SAR 0' not in result['answer']
+
+
+def test_data_quality_question_is_not_claimed_by_recoverable_findings(qa_context):
+    bundle,findings=qa_context
+    question='How reliable is the data behind this report — what quality issues exist?'
+    result=qa.answer_question(question,bundle=bundle,findings=findings)
+    assert result['matched'] is False

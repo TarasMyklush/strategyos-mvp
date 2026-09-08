@@ -24,12 +24,16 @@ def deployment(principal: dict[str,Any]=require_role('executive','operator','rev
     manifest=json.loads(path.read_text()) if path.is_file() else {}
     revision=os.getenv('STRATEGYOS_RELEASE_SHA','unrecorded')
     application_matches=bool(manifest and revision!='unrecorded' and manifest.get('application_revision')==revision)
+    run_matches=bool(summary.get('run_id') and manifest and manifest.get('run_id')==summary.get('run_id'))
+    source_receipt=manifest if application_matches and run_matches else {}
     return {'environment':CONFIG.environment_label,'application_revision':revision,
       'manifest_application_matches':application_matches,
       'image_digest':manifest.get('image_digest') if application_matches else None,
       'schema_sha256':manifest.get('schema_sha256') if application_matches else None,
-      'selected_run_id':summary.get('run_id'),'manifest_run_matches':bool(manifest and manifest.get('run_id')==summary.get('run_id')),
-      'source_digest':source_manifest.get('digest'),'source_classification':source_manifest.get('classification','not_declared'),
+      'selected_run_id':summary.get('run_id'),'manifest_run_matches':run_matches,
+      'source_digest':source_manifest.get('digest') or source_receipt.get('source_digest'),
+      'source_file_count':source_receipt.get('source_file_count'),
+      'source_classification':source_manifest.get('classification') or source_receipt.get('source_classification','not_declared'),
       'source_period':source_manifest.get('period'),'source_search':summary.get('source_search',{'status':'not_indexed'}),'data_region':os.getenv('STRATEGYOS_DATA_REGION','Not attested'),
       'model_provider':CONFIG.llm_provider if CONFIG.model_provider_enabled else 'disabled','model':CONFIG.llm_model if CONFIG.model_provider_enabled else None,
       'model_processing':os.getenv('STRATEGYOS_MODEL_PROCESSING_REGION','External provider; residency not attested') if CONFIG.model_provider_enabled else 'No model calls enabled',
