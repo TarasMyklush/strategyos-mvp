@@ -1,0 +1,23 @@
+{
+  "target": "https://new.strategyos.live",
+  "workflow": "https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34192315854",
+  "application_revision": "cffc9facc47644964562413e22e7085beaaf2cd2",
+  "image": "sha256:8401888757be0b636494ed591cf647acaf20d530cee7f14225bc624c63a05d63",
+  "service_gate": {
+    "passed": 2353,
+    "skipped": 0,
+    "warnings": 6,
+    "seconds": 446.16
+  },
+  "local_broad_suite": {
+    "passed": 2179,
+    "skipped": 154,
+    "warnings": 3,
+    "seconds": 147.80
+  },
+  "rollout": "success",
+  "worker_health": "success",
+  "protected_readiness": "success",
+  "governed_cloud_surface": "success",
+  "public_https": "success"
+}

@@ -6,7 +6,7 @@
 | --- | --- | --- | --- |
 | Closed P0 | History-derived decomposition | Deployed: one selected prior snapshot produces disclosed weights; adjustments bridge from history to proposal; missing values never become zero | Hosted acceptance recorded |
 | Closed P0 | Guided Strategic Advisor console | Deployed: a strategy advisor configures governed source bindings, dimensions, owners, tolerances and complete bilingual board labels without JSON or an engineering ticket; readiness, approval and publication are visible | Hosted acceptance recorded |
-| In validation | Board template registry and pack history | Implemented: tenant template versions and generated pack records are durable, permissioned, downloadable and stale-aware | Hosted deployment pending |
+| Closed P1 | Board template registry and pack history | Deployed: tenant template versions and generated pack records are durable, permissioned, downloadable and stale-aware | Hosted acceptance recorded |
 | P1 | Healthcare/pharma demo pack | Three synthetic stories run from governed evidence through cell drift and board pack, with sector details confined to configuration | History-derived decomposition for the mix story |
 | P1 | Price/volume/mix bridge | Exact, unit-safe bridge reconciles price, volume and mix effects to the observed variance | Explicit price and volume source fields |
 | P2 | Executive adoption loop | One executive request creates an accountable owner task; reply proposes a governed update and closure remains reviewable | Advisor configuration and outreach workflow |

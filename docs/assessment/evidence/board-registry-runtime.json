@@ -1,0 +1,24 @@
+{
+  "target": "https://new.strategyos.live",
+  "checked_at": "2026-09-08T06:09:28.499072+00:00",
+  "application_revision": "cffc9facc47644964562413e22e7085beaaf2cd2",
+  "image": "sha256:8401888757be0b636494ed591cf647acaf20d530cee7f14225bc624c63a05d63",
+  "runtime_user": "strategyos_preview_runtime",
+  "schema_contract": {
+    "fingerprint": "a3a5c4f975465a59b24da82e7f125ee8e9d7c5d29d59ab0584bc577d5ddcf123",
+    "prepared_at": "2026-09-08T06:06:38.121192+00:00"
+  },
+  "intent_tables": 10,
+  "all_tables_rls": true,
+  "request_role_privileges": {
+    "select": true,
+    "insert": true,
+    "update": false,
+    "delete": false,
+    "truncate": false
+  },
+  "board_tables": [
+    "strategyos_intent_board_templates",
+    "strategyos_intent_board_packs"
+  ]
+}

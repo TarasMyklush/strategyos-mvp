@@ -75,6 +75,35 @@ Hosted evidence: [acceptance](evidence/plan-decomposition-hosted-acceptance.json
 [runtime](evidence/plan-decomposition-runtime.json), and
 [release](evidence/plan-decomposition-release.json).
 
+## Hosted board template registry and pack history — 8 September 2026
+
+The deployed Intent Vault now registers consecutive immutable tenant board-template
+versions and records every generated pack. An approved Strategic Advisor template
+retains its configuration ID, version and digest as server-derived provenance.
+Generated history preserves the exact pages, analysis/template binding and payload
+digest. Reopening or downloading rechecks source export access and bytes and reports
+current or stale without rewriting the saved record.
+
+- Full service gate: **2,353 passed, zero skips**, six warnings, 446.16 seconds.
+- Local broad suite: **2,179 passed**, 154 service-dependent skips, three warnings,
+  147.80 seconds. The focused affected suite passed **49** tests.
+- Hosted synthetic acceptance passed **26 HTTPS checks**. It registered the existing
+  approved healthcare Advisor template, generated and reopened a current bilingual
+  pack, downloaded valid PDF and PPTX, and confirmed zero untranslated terms.
+- A newly imported governed synthetic actual made the first pack stale while its
+  stored payload and digest remained identical. Its download carried the stale
+  header. Regeneration created a different current pack and history retained both.
+- Anonymous, restricted BU and cross-origin requests were denied.
+- All ten Intent/Advisor/board tables have tenant RLS. The request database role has
+  SELECT/INSERT and no UPDATE/DELETE/TRUNCATE authority on them.
+- Revision `cffc9facc47644964562413e22e7085beaaf2cd2`, image
+  `sha256:8401888757be0b636494ed591cf647acaf20d530cee7f14225bc624c63a05d63`,
+  is healthy at https://new.strategyos.live/plan.
+
+Evidence: [hosted acceptance](evidence/board-registry-hosted-acceptance.json),
+[runtime/schema](evidence/board-registry-runtime.json), and
+[release](evidence/board-registry-release.json).
+
 ## Hosted board pack composer — 7 September 2026
 
 The deployed additive release connects the saved Intent analysis to an EN/AR preview,
