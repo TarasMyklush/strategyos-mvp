@@ -1,0 +1,146 @@
+{
+  "subject": "https://new.strategyos.live/",
+  "persona": "executive.tester",
+  "started_at": "2026-09-08T16:03:17.497315+00:00",
+  "mode": "read-only Chromium walkthrough",
+  "steps": [
+    {
+      "name": "Protected /plan redirects to customer sign-in",
+      "status": "passed",
+      "evidence": {
+        "url": "https://new.strategyos.live/login"
+      }
+    },
+    {
+      "name": "Invalid password is rejected without leaving sign-in",
+      "status": "passed",
+      "evidence": {}
+    },
+    {
+      "name": "Authorized executive preview account signs in",
+      "status": "passed",
+      "evidence": {
+        "landing_url": "https://new.strategyos.live/executive"
+      }
+    },
+    {
+      "name": "Configured pack renders three read-only decision stories",
+      "status": "passed",
+      "evidence": {}
+    },
+    {
+      "name": "Story 1: Institutional client rescues regional misses",
+      "status": "passed",
+      "evidence": {
+        "rollup": [
+          "300",
+          "295",
+          "-5",
+          "on_plan",
+          "3 / 3"
+        ],
+        "cells": 3,
+        "evidence_links": 6,
+        "evidence_statuses": [
+          200,
+          200,
+          200,
+          200,
+          200,
+          200
+        ],
+        "bilingual_board_pages": 14
+      }
+    },
+    {
+      "name": "Story 2: Volume growth hides adverse commercial mix",
+      "status": "passed",
+      "evidence": {
+        "rollup": [
+          "300",
+          "333",
+          "33",
+          "ahead",
+          "2 / 2"
+        ],
+        "cells": 2,
+        "evidence_links": 12,
+        "evidence_statuses": [
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200
+        ],
+        "bilingual_board_pages": 19
+      }
+    },
+    {
+      "name": "Story 3: Regional miss links to a credit constraint",
+      "status": "passed",
+      "evidence": {
+        "rollup": [
+          "300",
+          "240",
+          "-60",
+          "behind",
+          "2 / 2"
+        ],
+        "cells": 2,
+        "evidence_links": 4,
+        "evidence_statuses": [
+          200,
+          200,
+          200,
+          200
+        ],
+        "bilingual_board_pages": 9
+      }
+    },
+    {
+      "name": "Catalog remains usable at a 390px mobile viewport",
+      "status": "passed",
+      "evidence": {}
+    },
+    {
+      "name": "Sign-out clears the session and protects direct /plan access",
+      "status": "passed",
+      "evidence": {}
+    }
+  ],
+  "status": "passed",
+  "finished_at": "2026-09-08T16:03:35.512073+00:00",
+  "summary": {
+    "passed_steps": 9,
+    "stories_opened": 3,
+    "evidence_links_verified": 22,
+    "viewport_widths": [
+      1440,
+      390
+    ]
+  },
+  "release": {
+    "commit": "705a01b720d175e3ddb86404e16c7fd11b02dd1c",
+    "workflow_run": "https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34246692025",
+    "artifact_id": 10065071321,
+    "artifact_contents": [
+      "five full-page screenshots",
+      "three browser-downloaded evidence files",
+      "report.json"
+    ]
+  },
+  "defects_closed": [
+    {
+      "defect": "Intent Vault did not expose the sign-out control promised by the login page.",
+      "resolution": "Added a first-class Sign out action that POSTs to /auth/logout, redirects to /login, and was verified by reopening /plan after logout.",
+      "commit": "705a01b720d175e3ddb86404e16c7fd11b02dd1c"
+    }
+  ]
+}
