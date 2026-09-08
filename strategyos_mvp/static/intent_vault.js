@@ -153,6 +153,11 @@
         if (item.plan_source) refs.appendChild(link(item.cell_id + ' · Plan', '/analyses/' + result.analysis_hash + '/evidence?side=plan&cell_id=' + encodeURIComponent(item.cell_id)));
         if (item.actual_source) refs.appendChild(link(item.cell_id + ' · Actuals', '/analyses/' + result.analysis_hash + '/evidence?side=actuals&cell_id=' + encodeURIComponent(item.cell_id)));
       });
+      if (finding.finding_type === 'price_volume_mix') (finding.input_rows || []).forEach(function (item) {
+        [['plan_price', 'Planned price'], ['plan_volume', 'Planned volume'], ['actual_price', 'Actual price'], ['actual_volume', 'Actual volume']].forEach(function (source) {
+          refs.appendChild(link(item.member + ' · ' + source[1], '/analyses/' + result.analysis_hash + '/evidence?side=' + source[0] + '&cell_id=' + encodeURIComponent(item.cell_id)));
+        });
+      });
       card.appendChild(refs); findings.appendChild(card);
     });
     (result.price_volume_mix || []).filter(function (bridge) { return bridge.status !== 'reconciled'; }).forEach(function (bridge) {

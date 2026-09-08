@@ -67,7 +67,13 @@
       var findings = document.getElementById('demo-story-findings'); findings.replaceChildren();
       detail.analysis.findings.forEach(function (item) {
         var card = el('article', undefined, 'pack-page'); card.append(el('h3', item.finding_type.replaceAll('_', ' / ')), el('p', item.narrative));
-        if (item.effects) card.appendChild(el('p', 'Volume ' + item.effects.volume + ' · Mix ' + item.effects.mix + ' · Price ' + item.effects.price + ' · Observed ' + item.effects.observed_variance + ' ' + item.currency_unit));
+        if (item.effects) {
+          card.appendChild(el('p', 'Volume ' + item.effects.volume + ' · Mix ' + item.effects.mix + ' · Price ' + item.effects.price + ' · Observed ' + item.effects.observed_variance + ' ' + item.currency_unit));
+          var inputs = el('div', undefined, 'vault-actions');
+          detail.board_pack.evidence.filter(function (entry) { return entry.side.includes('price') || entry.side.includes('volume'); }).forEach(function (entry) {
+            var link = el('a', entry.cell_id + ' · ' + entry.side.replace('_', ' ')); link.href = entry.path; inputs.appendChild(link);
+          }); card.appendChild(inputs);
+        }
         findings.appendChild(card);
       });
       table(document.getElementById('demo-story-cells'), ['Cell / dimensions', 'Owner', 'Plan', 'Actual', 'Variance', 'Status', 'Evidence'], detail.analysis.cells.map(function (item) {

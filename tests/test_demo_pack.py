@@ -115,3 +115,4 @@ def test_intent_surface_loads_configured_pack_without_sector_copy_in_core():
     assert "/api/demo-packs/current" in js
     assert "Bilingual board-pack preview" in html
     assert "Open governed story" in js
+    assert "entry.side.includes('price')" in js
