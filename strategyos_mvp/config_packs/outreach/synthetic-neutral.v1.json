@@ -1,0 +1,426 @@
+{
+  "schema_version": 1,
+  "pack_id": "synthetic-neutral-v1",
+  "label": "Synthetic provider outreach demonstration",
+  "controls": {
+    "mode": "synthetic",
+    "connector_enabled": false,
+    "mailbox_class": "dedicated_agent",
+    "approval_required_before_send": true,
+    "delete_capability": false,
+    "raw_reply_stored": false,
+    "authority_effect": "none"
+  },
+  "providers": [
+    {
+      "provider_id": "commercial-north",
+      "name": "Amira Khan",
+      "role": "North commercial lead",
+      "connection_status": "not_connected"
+    },
+    {
+      "provider_id": "planning-lead",
+      "name": "Daniel Reed",
+      "role": "Planning lead",
+      "connection_status": "connected"
+    },
+    {
+      "provider_id": "treasury-controller",
+      "name": "Leila Mansour",
+      "role": "Treasury controller",
+      "connection_status": "connected"
+    },
+    {
+      "provider_id": "operations-lead",
+      "name": "Omar Haddad",
+      "role": "Operations lead",
+      "connection_status": "connected"
+    },
+    {
+      "provider_id": "finance-partner",
+      "name": "Priya Shah",
+      "role": "Finance business partner",
+      "connection_status": "connected"
+    },
+    {
+      "provider_id": "delivery-owner",
+      "name": "Jon Bell",
+      "role": "Delivery owner",
+      "connection_status": "connected"
+    },
+    {
+      "provider_id": "market-controller",
+      "name": "Maya Chen",
+      "role": "Market controller",
+      "connection_status": "connected"
+    }
+  ],
+  "threads": [
+    {
+      "thread_id": "thread-commercial-draft",
+      "title": "Confirm weekly commercial input",
+      "agent": {
+        "agent_id": "ceo-assistant",
+        "name": "Hermes",
+        "accountable_role": "CEO assistant"
+      },
+      "provider_id": "commercial-north",
+      "question": "Please confirm the owner and submission time for this week’s commercial input.",
+      "trigger": {
+        "kind": "data_source_contract",
+        "reference_id": "contract-commercial-weekly",
+        "label": "Weekly commercial input",
+        "reason": "The required provider has not yet been connected to the weekly source contract."
+      },
+      "current_status": "drafted",
+      "lifecycle": [
+        {
+          "action": "drafted",
+          "status": "drafted",
+          "occurred_at": "2026-09-08T08:00:00Z",
+          "actor": "Hermes",
+          "note": "Prepared from a named contract or executive question."
+        }
+      ]
+    },
+    {
+      "thread_id": "thread-plan-approval",
+      "title": "Clarify plan assumption",
+      "agent": {
+        "agent_id": "operations-assistant",
+        "name": "Iris",
+        "accountable_role": "Operations assistant"
+      },
+      "provider_id": "planning-lead",
+      "question": "Please confirm whether the current operating assumption remains valid for the next review.",
+      "trigger": {
+        "kind": "executive_question",
+        "reference_id": "question-plan-assumption",
+        "label": "Plan assumption",
+        "reason": "An executive question requires confirmation from the named accountable provider."
+      },
+      "current_status": "awaiting_approval",
+      "lifecycle": [
+        {
+          "action": "drafted",
+          "status": "drafted",
+          "occurred_at": "2026-09-08T08:10:00Z",
+          "actor": "Hermes",
+          "note": "Prepared from a named contract or executive question."
+        },
+        {
+          "action": "approval_requested",
+          "status": "awaiting_approval",
+          "occurred_at": "2026-09-08T08:12:00Z",
+          "actor": "Hermes",
+          "note": "Submitted for human approval before any outbound action."
+        }
+      ]
+    },
+    {
+      "thread_id": "thread-cash-sent",
+      "title": "Confirm cash outlook",
+      "agent": {
+        "agent_id": "cfo-assistant",
+        "name": "Atlas",
+        "accountable_role": "CFO assistant"
+      },
+      "provider_id": "treasury-controller",
+      "question": "Please confirm whether the submitted cash outlook remains current for the review period.",
+      "trigger": {
+        "kind": "data_source_contract",
+        "reference_id": "contract-cash-outlook",
+        "label": "Cash outlook",
+        "reason": "The current source contract requires provider confirmation before the next review."
+      },
+      "current_status": "sent",
+      "lifecycle": [
+        {
+          "action": "drafted",
+          "status": "drafted",
+          "occurred_at": "2026-09-08T08:20:00Z",
+          "actor": "Hermes",
+          "note": "Prepared from a named contract or executive question."
+        },
+        {
+          "action": "approval_requested",
+          "status": "awaiting_approval",
+          "occurred_at": "2026-09-08T08:22:00Z",
+          "actor": "Hermes",
+          "note": "Submitted for human approval before any outbound action."
+        },
+        {
+          "action": "sent",
+          "status": "sent",
+          "occurred_at": "2026-09-08T08:24:00Z",
+          "actor": "Synthetic delivery simulator",
+          "note": "Approved synthetic send recorded.",
+          "attempt": 1,
+          "approved_by": "M. Reed"
+        }
+      ]
+    },
+    {
+      "thread_id": "thread-commitment-replied",
+      "title": "Confirm delivery commitment",
+      "agent": {
+        "agent_id": "operations-assistant",
+        "name": "Iris",
+        "accountable_role": "Operations assistant"
+      },
+      "provider_id": "operations-lead",
+      "question": "Please confirm the accountable delivery date for the open operating commitment.",
+      "trigger": {
+        "kind": "executive_question",
+        "reference_id": "question-delivery-date",
+        "label": "Delivery commitment",
+        "reason": "Leadership requested a named date from the accountable owner."
+      },
+      "current_status": "replied",
+      "lifecycle": [
+        {
+          "action": "drafted",
+          "status": "drafted",
+          "occurred_at": "2026-09-08T08:30:00Z",
+          "actor": "Hermes",
+          "note": "Prepared from a named contract or executive question."
+        },
+        {
+          "action": "approval_requested",
+          "status": "awaiting_approval",
+          "occurred_at": "2026-09-08T08:32:00Z",
+          "actor": "Hermes",
+          "note": "Submitted for human approval before any outbound action."
+        },
+        {
+          "action": "sent",
+          "status": "sent",
+          "occurred_at": "2026-09-08T08:34:00Z",
+          "actor": "Synthetic delivery simulator",
+          "note": "Approved synthetic send recorded.",
+          "attempt": 1,
+          "approved_by": "M. Reed"
+        },
+        {
+          "action": "reply_parsed",
+          "status": "replied",
+          "occurred_at": "2026-09-08T08:36:00Z",
+          "actor": "Deterministic reply parser",
+          "note": "Structured fact recorded; source wording discarded."
+        }
+      ],
+      "outcome": {
+        "kind": "confirmed_commitment",
+        "summary": "The provider confirmed the accountable delivery date.",
+        "knowledge_entry": {
+          "entry_id": "kg-commitment-delivery",
+          "kind": "commitment",
+          "subject_ref": "provider:operations-lead",
+          "predicate": "committed_delivery_date",
+          "value": "2026-09-18",
+          "source_thread_id": "thread-commitment-replied",
+          "disposition": "synthetic_projection",
+          "unit": "date"
+        }
+      }
+    },
+    {
+      "thread_id": "thread-forecast-replied",
+      "title": "Refresh forecast position",
+      "agent": {
+        "agent_id": "cfo-assistant",
+        "name": "Atlas",
+        "accountable_role": "CFO assistant"
+      },
+      "provider_id": "finance-partner",
+      "question": "Please confirm whether the current forecast position needs a structured revision.",
+      "trigger": {
+        "kind": "data_source_contract",
+        "reference_id": "contract-forecast-weekly",
+        "label": "Weekly forecast",
+        "reason": "The forecast contract reached its provider confirmation checkpoint."
+      },
+      "current_status": "replied",
+      "lifecycle": [
+        {
+          "action": "drafted",
+          "status": "drafted",
+          "occurred_at": "2026-09-08T08:40:00Z",
+          "actor": "Hermes",
+          "note": "Prepared from a named contract or executive question."
+        },
+        {
+          "action": "approval_requested",
+          "status": "awaiting_approval",
+          "occurred_at": "2026-09-08T08:42:00Z",
+          "actor": "Hermes",
+          "note": "Submitted for human approval before any outbound action."
+        },
+        {
+          "action": "sent",
+          "status": "sent",
+          "occurred_at": "2026-09-08T08:44:00Z",
+          "actor": "Synthetic delivery simulator",
+          "note": "Approved synthetic send recorded.",
+          "attempt": 1,
+          "approved_by": "M. Reed"
+        },
+        {
+          "action": "reply_parsed",
+          "status": "replied",
+          "occurred_at": "2026-09-08T08:46:00Z",
+          "actor": "Deterministic reply parser",
+          "note": "Structured fact recorded; source wording discarded."
+        }
+      ],
+      "outcome": {
+        "kind": "updated_forecast",
+        "summary": "The provider supplied a structured forecast revision for review.",
+        "knowledge_entry": {
+          "entry_id": "kg-forecast-margin",
+          "kind": "forecast",
+          "subject_ref": "provider:finance-partner",
+          "predicate": "forecast_status",
+          "value": "revised_upside_case",
+          "source_thread_id": "thread-forecast-replied",
+          "disposition": "synthetic_projection"
+        }
+      }
+    },
+    {
+      "thread_id": "thread-unparseable-flagged",
+      "title": "Review ambiguous response",
+      "agent": {
+        "agent_id": "ceo-assistant",
+        "name": "Hermes",
+        "accountable_role": "CEO assistant"
+      },
+      "provider_id": "delivery-owner",
+      "question": "Please provide the commitment in the approved date and owner fields.",
+      "trigger": {
+        "kind": "executive_question",
+        "reference_id": "question-commitment-format",
+        "label": "Structured commitment",
+        "reason": "The prior response could not be represented as a supported structured fact."
+      },
+      "current_status": "flagged",
+      "lifecycle": [
+        {
+          "action": "drafted",
+          "status": "drafted",
+          "occurred_at": "2026-09-08T08:50:00Z",
+          "actor": "Hermes",
+          "note": "Prepared from a named contract or executive question."
+        },
+        {
+          "action": "approval_requested",
+          "status": "awaiting_approval",
+          "occurred_at": "2026-09-08T08:52:00Z",
+          "actor": "Hermes",
+          "note": "Submitted for human approval before any outbound action."
+        },
+        {
+          "action": "sent",
+          "status": "sent",
+          "occurred_at": "2026-09-08T08:54:00Z",
+          "actor": "Synthetic delivery simulator",
+          "note": "Approved synthetic send recorded.",
+          "attempt": 1,
+          "approved_by": "M. Reed"
+        },
+        {
+          "action": "flagged",
+          "status": "flagged",
+          "occurred_at": "2026-09-08T08:56:00Z",
+          "actor": "Hermes",
+          "note": "Reply could not be parsed into a supported fact; human review required."
+        }
+      ],
+      "outcome": {
+        "kind": "flagged_risk",
+        "summary": "No business fact was inferred; the unparseable response was flagged for human review.",
+        "knowledge_entry": {
+          "entry_id": "kg-risk-unparseable",
+          "kind": "risk",
+          "subject_ref": "provider:delivery-owner",
+          "predicate": "review_requirement",
+          "value": "unparseable_response_requires_human_review",
+          "source_thread_id": "thread-unparseable-flagged",
+          "disposition": "synthetic_projection"
+        }
+      }
+    },
+    {
+      "thread_id": "thread-no-reply-flagged",
+      "title": "Escalate missing confirmation",
+      "agent": {
+        "agent_id": "operations-assistant",
+        "name": "Iris",
+        "accountable_role": "Operations assistant"
+      },
+      "provider_id": "market-controller",
+      "question": "Please confirm the named owner for the outstanding market input.",
+      "trigger": {
+        "kind": "data_source_contract",
+        "reference_id": "contract-market-input",
+        "label": "Market input",
+        "reason": "The contracted response window closed without a structured confirmation."
+      },
+      "current_status": "flagged",
+      "lifecycle": [
+        {
+          "action": "drafted",
+          "status": "drafted",
+          "occurred_at": "2026-09-08T08:00:00Z",
+          "actor": "Hermes",
+          "note": "Prepared from a named contract or executive question."
+        },
+        {
+          "action": "approval_requested",
+          "status": "awaiting_approval",
+          "occurred_at": "2026-09-08T08:02:00Z",
+          "actor": "Hermes",
+          "note": "Submitted for human approval before any outbound action."
+        },
+        {
+          "action": "sent",
+          "status": "sent",
+          "occurred_at": "2026-09-08T08:04:00Z",
+          "actor": "Synthetic delivery simulator",
+          "note": "Approved synthetic send recorded.",
+          "attempt": 1,
+          "approved_by": "M. Reed"
+        },
+        {
+          "action": "reasked",
+          "status": "sent",
+          "occurred_at": "2026-09-08T08:06:00Z",
+          "actor": "Synthetic delivery simulator",
+          "note": "One approved follow-up attempt recorded.",
+          "attempt": 2,
+          "approved_by": "M. Reed"
+        },
+        {
+          "action": "flagged",
+          "status": "flagged",
+          "occurred_at": "2026-09-08T08:08:00Z",
+          "actor": "Hermes",
+          "note": "No structured reply after the approved re-ask; human review required."
+        }
+      ],
+      "outcome": {
+        "kind": "flagged_risk",
+        "summary": "No business fact was guessed; the response gap was flagged after one approved re-ask.",
+        "knowledge_entry": {
+          "entry_id": "kg-risk-no-response",
+          "kind": "risk",
+          "subject_ref": "provider:market-controller",
+          "predicate": "review_requirement",
+          "value": "response_gap_requires_human_review",
+          "source_thread_id": "thread-no-reply-flagged",
+          "disposition": "synthetic_projection"
+        }
+      }
+    }
+  ]
+}

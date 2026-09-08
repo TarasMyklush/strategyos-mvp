@@ -280,3 +280,25 @@ Pre-cutover plans remain readable with an explicit `legacy_unbound` status.
 
 Evidence: [hosted acceptance](evidence/tenant-structure-hosted-acceptance.json) and
 [workflow](https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34224139354).
+
+## Hosted whole-objective granular drift — 8 September 2026
+
+Release **cb55088** is deployed to **https://new.strategyos.live**. It adds exact
+whole-objective decomposition across two or more approved dimensions, accountable
+cell targets/tolerances, first-class offset and concentration findings, deterministic
+cell explanations and an executive Plan Health link into the Intent Vault.
+
+- The hosted service gate passed **2,359 tests with zero skips**, including the
+  required PostgreSQL, Neo4j and Qdrant service proofs.
+- The immutable runtime image is
+  `sha256:67e5cdd24bcfaf270d77d0886d80399e9896de8e0a0847a2a8ddc24faed43da2`.
+- The deployment backed up the preview database and passed worker health, protected
+  readiness, governed-surface, internal-edge and public HTTPS checks.
+- The hosted `objective_decomposition.js` exactly matches the committed asset at
+  SHA-256 `a91c5c8440c0a0531797380ec6df8b57602a8295398f5582bed611aac8403e7e`.
+  Anonymous `/plan` access redirects to sign-in; catalog and explanation APIs return 401.
+- Acceptance fixtures use synthetic data and configured policies. They do not prove
+  a real client's plan, source semantics, concentration policy or approval.
+
+Evidence: [hosted acceptance](evidence/granular-drift-hosted-acceptance.json) and
+[workflow](https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34228253245).

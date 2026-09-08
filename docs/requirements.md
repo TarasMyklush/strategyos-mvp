@@ -288,3 +288,19 @@ Every cell exposes a deterministic explanation with target, actual, variance,
 status, owner, ratified plan version/digest and both evidence references. The
 executive Plan Health surface links into the Intent Vault drill. Price/volume/mix
 remains separate until governed price and volume inputs exist.
+
+**REQ-37 — Connector-free provider outreach demonstration.** An authenticated
+outreach surface shows named providers alongside data coverage and exposes who an
+assistant contacted, what it asked, the source contract or executive question that
+triggered the outreach, and the complete drafted, awaiting-approval, sent, replied
+or flagged lifecycle. Synthetic configuration packs provide the demonstration data;
+sector-specific provider roles and story content remain outside the core contract.
+
+The typed contract requires a dedicated agent mailbox, named approval before every
+synthetic send or re-ask, no delete capability, no connector, no business authority
+effect and no retained raw reply text. A parsed reply can create only a structured
+commitment or forecast projection. An unparseable reply, or no reply after one
+approved re-ask, creates a structured risk for human review and never an inferred
+business fact. Every projection links back to its thread and trigger. This closes
+the connector-free product demonstration; live delivery, mailbox security and a
+durable Knowledge Graph write remain subject to separate connector acceptance.

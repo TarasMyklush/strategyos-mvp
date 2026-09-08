@@ -6,7 +6,7 @@
 | --- | --- | --- | --- |
 | Closed P0 | History-derived decomposition | Deployed: one selected prior snapshot produces disclosed weights; adjustments bridge from history to proposal; missing values never become zero | Hosted acceptance recorded |
 | Closed P0 | Organization/dimension structure | Deployed: guided immutable versions, independent approval, registered-source mappings and current approved structure bindings govern new plans | Hosted service and edge acceptance recorded |
-| P0 | Granular plan completion | Whole-objective/multi-level decomposition, per-cell drift, concentration and assistant citation acceptance on realistic data | Approved structure contract |
+| Closed P0 | Granular plan completion | Deployed: whole-objective multidimensional decomposition, per-cell drift/explanation, offset and concentration findings | Hosted service and edge acceptance recorded |
 | Spec complete | Strategic Advisor console | Capture → configure → ratify workstreams, template outputs, gauges and missing-info routing are specified; implementation remains incremental | `strategic-advisor-console-spec.md` |
 | Closed P1 | Board template registry and pack history | Deployed: tenant template versions and generated pack records are durable, permissioned, downloadable and stale-aware | Hosted acceptance recorded |
 | P0 | Synthetic outreach surface | Full draft/approval/send/reply/flag lifecycle and people coverage work with the connector disabled | Typed outreach objects |

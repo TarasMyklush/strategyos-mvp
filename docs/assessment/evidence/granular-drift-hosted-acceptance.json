@@ -1,0 +1,42 @@
+{
+  "recorded_at": "2026-09-08T13:06:02Z",
+  "environment": "preview",
+  "base_url": "https://new.strategyos.live",
+  "release": {
+    "commit": "cb550885117ec802c73ae5d02026174ec3d5b35f",
+    "image": "ghcr.io/tarasmyklush/strategyos-mvp@sha256:67e5cdd24bcfaf270d77d0886d80399e9896de8e0a0847a2a8ddc24faed43da2",
+    "workflow_run": 34228253245,
+    "workflow_url": "https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34228253245",
+    "conclusion": "success"
+  },
+  "service_gate": {
+    "passed": 2359,
+    "skipped": 0,
+    "warnings": 6,
+    "duration_seconds": 501.12,
+    "required_service_proof_gate": "passed"
+  },
+  "deployment": {
+    "database_backup_before_migration": "passed",
+    "compose_stack": "passed",
+    "worker_health": "passed",
+    "protected_readiness": "passed",
+    "governed_cloud_surface": "passed",
+    "internal_edge": "passed",
+    "public_https_edge": "passed"
+  },
+  "hosted_checks": {
+    "objective_decomposition_asset_sha256": "a91c5c8440c0a0531797380ec6df8b57602a8295398f5582bed611aac8403e7e",
+    "committed_asset_sha256": "a91c5c8440c0a0531797380ec6df8b57602a8295398f5582bed611aac8403e7e",
+    "asset_match": true,
+    "anonymous_plan_status": 307,
+    "anonymous_plan_redirect": "https://new.strategyos.live/login",
+    "anonymous_catalog_status": 401,
+    "anonymous_explanation_status": 401
+  },
+  "scope": {
+    "data": "synthetic",
+    "real_client_approval": false,
+    "price_volume_mix": false
+  }
+}

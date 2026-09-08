@@ -9111,6 +9111,20 @@ def plan_page(
     return HTMLResponse(template_path.read_text(encoding="utf-8"))
 
 
+@app.get("/outreach", response_class=HTMLResponse)
+def outreach_page(
+    principal: dict[str, Any] = Depends(authenticate_optional_request),
+) -> Any:
+    """Serve the authenticated, connector-free provider outreach demonstration."""
+    login_redirect = _login_or_authorized_html(principal)
+    if login_redirect is not None:
+        return login_redirect
+    return HTMLResponse(
+        (STATIC_DIR / "outreach.html").read_text(encoding="utf-8"),
+        headers={"Cache-Control": "private, no-store"},
+    )
+
+
 @app.get("/api/plan/latest", include_in_schema=False)
 def retired_plan_tracker() -> RedirectResponse:
     """Legacy route now leads to the authenticated Intent catalog."""
@@ -17131,3 +17145,5 @@ from .conversation_state import router as conversation_state_router
 app.include_router(conversation_state_router)
 from .claim_api import router as claim_router
 app.include_router(claim_router)
+from .outreach_api import router as outreach_router
+app.include_router(outreach_router)

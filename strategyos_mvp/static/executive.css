@@ -10638,3 +10638,15 @@ body {
   color: var(--muted);
   font-size: 13px;
 }
+.agents-outreach-link {
+  flex: 0 0 auto;
+  color: var(--navy, #25335c);
+  border: 1px solid rgba(37, 51, 92, 0.18);
+  border-radius: 999px;
+  padding: 8px 13px;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.agents-outreach-link:hover { background: rgba(37, 51, 92, 0.06); }
