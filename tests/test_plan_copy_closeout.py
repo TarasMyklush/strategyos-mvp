@@ -26,11 +26,16 @@ def test_plan_page_fetches_governed_api_payload_instead_of_static_truth() -> Non
     assert "/static/intent_vault.js" in html
     assert 'id="decomposition-form"' in html
     assert "Create decomposition proposal" in html
+    assert 'id="objective-decomposition-form"' in html
+    assert "Decompose a whole objective across dimensions" in html
+    assert "/static/objective_decomposition.js" in html
     assert 'id="advisor-console"' in html
     assert 'id="structure-setup"' in html
     assert "Organization and dimension structure" in html
     assert "Save structure version" in html
     assert "/static/structure_console.js" in html
+    assert 'id="analysis-explanation"' in html
+    assert "Deterministic cell explanation" in html
     assert 'id="advisor-allocations"' in html
     assert "Save ready configuration" in html
     assert "/static/advisor_console.js" in html

@@ -21,7 +21,8 @@ from strategyos_mvp import auth, dimensional_intent_sources as sources
 from strategyos_mvp import dimensional_intent_store as store
 from strategyos_mvp.dimensional_intent_api import router
 from strategyos_mvp.dimensional_plan import Actuals, Plan, fingerprint
-from strategyos_mvp.plan_decomposition import DecompositionRequest, HistoricalDecompositionRequest
+from strategyos_mvp.plan_decomposition import (DecompositionRequest, HistoricalDecompositionRequest,
+                                               ObjectiveDecompositionRequest)
 from strategyos_mvp.advisor_config import AdvisorConfiguration
 from strategyos_mvp import advisor_config_store
 from strategyos_mvp.tenant_structure import TenantStructureConfiguration
@@ -174,14 +175,18 @@ def fixture_structure_body():
     }]
     configured = {
         'product': ['item-a'],
-        'region': ['north', 'south'],
+        'region': ['all-regions', 'north', 'south'],
         'client': ['retail', 'institution', 'hospital', 'pharmacy'],
     }
     for key, members in configured.items():
+        dimension_members = [
+            {'key': member, 'label': {'en': member.title(), 'ar': 'قيمة ' + member},
+             **({'parent': 'all-regions'} if key == 'region' and member != 'all-regions' else {})}
+            for member in members
+        ]
         dimensions.append({
             'key': key, 'label': {'en': key.title(), 'ar': 'بُعد ' + key},
-            'members': [{'key': member, 'label': {'en': member.title(), 'ar': 'قيمة ' + member}}
-                        for member in members],
+            'members': dimension_members,
         })
         mappings.append({
             'source_key': 'intent-proof', 'source_field': key,
@@ -875,6 +880,94 @@ def decomposition_body(s, digest):
              'owner': 'pharmacy-owner', 'tolerance': '1', 'basis': source},
         ],
     }
+
+
+def objective_decomposition_body(s, digest):
+    return {
+        'parent_digest': digest, 'metric': 'revenue',
+        'split_dimensions': ['region', 'client'], 'decimal_places': 2,
+        'allocations': [
+            {'cell_id': 'north-hospital', 'dimensions': {'product': 'item-a', 'region': 'north', 'client': 'hospital'},
+             'weight': '1', 'owner': 'North hospital lead', 'tolerance': '2', 'basis_cell_id': 'regional'},
+            {'cell_id': 'north-pharmacy', 'dimensions': {'product': 'item-a', 'region': 'north', 'client': 'pharmacy'},
+             'weight': '1', 'owner': 'North pharmacy lead', 'tolerance': '2', 'basis_cell_id': 'regional'},
+            {'cell_id': 'south-hospital', 'dimensions': {'product': 'item-a', 'region': 'south', 'client': 'hospital'},
+             'weight': '2', 'owner': 'South hospital lead', 'tolerance': '2', 'basis_cell_id': 'institutional'},
+            {'cell_id': 'south-pharmacy', 'dimensions': {'product': 'item-a', 'region': 'south', 'client': 'pharmacy'},
+             'weight': '4', 'owner': 'South pharmacy lead', 'tolerance': '2', 'basis_cell_id': 'institutional'},
+        ],
+    }
+
+
+def test_whole_objective_multidimensional_decomposition_findings_and_explanation(setup):
+    s = setup
+    s['p']['concentration_policies'] = [{
+        'policy_id': 'client-share', 'metric': 'revenue', 'dimension': 'client', 'threshold_percent': '60',
+    }]
+    parent = import_pair(s); approve(s, parent)
+    body = objective_decomposition_body(s, parent['digest'])
+    proposal = store.create_objective_decomposition(
+        s['operator'], s['p']['plan_id'], 1, ObjectiveDecompositionRequest.model_validate(body))
+    assert proposal['payload']['derivation']['engine_version'] == 'weighted-multidimensional-allocation.v1'
+    assert proposal['payload']['derivation']['split_dimensions'] == ['region', 'client']
+    assert {cell['id']: cell['target'] for cell in proposal['payload']['cells']} == {
+        'north-hospital': '25.00', 'north-pharmacy': '25.00',
+        'south-hospital': '50.00', 'south-pharmacy': '100.00',
+    }
+    prefix = f"/api/intent/dimensional/plans/{s['p']['plan_id']}/versions/1/decompose-objective"
+    assert s['client'].post(prefix, json=body).json()['digest'] == proposal['digest']
+    s['current']['principal'] = s['executive']
+    assert s['client'].post(prefix, json=body).status_code == 403
+    ratified = store.ratify(s['executive'], s['p']['plan_id'], 2, proposal['digest'],
+                            'Reviewed all objective branches, owners, weights and evidence independently.')
+    assert ratified['plan_digest'] == proposal['digest']
+    source = deepcopy(s['a']['observations'][0]['source'])
+    actuals = deepcopy(s['a'])
+    actuals['revision'] = 'objective-actuals'
+    actuals['observations'] = [
+        {'metric': 'revenue', 'dimensions': row['dimensions'], 'unit': 'SAR', 'value': value, 'source': source}
+        for row, value in zip(body['allocations'], ['0', '50', '30', '120'])
+    ]
+    store.import_actuals(s['operator'], Actuals.model_validate(actuals), s['pack'])
+    result = store.create_analysis(s['executive'], s['p']['plan_id'], 2, 'objective-actuals', TODAY)
+    offset = next(item for item in result['findings'] if item['finding_type'] == 'offset')
+    assert offset['arithmetic'] == {'actual_minus_plan_behind': '-45.00',
+                                    'actual_minus_plan_ahead': '45.00', 'net_variance': '0'}
+    assert offset['plan_citation']['version'] == 2
+    concentration = next(item for item in result['findings'] if item['finding_type'] == 'concentration')
+    assert concentration['member'] == 'pharmacy'
+    assert concentration['share_percent'] == '80.0'
+    assert concentration['threshold_percent'] == '60'
+    explanation = store.explain_cell(s['executive'], result['analysis_hash'], 'south-pharmacy')
+    assert explanation['plan_citation']['version'] == 2
+    assert explanation['plan_citation']['digest'] == proposal['digest']
+    assert explanation['facts']['actual'] == '120'
+    assert {citation['side'] for citation in explanation['evidence']} == {'plan', 'actuals'}
+    api_explanation = s['client'].get('/api/intent/dimensional/analyses/' + result['analysis_hash'] +
+                                      '/explain', params={'cell_id': 'south-pharmacy'})
+    assert api_explanation.status_code == 200
+    assert api_explanation.json()['answer'] == explanation['answer']
+
+
+def test_multidimensional_decomposition_rejects_unconfigured_or_undeclared_members(setup):
+    s = setup
+    parent = import_pair(s); approve(s, parent)
+    unknown = objective_decomposition_body(s, parent['digest'])
+    unknown['allocations'][0]['dimensions']['client'] = 'unknown-client'
+    with pytest.raises(ValueError, match='outside the approved'):
+        store.create_objective_decomposition(
+            s['operator'], s['p']['plan_id'], 1, ObjectiveDecompositionRequest.model_validate(unknown))
+    undeclared = objective_decomposition_body(s, parent['digest'])
+    undeclared['allocations'][0]['dimensions']['product'] = 'item-b'
+    with pytest.raises(ValueError, match='declaring it as a split dimension'):
+        store.create_objective_decomposition(
+            s['operator'], s['p']['plan_id'], 1, ObjectiveDecompositionRequest.model_validate(undeclared))
+    overlapping = objective_decomposition_body(s, parent['digest'])
+    overlapping['allocations'][0]['dimensions']['region'] = 'all-regions'
+    overlapping['allocations'][1]['dimensions']['client'] = 'hospital'
+    with pytest.raises(ValueError, match='mix parent and child'):
+        store.create_objective_decomposition(
+            s['operator'], s['p']['plan_id'], 1, ObjectiveDecompositionRequest.model_validate(overlapping))
 
 
 def test_decomposition_requires_ratified_parent_and_is_idempotent(setup):

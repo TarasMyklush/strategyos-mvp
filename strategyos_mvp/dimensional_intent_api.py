@@ -11,7 +11,7 @@ import os
 
 from .auth import require_role
 from .dimensional_plan import Actuals, Contract, Name, Plan
-from .plan_decomposition import DecompositionRequest, HistoricalDecompositionRequest
+from .plan_decomposition import DecompositionRequest, HistoricalDecompositionRequest, ObjectiveDecompositionRequest
 from .advisor_config import AdvisorConfiguration
 from .tenant_structure import TenantStructureConfiguration
 from . import advisor_config_store as advisor_store
@@ -126,6 +126,12 @@ def read_plan(plan_id: str, version: Annotated[int, Path(ge=1)],
 def decompose_plan(plan_id: str, version: Annotated[int, Path(ge=1)], body: DecompositionRequest,
                    principal: dict[str, Any] = require_role('operator')):
     return perform(lambda: store.create_decomposition(principal, plan_id, version, body))
+
+
+@router.post('/plans/{plan_id}/versions/{version}/decompose-objective')
+def decompose_objective(plan_id: str, version: Annotated[int, Path(ge=1)], body: ObjectiveDecompositionRequest,
+                        principal: dict[str, Any] = require_role('operator')):
+    return perform(lambda: store.create_objective_decomposition(principal, plan_id, version, body))
 
 
 @router.get('/plans/{plan_id}/versions/{version}/history-candidates')
@@ -244,6 +250,12 @@ def create_analysis(body: AnalysisRequest, principal: dict[str, Any] = require_r
 @router.get('/analyses/{analysis_id}')
 def read_analysis(analysis_id: str, principal: dict[str, Any] = require_role('operator', 'reviewer', 'executive')):
     return perform(lambda: store.read_analysis(principal, analysis_id))
+
+
+@router.get('/analyses/{analysis_id}/explain')
+def explain_analysis_cell(analysis_id: str, cell_id: Annotated[str, Query(min_length=1, max_length=160)],
+                          principal: dict[str, Any] = require_role('operator', 'reviewer', 'executive')):
+    return perform(lambda: store.explain_cell(principal, analysis_id, cell_id))
 
 
 @router.get('/analyses/{analysis_id}/evidence')

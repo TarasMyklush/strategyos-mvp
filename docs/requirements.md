@@ -268,3 +268,23 @@ Guidance for complicated organizations is in
 [organization-structure-guidance.md](organization-structure-guidance.md); the full
 capture → configure → ratify product contract is in
 [strategic-advisor-console-spec.md](strategic-advisor-console-spec.md).
+
+**REQ-36 — Whole-objective granular decomposition and explainable findings.** An
+operator can replace every cell of one metric objective with a proposed set of
+accountable cells spanning at least two configured dimensions. Each row supplies
+the exact dimension tuple, positive decimal weight, owner, tolerance and a parent
+evidence basis. Cell IDs and tuples are unique; undeclared varying dimensions,
+unconfigured members, overlapping hierarchy parent/child cells and non-objective
+basis cells fail closed. The deterministic
+engine preserves the approved metric total at the requested precision, assigns the
+remainder to the final lexicographic cell and records complete lineage. The proposal
+uses the existing independent ratification and stale-parent controls.
+
+Saved drift analyses emit first-class offset findings containing the contributing
+cells, actual-minus-plan arithmetic, plan/actual evidence and ratified plan citation.
+Optional approved plan policies identify concentration when one configured member's
+positive measured share of a comparable cell group exceeds the exact threshold.
+Every cell exposes a deterministic explanation with target, actual, variance,
+status, owner, ratified plan version/digest and both evidence references. The
+executive Plan Health surface links into the Intent Vault drill. Price/volume/mix
+remains separate until governed price and volume inputs exist.

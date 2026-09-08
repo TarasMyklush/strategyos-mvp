@@ -4862,11 +4862,14 @@
       var coverageButton = safeArray(enrichedPlanHealth.commitments).length
         ? '<button type="button" class="plan-coverage-chip" data-plan-coverage-toggle aria-expanded="' + (state.planCoverageOpen ? 'true' : 'false') + '">' + escapeHtml(firstDefined(enrichedPlanHealth.coverage_label, 'Plan coverage')) + '</button>'
         : '';
+      var granularPlanLink = safeArray(enrichedPlanHealth.commitments).length
+        ? '<a class="plan-coverage-chip" href="/plan">Open intent and granular drift</a>'
+        : '';
       var coverageTable = state.planCoverageOpen ? '<div class="plan-coverage-table">' + safeArray(enrichedPlanHealth.commitments).map(function (item) {
         var isBehind = /^behind/i.test(String(firstDefined(item.status_vs_path, '')));
         return '<div class="plan-coverage-row' + (isBehind ? ' is-behind' : '') + '"><span>' + escapeHtml(firstDefined(item.name, item.kpi_id, 'Board commitment')) + '</span>' + planCommitmentBulletMarkup(item) + '<strong>' + escapeHtml(item.actual == null ? 'Not supplied' : String(item.actual) + (item.unit === '%' ? '%' : ' ' + firstDefined(item.unit, ''))) + '</strong><small><i class="plan-status-pip" aria-hidden="true"></i>' + escapeHtml(firstDefined(item.status_vs_path, item.measurement_status, '')) + '</small></div>';
       }).join('') + '</div>' : '';
-      coverageHost.innerHTML = coverageButton + coverageTable;
+      coverageHost.innerHTML = coverageButton + granularPlanLink + coverageTable;
       var coverageToggle = coverageHost.querySelector('[data-plan-coverage-toggle]');
       if (coverageToggle) coverageToggle.onclick = function () {
         state.planCoverageOpen = !state.planCoverageOpen;

@@ -8,7 +8,7 @@
   function show(id, visible) { $(id).hidden = !visible; }
   function message(text) { $('vault-message').textContent = text; }
   function text(value) { return value === null || value === undefined ? 'Missing' : String(value); }
-  function label(status) { return ({ on_plan: 'On plan', ahead: 'Ahead', behind: 'Behind', incomplete: 'Incomplete', missing: 'Missing', proposed: 'Proposed', ratified: 'Ratified' })[status] || status; }
+  function label(status) { return ({ on_plan: 'On plan', ahead: 'Ahead', behind: 'Behind', incomplete: 'Incomplete', missing: 'Missing', proposed: 'Proposed', ratified: 'Ratified', current: 'Current', superseded: 'Superseded' })[status] || status; }
   function dimensions(value) { return Object.keys(value).sort().map(function (k) { return k + ': ' + value[k]; }).join(' · '); }
   function planPath() { return '/plans/' + encodeURIComponent(state.record.plan_id) + '/versions/' + state.record.version; }
   function safeId(value) { return String(value).toLowerCase().replace(/[^a-z0-9_.-]+/g, '-').replace(/^-|-$/g, '').slice(0, 120) || 'cell'; }
@@ -117,9 +117,12 @@
     if (plan.derivation) {
       var d = plan.derivation;
       var historical = d.engine_version === 'history-adjusted-allocation.v1';
-      $('decomposition-summary').textContent = 'Created from ' + d.parent_plan_id + ' v' + d.parent_version + ', cell ' + d.parent_cell_id + ', split by ' + d.split_dimension + '. Engine ' + d.engine_version + '; remainder: ' + d.remainder_rule + '. Parent fingerprint: ' + d.parent_digest + '.' + (historical ? ' Historical actuals: ' + d.historical_actual_revision + ' (' + d.historical_actual_digest + ').' : '');
-      table('decomposition-allocations', historical ? ['Result cell', 'Member', 'Historical', 'Adjustment', 'Effective weight', 'Owner / tolerance', 'Historical evidence'] : ['Result cell', 'Member', 'Weight', 'Owner / tolerance', 'Evidence'], d.allocations.map(function (a) {
-        return historical ? [a.cell_id, a.member, a.historical_value, a.adjustment_percent + '%', a.effective_weight, a.owner + ' / ' + a.tolerance, a.basis.locator + ' · SHA-256 ' + a.basis.sha256] : [a.cell_id, a.member, a.weight, a.owner + ' / ' + a.tolerance, a.basis.locator + ' · SHA-256 ' + a.basis.sha256];
+      var multidimensional = d.engine_version === 'weighted-multidimensional-allocation.v1';
+      $('decomposition-summary').textContent = multidimensional ?
+        'Created from ' + d.parent_plan_id + ' v' + d.parent_version + ', objective ' + d.parent_metric + ', across ' + d.split_dimensions.join(', ') + '. Engine ' + d.engine_version + '; remainder: ' + d.remainder_rule + '. Parent fingerprint: ' + d.parent_digest + '.' :
+        'Created from ' + d.parent_plan_id + ' v' + d.parent_version + ', cell ' + d.parent_cell_id + ', split by ' + d.split_dimension + '. Engine ' + d.engine_version + '; remainder: ' + d.remainder_rule + '. Parent fingerprint: ' + d.parent_digest + '.' + (historical ? ' Historical actuals: ' + d.historical_actual_revision + ' (' + d.historical_actual_digest + ').' : '');
+      table('decomposition-allocations', multidimensional ? ['Result cell', 'Dimensions', 'Weight', 'Owner / tolerance', 'Evidence'] : historical ? ['Result cell', 'Member', 'Historical', 'Adjustment', 'Effective weight', 'Owner / tolerance', 'Historical evidence'] : ['Result cell', 'Member', 'Weight', 'Owner / tolerance', 'Evidence'], d.allocations.map(function (a) {
+        return multidimensional ? [a.cell_id, dimensions(a.dimensions), a.weight, a.owner + ' / ' + a.tolerance, a.basis.locator + ' · SHA-256 ' + a.basis.sha256] : historical ? [a.cell_id, a.member, a.historical_value, a.adjustment_percent + '%', a.effective_weight, a.owner + ' / ' + a.tolerance, a.basis.locator + ' · SHA-256 ' + a.basis.sha256] : [a.cell_id, a.member, a.weight, a.owner + ' / ' + a.tolerance, a.basis.locator + ' · SHA-256 ' + a.basis.sha256];
       }));
       show('decomposition-lineage', true);
     }
@@ -134,20 +137,39 @@
     message('Loaded version ' + record.version + '.');
   }
   function renderAnalysis(result) {
+    show('analysis-explanation', false);
     $('analysis-context').textContent = result.plan_id + ' · Version ' + result.plan_version + ' · Actuals ' + result.actual_revision + ' · As of ' + result.as_of;
     var findings = $('analysis-findings'); findings.replaceChildren();
+    (result.findings || []).forEach(function (finding) {
+      var card = node('article'), refs = node('div'); card.className = 'pack-page'; refs.className = 'vault-actions';
+      card.append(node('h3', finding.finding_type === 'offset' ? 'Offset across cells' : 'Concentration above threshold'),
+        node('p', finding.narrative), node('p', 'Ratified plan ' + finding.plan_citation.plan_id + ' · Version ' + finding.plan_citation.version));
+      var cells = finding.cells || [finding]; cells.forEach(function (item) {
+        if (item.plan_source) refs.appendChild(link(item.cell_id + ' · Plan', '/analyses/' + result.analysis_hash + '/evidence?side=plan&cell_id=' + encodeURIComponent(item.cell_id)));
+        if (item.actual_source) refs.appendChild(link(item.cell_id + ' · Actuals', '/analyses/' + result.analysis_hash + '/evidence?side=actuals&cell_id=' + encodeURIComponent(item.cell_id)));
+      });
+      card.appendChild(refs); findings.appendChild(card);
+    });
     result.rollups.forEach(function (r) {
-      if (r.offset_detected) findings.appendChild(node('p', r.metric + ': the total is ' + label(r.status).toLowerCase() + ', but its composition differs. Behind: ' + r.behind_cells.join(', ') + '. Ahead: ' + r.ahead_cells.join(', ') + '.'));
+      if (!(result.findings || []).length && r.offset_detected) findings.appendChild(node('p', r.metric + ': the total is ' + label(r.status).toLowerCase() + ', but its composition differs. Behind: ' + r.behind_cells.join(', ') + '. Ahead: ' + r.ahead_cells.join(', ') + '.'));
       if (r.unplanned_actuals.length) findings.appendChild(node('p', r.metric + ': ' + r.unplanned_actuals.length + ' actual cells have no plan target; the rollup remains incomplete.'));
     });
     table('analysis-rollups', ['Metric', 'Target', 'Actual', 'Variance', 'Status', 'Coverage'], result.rollups.map(function (r) {
       return [r.metric + ' (' + r.unit + ')', r.target, r.actual, r.variance, label(r.status), r.measured_cells + ' / ' + r.planned_cells];
     }));
-    table('analysis-cells', ['Cell / dimensions', 'Owner', 'Target', 'Actual', 'Variance', 'Status', 'Evidence'], result.cells.map(function (c) {
-      var refs = node('div');
+    table('analysis-cells', ['Cell / dimensions', 'Owner', 'Target', 'Actual', 'Variance', 'Status', 'Evidence', 'Explanation'], result.cells.map(function (c) {
+      var refs = node('div'), explain = node('button', 'Explain'); explain.type = 'button'; explain.className = 'secondary';
       refs.appendChild(link('Plan', '/analyses/' + result.analysis_hash + '/evidence?side=plan&cell_id=' + encodeURIComponent(c.cell_id)));
       if (c.actual_source) { refs.appendChild(node('span', ' · ')); refs.appendChild(link('Actuals', '/analyses/' + result.analysis_hash + '/evidence?side=actuals&cell_id=' + encodeURIComponent(c.cell_id))); }
-      return [c.cell_id + ' · ' + dimensions(c.dimensions), c.owner, c.target + ' ' + c.unit, c.actual, c.variance, label(c.status), refs];
+      explain.addEventListener('click', function () { action(async function () {
+        var detail = await request('/analyses/' + result.analysis_hash + '/explain?cell_id=' + encodeURIComponent(c.cell_id));
+        $('analysis-explanation-answer').textContent = detail.answer;
+        $('analysis-explanation-citation').textContent = 'Ratified plan ' + detail.plan_citation.plan_id + ' · Version ' + detail.plan_citation.version + ' · ' + detail.plan_citation.digest;
+        var evidence = $('analysis-explanation-evidence'); evidence.replaceChildren(); detail.evidence.forEach(function (citation) {
+          evidence.appendChild(link(citation.side === 'plan' ? 'Open plan evidence' : 'Open actual evidence', '/analyses/' + result.analysis_hash + '/evidence?side=' + citation.side + '&cell_id=' + encodeURIComponent(c.cell_id)));
+        }); show('analysis-explanation', true); $('analysis-explanation').focus();
+      }); });
+      return [c.cell_id + ' · ' + dimensions(c.dimensions), c.owner, c.target + ' ' + c.unit, c.actual, c.variance, label(c.status), refs, explain];
     }));
     var url = new URL(window.location.href); url.search = ''; url.searchParams.set('analysis', result.analysis_hash);
     $('saved-link').href = url.pathname + url.search;
@@ -246,6 +268,10 @@
     var result = await request('/actuals', { source_pack_id: $('actual-pack').value.trim(), actuals: await fileJSON('actual-file') });
     await loadCatalog(false); await loadPlan(); $('actual-select').value = result.revision; message('Actual snapshot imported.');
   });
+  window.addEventListener('kyvern-objective-created', function (event) { action(async function () {
+    var result = event.detail; await loadCatalog(false); $('plan-select').value = result.plan_id + ':' + result.version;
+    await loadPlan(); message('Whole-objective proposal created as version ' + result.version + '. An independently authorized reviewer must ratify it.');
+  }); });
   action(async function () {
     await loadCatalog(false);
     var hash = new URL(window.location.href).searchParams.get('analysis');

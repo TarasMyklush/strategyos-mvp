@@ -192,3 +192,8 @@ def test_deterministic_evidence_status_depends_on_resolution_not_citation_count(
     assert 'Traced to source' not in unverified and 'Strong' not in unverified
     assert 'Source missing' in missing
     assert 'Review before use' in model and 'Traced to source' not in model
+
+
+def test_plan_health_exposes_the_granular_intent_drill():
+    source = Path('strategyos_mvp/static/executive.js').read_text()
+    assert 'href="/plan">Open intent and granular drift</a>' in source

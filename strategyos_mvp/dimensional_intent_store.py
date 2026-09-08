@@ -153,8 +153,9 @@ def _validate_structure_binding(conn, tenant, plan, *, require_current=True):
     units = {unit.key for unit in configuration.business_units}
     if plan.business_unit not in units:
         raise ValueError('Plan business-unit scope is not present in the approved organization structure.')
-    configured = {dimension.key: {member.key for member in dimension.members}
-                  for dimension in configuration.dimensions}
+    definitions = {dimension.key: dimension for dimension in configuration.dimensions}
+    configured = {key: {member.key for member in definition.members}
+                  for key, definition in definitions.items()}
     if set(plan.dimensions) != set(configured):
         raise ValueError('Plan dimensions must exactly match the approved organization structure.')
     for dimension, members in plan.dimensions.items():
@@ -162,6 +163,21 @@ def _validate_structure_binding(conn, tenant, plan, *, require_current=True):
         if unknown:
             raise ValueError(dimension + ' contains members outside the approved organization structure: '
                              + ', '.join(unknown) + '.')
+    for dimension, definition in definitions.items():
+        parents = {member.key: member.parent for member in definition.members}
+        groups = {}
+        for cell in plan.cells:
+            scope = (cell.metric, tuple(sorted((key, value) for key, value in cell.dimensions.items()
+                                               if key != dimension)))
+            groups.setdefault(scope, set()).add(cell.dimensions[dimension])
+        for members in groups.values():
+            for member in members:
+                ancestor = parents.get(member)
+                while ancestor:
+                    if ancestor in members:
+                        raise ValueError('Plan cells cannot mix parent and child members of dimension '
+                                         + dimension + ' in the same scope.')
+                    ancestor = parents.get(ancestor)
     return {'status': 'current' if latest_approved == binding.version else 'superseded',
             'config_id': binding.config_id, 'version': binding.version,
             'digest': binding.digest, 'business_unit': plan.business_unit}
@@ -241,6 +257,7 @@ def create_decomposition(principal, plan_id, version, request):
         latest = conn.execute('''SELECT COALESCE(MAX(version),0) FROM strategyos_intent_plan_versions
             WHERE tenant_key=%s AND plan_id=%s''', (tenant, plan_id)).fetchone()[0]
         proposal = decompose(Plan.model_validate(parent['payload']), request, next_version=latest + 1)
+        _validate_existing_structure(conn, tenant, proposal)
         payload = _plan_payload(proposal)
         existing = _row(conn, '''SELECT * FROM strategyos_intent_plan_versions
             WHERE tenant_key=%s AND plan_id=%s
@@ -309,6 +326,51 @@ def history_candidates(principal, plan_id, version, parent_cell_id, split_dimens
     }
 
 
+def create_objective_decomposition(principal, plan_id, version, request):
+    """Create one immutable whole-objective proposal across multiple dimensions."""
+    from .plan_decomposition import decompose_objective
+    tenant, actor = _scope(principal, IMPORT_ROLES)
+    _key(plan_id)
+    with _connection() as conn:
+        _lock(conn, tenant, plan_id)
+        parent = _plan(conn, tenant, plan_id, version)
+        _validate_existing_structure(conn, tenant, Plan.model_validate(parent['payload']))
+        if parent['digest'] != request.parent_digest:
+            raise Conflict('Parent plan fingerprint differs from the version reviewed.')
+        approval = conn.execute('''SELECT 1 FROM strategyos_intent_ratifications
+            WHERE tenant_key=%s AND plan_id=%s AND version=%s''', (tenant, plan_id, version)).fetchone()
+        if not approval:
+            raise Conflict('Only a ratified plan version can be decomposed.')
+        newest_ratified = conn.execute('''SELECT COALESCE(MAX(version),0) FROM strategyos_intent_ratifications
+            WHERE tenant_key=%s AND plan_id=%s''', (tenant, plan_id)).fetchone()[0]
+        if newest_ratified != version:
+            raise Conflict('A newer ratified plan version exists; decompose that version instead.')
+        latest = conn.execute('''SELECT COALESCE(MAX(version),0) FROM strategyos_intent_plan_versions
+            WHERE tenant_key=%s AND plan_id=%s''', (tenant, plan_id)).fetchone()[0]
+        proposal = decompose_objective(Plan.model_validate(parent['payload']), request, next_version=latest + 1)
+        _validate_existing_structure(conn, tenant, proposal)
+        payload = _plan_payload(proposal)
+        existing = _row(conn, '''SELECT * FROM strategyos_intent_plan_versions
+            WHERE tenant_key=%s AND plan_id=%s AND payload->'derivation'->>'request_hash'=%s''',
+            (tenant, plan_id, payload['derivation']['request_hash']))
+        if existing:
+            _checked(existing); _sources(principal, existing, kind='plan')
+            existing_approval = conn.execute('''SELECT 1 FROM strategyos_intent_ratifications
+                WHERE tenant_key=%s AND plan_id=%s AND version=%s''',
+                (tenant, plan_id, existing['version'])).fetchone()
+            return {**_public(existing), 'governance_status': 'ratified' if existing_approval else 'proposed',
+                    'created_from': {'plan_id': plan_id, 'version': version, 'digest': parent['digest']}}
+        encoded, digest = _encode(payload), fingerprint(payload)
+        _sources(principal, {'payload': payload, 'source_pack_id': parent['source_pack_id']}, kind='plan')
+        conn.execute('''INSERT INTO strategyos_intent_plan_versions
+            (tenant_key,plan_id,version,source_pack_id,payload,digest,imported_by)
+            VALUES (%s,%s,%s,%s,%s::jsonb,%s,%s)''',
+            (tenant, plan_id, proposal.version, parent['source_pack_id'], encoded, digest, actor))
+        created = _plan(conn, tenant, plan_id, proposal.version)
+        return {**_public(created), 'governance_status': 'proposed', 'created_from': {
+            'plan_id': plan_id, 'version': version, 'digest': parent['digest']}}
+
+
 def create_history_decomposition(principal, plan_id, version, request):
     """Create one immutable proposal from a prior actual mix plus explicit adjustments."""
     from .plan_decomposition import decompose_from_history
@@ -338,6 +400,7 @@ def create_history_decomposition(principal, plan_id, version, request):
             Plan.model_validate(parent['payload']), Actuals.model_validate(actual_row['payload']), request,
             next_version=latest + 1, historical_digest=actual_row['digest'],
             historical_source_pack_id=actual_row['source_pack_id'])
+        _validate_existing_structure(conn, tenant, proposal)
         payload = _plan_payload(proposal)
         existing = _row(conn, '''SELECT * FROM strategyos_intent_plan_versions
             WHERE tenant_key=%s AND plan_id=%s AND payload->'derivation'->>'request_hash'=%s''',
@@ -550,6 +613,38 @@ def read_analysis(principal, analysis_id):
     if result.get('analysis_hash') != analysis_id or fingerprint({k:v for k,v in result.items() if k != 'analysis_hash'}) != analysis_id:
         raise Unavailable('Stored analysis failed its integrity check.')
     return result
+
+
+def explain_cell(principal, analysis_id, cell_id):
+    """Return a deterministic assistant-ready explanation over one saved cell."""
+    result = read_analysis(principal, analysis_id)
+    cell = next((item for item in result['cells'] if item['cell_id'] == cell_id), None)
+    if cell is None:
+        raise NotFound('Analysis cell not found.')
+    dimensions = ', '.join(key + '=' + value for key, value in sorted(cell['dimensions'].items()))
+    if cell['actual'] is None:
+        statement = ('No measured actual is available for ' + dimensions + '; the ratified target is ' +
+                     cell['target'] + ' ' + cell['unit'] + '.')
+    else:
+        statement = (dimensions + ' is ' + cell['status'].replace('_', ' ') + ': actual ' + cell['actual'] +
+                     ' ' + cell['unit'] + ' versus ratified target ' + cell['target'] + ', a variance of ' +
+                     cell['variance'] + '. Accountable owner: ' + cell['owner'] + '.')
+    citations = [{"side": "plan", **cell['plan_source']}]
+    if cell['actual_source']:
+        citations.append({"side": "actuals", **cell['actual_source']})
+    related = [finding['finding_id'] for finding in result.get('findings', [])
+               if cell_id == finding.get('cell_id') or any(item.get('cell_id') == cell_id
+                                                            for item in finding.get('cells', []))]
+    return {
+        'analysis_id': analysis_id, 'cell_id': cell_id, 'answer': statement,
+        'facts': {key: cell.get(key) for key in ('metric', 'dimensions', 'owner', 'unit', 'target', 'tolerance',
+                                                 'actual', 'variance', 'variance_percent', 'status')},
+        'plan_citation': {'plan_id': result['plan_id'], 'version': result['plan_version'],
+                          'digest': result['plan_import_digest'], 'ratified_by': result['ratification']['approved_by'],
+                          'ratified_at': result['ratification']['approved_at']},
+        'evidence': citations, 'related_findings': related,
+        'assurance': result['evidence_assurance'],
+    }
 
 
 def catalog(principal, offset=0, limit=25):

@@ -57,6 +57,50 @@ class HistoricalDecompositionRequest(Contract):
         return self
 
 
+class ObjectiveAllocation(Contract):
+    cell_id: Name
+    dimensions: dict[Name, Name] = Field(min_length=1)
+    weight: Amount = Field(gt=0)
+    owner: Name
+    tolerance: Amount = Field(ge=0)
+    basis_cell_id: Name
+
+
+class ObjectiveDecompositionRequest(Contract):
+    parent_digest: str = Field(pattern=r"^[a-f0-9]{64}$")
+    metric: Name
+    split_dimensions: list[Name] = Field(min_length=2, max_length=20)
+    decimal_places: int = Field(default=2, ge=0, le=12, strict=True)
+    allocations: list[ObjectiveAllocation] = Field(min_length=2, max_length=5000)
+
+    @model_validator(mode="after")
+    def unique_outputs(self):
+        if len(self.split_dimensions) != len(set(self.split_dimensions)):
+            raise ValueError("Split dimensions must be unique.")
+        ids = [item.cell_id for item in self.allocations]
+        tuples = [tuple(sorted(item.dimensions.items())) for item in self.allocations]
+        if len(ids) != len(set(ids)) or len(tuples) != len(set(tuples)):
+            raise ValueError("Allocation cell IDs and dimensional tuples must be unique.")
+        return self
+
+
+def _allocate(total, weighted, decimal_places):
+    quantum = Decimal(1).scaleb(-decimal_places)
+    total_weight = sum((item.weight for item in weighted), Decimal(0))
+    with localcontext() as context:
+        context.prec = 80
+        if total.quantize(quantum) != total:
+            raise ValueError("Parent target has more decimal places than the requested precision.")
+        amounts, assigned = [], Decimal(0)
+        for item in weighted[:-1]:
+            value = (total * item.weight / total_weight).quantize(quantum, rounding=ROUND_DOWN)
+            amounts.append(value); assigned += value
+        amounts.append(total - assigned)
+    if any(value.quantize(quantum) != value for value in amounts):
+        raise ValueError("Allocation remainder cannot be represented at the requested precision.")
+    return amounts
+
+
 def decompose(parent: Plan, request: DecompositionRequest, *, next_version: int) -> Plan:
     """Return a proposal that exactly reconciles to its ratified parent plan.
 
@@ -75,22 +119,8 @@ def decompose(parent: Plan, request: DecompositionRequest, *, next_version: int)
         raise ValueError("A decomposed child must use a new cell ID.")
     if next_version <= parent.version:
         raise ValueError("A decomposition must create a later plan version.")
-    quantum = Decimal(1).scaleb(-request.decimal_places)
     ordered = sorted(request.allocations, key=lambda item: item.cell_id)
-    total_weight = sum((item.weight for item in ordered), Decimal(0))
-    with localcontext() as context:
-        context.prec = 80
-        if parent_cell.target.quantize(quantum) != parent_cell.target:
-            raise ValueError("Parent target has more decimal places than the requested precision.")
-        amounts = []
-        assigned = Decimal(0)
-        for item in ordered[:-1]:
-            value = (parent_cell.target * item.weight / total_weight).quantize(quantum, rounding=ROUND_DOWN)
-            amounts.append(value)
-            assigned += value
-        amounts.append(parent_cell.target - assigned)
-    if any(value.quantize(quantum) != value for value in amounts):
-        raise ValueError("Allocation remainder cannot be represented at the requested precision.")
+    amounts = _allocate(parent_cell.target, ordered, request.decimal_places)
 
     payload = parent.model_dump(mode="json")
     payload["version"] = next_version
@@ -134,6 +164,65 @@ def decompose(parent: Plan, request: DecompositionRequest, *, next_version: int)
             }
             for item in ordered
         ],
+    }
+    payload["derivation"]["request_hash"] = fingerprint(payload["derivation"])
+    return Plan.model_validate(payload)
+
+
+def decompose_objective(parent: Plan, request: ObjectiveDecompositionRequest, *, next_version: int) -> Plan:
+    """Replace one complete metric objective with accountable multidimensional cells."""
+    if parent.status != "proposed":
+        raise ValueError("Decomposition requires the stored ratified plan payload.")
+    if request.metric not in parent.metrics:
+        raise ValueError("The objective metric is not configured on the parent plan.")
+    if any(name not in parent.dimensions for name in request.split_dimensions):
+        raise ValueError("Every split dimension must be configured on the parent plan.")
+    if next_version <= parent.version:
+        raise ValueError("A decomposition must create a later plan version.")
+    existing_ids = {cell.id for cell in parent.cells}
+    parent_cells = {cell.id: cell for cell in parent.cells if cell.metric == request.metric}
+    if not parent_cells:
+        raise ValueError("The objective has no parent cells.")
+    if any(item.cell_id in existing_ids for item in request.allocations):
+        raise ValueError("Objective decomposition cells must use new cell IDs.")
+    expected_dimensions = set(parent.dimensions)
+    for item in request.allocations:
+        if set(item.dimensions) != expected_dimensions:
+            raise ValueError("Every objective allocation must supply the exact configured dimensions.")
+        if item.basis_cell_id not in parent_cells:
+            raise ValueError("Every allocation basis must name a parent cell for the selected objective.")
+    for dimension in expected_dimensions - set(request.split_dimensions):
+        if len({item.dimensions[dimension] for item in request.allocations}) != 1:
+            raise ValueError("Changing a dimension requires declaring it as a split dimension: " + dimension + ".")
+    for dimension in request.split_dimensions:
+        if len({item.dimensions[dimension] for item in request.allocations}) < 2:
+            raise ValueError("Every declared split dimension must contain at least two allocation members: " + dimension + ".")
+    ordered = sorted(request.allocations, key=lambda item: item.cell_id)
+    total = parent.metrics[request.metric].planned_total
+    amounts = _allocate(total, ordered, request.decimal_places)
+    payload = parent.model_dump(mode="json")
+    payload.update(version=next_version, status="proposed", ratified_by=None, ratified_on=None, ratification=None)
+    payload["cells"] = [cell for cell in payload["cells"] if cell["metric"] != request.metric]
+    lineage = []
+    for item, target in zip(ordered, amounts):
+        basis = parent_cells[item.basis_cell_id].source.model_dump(mode="json")
+        payload["cells"].append({
+            "id": item.cell_id, "metric": request.metric, "dimensions": item.dimensions,
+            "owner": item.owner, "target": str(target), "tolerance": str(item.tolerance), "source": basis,
+        })
+        lineage.append({
+            "cell_id": item.cell_id, "dimensions": item.dimensions, "weight": str(item.weight),
+            "owner": item.owner, "tolerance": str(item.tolerance), "basis": basis, "target_source": basis,
+        })
+    for dimension in payload["dimensions"]:
+        payload["dimensions"][dimension] = sorted(set(payload["dimensions"][dimension]) |
+                                                   {item.dimensions[dimension] for item in ordered})
+    payload["derivation"] = {
+        "kind": "decomposition", "engine_version": "weighted-multidimensional-allocation.v1",
+        "parent_plan_id": parent.plan_id, "parent_version": parent.version,
+        "parent_digest": request.parent_digest, "parent_metric": request.metric,
+        "split_dimensions": request.split_dimensions, "decimal_places": request.decimal_places,
+        "remainder_rule": "final_lexicographic_cell", "allocations": lineage,
     }
     payload["derivation"]["request_hash"] = fingerprint(payload["derivation"])
     return Plan.model_validate(payload)
@@ -206,7 +295,7 @@ def decompose_from_history(parent: Plan, actuals: Actuals, request: HistoricalDe
         decimal_places=request.decimal_places,
         allocations=explicit,
     ), next_version=next_version)
-    payload = proposal.model_dump(mode="json")
+    payload = proposal.model_dump(mode="json", exclude_none=True)
     derivation = payload["derivation"]
     derivation.update({
         "engine_version": "history-adjusted-allocation.v1",

@@ -62,7 +62,8 @@ class Cell(Contract):
 
 class DecompositionAllocation(Contract):
     cell_id: Name
-    member: Name
+    member: Name | None = None
+    dimensions: dict[Name, Name] | None = None
     weight: Amount = Field(gt=0)
     owner: Name
     tolerance: Amount = Field(ge=0)
@@ -72,28 +73,60 @@ class DecompositionAllocation(Contract):
     adjustment_percent: Amount | None = None
     effective_weight: Amount | None = None
 
+    @model_validator(mode="after")
+    def one_dimension_shape(self):
+        if (self.member is None) == (self.dimensions is None):
+            raise ValueError("Decomposition allocation requires either one member or a dimensional tuple.")
+        return self
+
 
 class PlanDerivation(Contract):
     kind: Literal["decomposition"]
-    engine_version: Literal["weighted-allocation.v1", "history-adjusted-allocation.v1"]
+    engine_version: Literal["weighted-allocation.v1", "history-adjusted-allocation.v1",
+                            "weighted-multidimensional-allocation.v1"]
     parent_plan_id: Name
     parent_version: int = Field(ge=1, strict=True)
     parent_digest: str = Field(pattern=r"^[a-f0-9]{64}$")
-    parent_cell_id: Name
-    split_dimension: Name
+    parent_cell_id: Name | None = None
+    parent_metric: Name | None = None
+    split_dimension: Name | None = None
+    split_dimensions: list[Name] | None = None
     decimal_places: int = Field(ge=0, le=12, strict=True)
     remainder_rule: Literal["final_lexicographic_cell"]
-    allocations: list[DecompositionAllocation] = Field(min_length=2, max_length=500)
+    allocations: list[DecompositionAllocation] = Field(min_length=2, max_length=5000)
     request_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
     historical_actual_revision: Name | None = None
     historical_actual_digest: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     historical_source_pack_id: Name | None = None
+
+    @model_validator(mode="after")
+    def derivation_shape(self):
+        multi = self.engine_version == "weighted-multidimensional-allocation.v1"
+        if multi:
+            if (not self.parent_metric or not self.split_dimensions or len(self.split_dimensions) < 2 or
+                    self.parent_cell_id is not None or self.split_dimension is not None):
+                raise ValueError("Multidimensional decomposition requires a parent metric and at least two split dimensions.")
+            if len(self.split_dimensions) != len(set(self.split_dimensions)):
+                raise ValueError("Multidimensional split dimensions must be unique.")
+            if any(item.dimensions is None for item in self.allocations):
+                raise ValueError("Multidimensional decomposition requires a dimensional tuple for every allocation.")
+        elif (not self.parent_cell_id or not self.split_dimension or self.parent_metric is not None or
+              self.split_dimensions is not None or any(item.member is None for item in self.allocations)):
+            raise ValueError("Single-dimension decomposition requires one parent cell and split member per allocation.")
+        return self
 
 
 class StructureBinding(Contract):
     config_id: Name
     version: int = Field(ge=1, strict=True)
     digest: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
+class ConcentrationPolicy(Contract):
+    policy_id: Name
+    metric: Name
+    dimension: Name
+    threshold_percent: Amount = Field(gt=0, lt=100)
 
 
 class Plan(Contract):
@@ -112,6 +145,7 @@ class Plan(Contract):
     structure: StructureBinding | None = None
     dimensions: dict[Name, list[Name]] = Field(min_length=1)
     metrics: dict[Name, Metric] = Field(min_length=1)
+    concentration_policies: list[ConcentrationPolicy] = Field(default_factory=list, max_length=50)
     cells: list[Cell] = Field(min_length=1, max_length=100000)
     derivation: PlanDerivation | None = None
 
@@ -128,6 +162,12 @@ class Plan(Contract):
         for members in self.dimensions.values():
             if not members or len(members) != len(set(members)):
                 raise ValueError("Dimension members must be nonempty and unique.")
+        policies = [(policy.metric, policy.dimension) for policy in self.concentration_policies]
+        if len(policies) != len(set(policies)):
+            raise ValueError("Concentration policies must be unique by metric and dimension.")
+        for policy in self.concentration_policies:
+            if policy.metric not in self.metrics or policy.dimension not in self.dimensions:
+                raise ValueError("Concentration policy references an unknown metric or dimension.")
         ids, keys = set(), set()
         totals = {metric: Decimal(0) for metric in self.metrics}
         with localcontext() as ctx:
@@ -162,9 +202,10 @@ class Plan(Contract):
                 raise ValueError("Decomposition lineage references missing result cells.")
             for item in self.derivation.allocations:
                 cell = cells[item.cell_id]
-                if (cell.dimensions.get(self.derivation.split_dimension) != item.member or
-                        cell.owner != item.owner or cell.tolerance != item.tolerance or
-                        cell.source != (item.target_source or item.basis)):
+                expected_dimensions = item.dimensions if item.dimensions is not None else {
+                    **cell.dimensions, self.derivation.split_dimension: item.member}
+                if (cell.dimensions != expected_dimensions or cell.owner != item.owner or
+                        cell.tolerance != item.tolerance or cell.source != (item.target_source or item.basis)):
                     raise ValueError("Decomposition lineage differs from its result cells.")
                 if history and not all(value is not None for value in
                                        (item.historical_value, item.adjustment_percent, item.effective_weight)):
@@ -269,6 +310,7 @@ def evaluate(plan: Plan, actuals: Actuals, *, source_root: Path, company_id: str
             definition = plan.metrics[cell.metric]
             rows.append({"cell_id": cell.id, "metric": cell.metric, "dimensions": cell.dimensions,
                 "owner": cell.owner, "unit": definition.unit, "target": str(cell.target),
+                "tolerance": str(cell.tolerance),
                 "actual": str(value) if value is not None else None,
                 "variance": str(delta) if delta is not None else None,
                 "variance_percent": str(delta / abs(cell.target) * 100) if delta is not None and cell.target else None,
@@ -298,12 +340,74 @@ def evaluate(plan: Plan, actuals: Actuals, *, source_root: Path, company_id: str
         members.sort()
     actual_payload = actuals.model_dump(mode="json")
     actual_payload["observations"] = sorted(actual_payload["observations"], key=lambda o: cell_key(o["metric"], o["dimensions"]))
-    result = {"schema_version": 1, "formula_version": "cell-variance.v1", "company_id": company_id,
+    plan_hash, actual_hash = fingerprint(plan_payload), fingerprint(actual_payload)
+    findings = []
+    for rollup in rollups:
+        if not rollup["offset_detected"]:
+            continue
+        selected = [row for row in rows if row["metric"] == rollup["metric"] and row["status"] in {"behind", "ahead"}]
+        behind_delta = sum((Decimal(row["variance"]) for row in selected if row["status"] == "behind"), Decimal(0))
+        ahead_delta = sum((Decimal(row["variance"]) for row in selected if row["status"] == "ahead"), Decimal(0))
+        identity = {"type": "offset", "metric": rollup["metric"], "cells": [row["cell_id"] for row in selected],
+                    "plan_hash": plan_hash, "actuals_hash": actual_hash}
+        findings.append({
+            "finding_id": fingerprint(identity), "finding_type": "offset", "metric": rollup["metric"],
+            "status": "material_composition_drift", "cells": [{
+                "cell_id": row["cell_id"], "dimensions": row["dimensions"], "status": row["status"],
+                "variance": row["variance"], "plan_source": row["plan_source"], "actual_source": row["actual_source"],
+            } for row in selected],
+            "arithmetic": {"actual_minus_plan_behind": str(behind_delta),
+                           "actual_minus_plan_ahead": str(ahead_delta),
+                           "net_variance": rollup["variance"]},
+            "plan_citation": {"plan_id": plan.plan_id, "version": plan.version, "digest": plan_hash},
+            "narrative": (rollup["metric"] + " is " + rollup["status"].replace('_', ' ') +
+                          " at total, but " + str(len(rollup["behind_cells"])) + " cell(s) are behind and " +
+                          str(len(rollup["ahead_cells"])) + " are ahead. Actual minus plan is " +
+                          str(behind_delta) + " behind and " + str(ahead_delta) + " ahead; net " +
+                          str(rollup["variance"]) + ". Compared with ratified plan " + plan.plan_id +
+                          " version " + str(plan.version) + "."),
+        })
+    for policy in plan.concentration_policies:
+        groups = {}
+        for row in rows:
+            if row["metric"] != policy.metric or row["actual"] is None or Decimal(row["actual"]) <= 0:
+                continue
+            scope = tuple(sorted((key, value) for key, value in row["dimensions"].items()
+                                 if key != policy.dimension))
+            groups.setdefault(scope, []).append(row)
+        for scope, candidates in sorted(groups.items()):
+            if len(candidates) < 2:
+                continue
+            total = sum((Decimal(row["actual"]) for row in candidates), Decimal(0))
+            if total <= 0:
+                continue
+            top = sorted(candidates, key=lambda row: (-Decimal(row["actual"]), row["cell_id"]))[0]
+            share = Decimal(top["actual"]) / total * Decimal(100)
+            if share <= policy.threshold_percent:
+                continue
+            identity = {"type": "concentration", "policy": policy.policy_id, "scope": scope,
+                        "cell": top["cell_id"], "plan_hash": plan_hash,
+                        "actuals_hash": actual_hash}
+            findings.append({
+                "finding_id": fingerprint(identity), "finding_type": "concentration", "metric": policy.metric,
+                "status": "above_threshold", "policy_id": policy.policy_id,
+                "dimension": policy.dimension, "member": top["dimensions"][policy.dimension],
+                "scope": dict(scope), "cell_id": top["cell_id"], "actual": top["actual"],
+                "scope_total": str(total), "share_percent": str(share),
+                "threshold_percent": str(policy.threshold_percent),
+                "plan_source": top["plan_source"], "actual_source": top["actual_source"],
+                "plan_citation": {"plan_id": plan.plan_id, "version": plan.version, "digest": plan_hash},
+                "narrative": (top["dimensions"][policy.dimension] + " provides " + str(share) + "% of " +
+                              policy.metric + " for this cell group, above the approved " +
+                              str(policy.threshold_percent) + "% threshold. Compared with ratified plan " +
+                              plan.plan_id + " version " + str(plan.version) + "."),
+            })
+    result = {"schema_version": 1, "formula_version": "cell-variance.v2", "company_id": company_id,
         "plan_id": plan.plan_id, "plan_version": plan.version, "period": plan.period.model_dump(mode="json"),
-        "as_of": as_of.isoformat(), "plan_hash": fingerprint(plan_payload), "actuals_hash": fingerprint(actual_payload),
+        "as_of": as_of.isoformat(), "plan_hash": plan_hash, "actuals_hash": actual_hash,
         "approval_status": plan.status, "approval_basis": "imported_metadata_not_authorization_verified",
         "comparison_basis": "imported_ratified_plan" if plan.status == "ratified" else "proposed_plan_preview",
-        "cells": rows, "rollups": rollups}
+        "cells": rows, "rollups": rollups, "findings": findings}
     result["analysis_hash"] = fingerprint(result)
     return result
 

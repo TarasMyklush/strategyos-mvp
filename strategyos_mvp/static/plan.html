@@ -890,6 +890,22 @@ button:disabled { opacity: .5; cursor: not-allowed; }
       <div id="history-allocations" class="vault-table" hidden tabindex="0" role="region" aria-label="Historical allocation adjustments"></div>
       <button id="history-create" type="submit" hidden>Create history-based proposal</button>
     </form>
+    <details style="margin-top:24px"><summary>Decompose a whole objective across dimensions</summary>
+      <p class="vault-note">Allocate the complete approved metric across two or more configured dimensions. Every output cell receives an owner, tolerance and evidence basis; the final cell receives the disclosed rounding remainder.</p>
+      <form id="objective-decomposition-form">
+        <div class="vault-controls">
+          <label class="vault-field">Objective metric<select id="objective-decomposition-metric" required></select></label>
+          <label class="vault-field">Decimal places<input id="objective-decomposition-precision" type="number" value="2" min="0" max="12" required></label>
+        </div>
+        <fieldset id="objective-decomposition-dimensions" class="pack-page"><legend>Dimensions to decompose</legend></fieldset>
+        <div id="objective-decomposition-rows"></div>
+        <div class="vault-actions">
+          <button id="objective-decomposition-add" type="button" class="secondary">Add accountable cell</button>
+          <button type="submit">Create objective proposal</button>
+        </div>
+        <p id="objective-decomposition-status" class="vault-message" role="status" aria-live="polite"></p>
+      </form>
+    </details>
     <details style="margin-top:24px"><summary>Use approved explicit weights</summary>
     <form id="decomposition-form">
       <label class="vault-field" style="margin-top:16px">Allocation rows (JSON)<textarea id="decomposition-rows" rows="10" required spellcheck="false" aria-describedby="decomposition-help">[
@@ -997,6 +1013,12 @@ button:disabled { opacity: .5; cursor: not-allowed; }
     <h2>Saved drift analysis</h2><p id="analysis-context"></p><div id="analysis-findings"></div>
     <div id="analysis-rollups" class="vault-table" tabindex="0" role="region" aria-label="Metric totals and coverage"></div>
     <div id="analysis-cells" class="vault-table" tabindex="0" role="region" aria-label="Cell drift and evidence"></div>
+    <div id="analysis-explanation" class="pack-page" hidden tabindex="-1">
+      <h3>Deterministic cell explanation</h3>
+      <p id="analysis-explanation-answer"></p>
+      <p id="analysis-explanation-citation" class="vault-note"></p>
+      <div id="analysis-explanation-evidence" class="vault-actions"></div>
+    </div>
     <p class="vault-note">These figures are preserved with their approved plan and actual revision. Source hashes verify file integrity; they do not independently certify each reported value.</p>
     <a id="saved-link">Reopen this saved analysis</a>
   </div>
@@ -1041,5 +1063,6 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 <script src="/static/intent_vault.js" defer></script>
 <script src="/static/advisor_console.js" defer></script>
 <script src="/static/structure_console.js" defer></script>
+<script src="/static/objective_decomposition.js" defer></script>
 </body>
 </html>

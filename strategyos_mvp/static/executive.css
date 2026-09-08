@@ -10128,6 +10128,7 @@ body {
   font: inherit;
   font-size: 12px;
   cursor: pointer;
+  text-decoration: none;
 }
 .hero-briefing {
   display: grid;
