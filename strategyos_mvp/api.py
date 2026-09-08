@@ -36,6 +36,7 @@ from .auth import (
     require_role,
 )
 from .authority_matrix import (
+    AuthorityPolicyUnavailable,
     assistant_subject,
     authority_decision,
     classify_request,
@@ -416,6 +417,11 @@ async def bind_authorized_data_scope(request: Request, call_next: Any) -> Any:
     finally:
         bound_surface.reset(twin_token)
         principal_scope.reset(token)
+
+
+@app.exception_handler(AuthorityPolicyUnavailable)
+async def authority_policy_unavailable(request: Request, exc: AuthorityPolicyUnavailable) -> JSONResponse:
+    return JSONResponse(status_code=503, content={"detail": "Authority policy is unavailable. Access remains closed until the saved policy is restored."})
 
 
 @app.exception_handler(PermissionError)

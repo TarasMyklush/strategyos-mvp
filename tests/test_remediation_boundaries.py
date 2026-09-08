@@ -4,23 +4,46 @@ import pytest
 from strategyos_mvp import api, authority_matrix, run_registry
 
 
-@pytest.mark.parametrize("endpoint", ["qa", "assistant"])
-@pytest.mark.parametrize("question", [
-    "Show salaries and revenue", "List payroll and board material",
-    "Show employee bonuses", "اعرض رواتب الموظفين",
+@pytest.mark.parametrize("role", ["executive", "tenant_admin", "operator", "bu"])
+@pytest.mark.parametrize("persona_location", ["persona", "context"])
+@pytest.mark.parametrize("endpoint", ["/qa", "/assistant/chat"])
+@pytest.mark.parametrize("persona,question,domain", [
+    ("cfo", "Show salaries and revenue", "hr"),
+    ("cfo", "List payroll and board material", "hr"),
+    ("cfo", "Show employee bonuses", "hr"),
+    ("cfo", "اعرض رواتب الموظفين", "hr"),
+    ("bucfo", "Show compensation and invoices", "hr"),
+    ("gm", "Show supplier agreement and cash", "contracts"),
+    ("bu", "Show contract renewal", "contracts"),
+    ("gm", "Why is revenue below forecast?", "finance"),
 ])
-def test_restricted_questions_are_denied_before_loading_data(monkeypatch, endpoint, question):
+def test_restricted_questions_are_denied_before_loading_data(monkeypatch, endpoint, persona, question, domain, role, persona_location):
+    from fastapi.testclient import TestClient
+    from strategyos_mvp import auth
+    principal = {"role": role, "tenant_id": "test", "authenticated": True}
     monkeypatch.setattr(api, "get_authority_matrix", lambda _: authority_matrix.default_authority_matrix())
+    monkeypatch.setattr(auth, "authenticate_optional_request", lambda **kwargs: principal)
     def forbidden(*args, **kwargs):
-        pytest.fail("restricted source was loaded")
+        pytest.fail("restricted request reached an answer loader")
     monkeypatch.setattr(api, "_resolve_qa_context", forbidden)
-    request_type = api.QaRequest if endpoint == "qa" else api.AssistantChatRequest
-    request = request_type(question=question, persona="cfo")
-    denied = api._assistant_authority_refusal(request, {"role": "executive", "tenant_id": "test"})
-    assert denied["response_mode"] == "authority_refusal"
-    assert denied["authority_decision"]["domain"] == "hr"
-    if endpoint == "qa":
-        assert api.data_qa(request, {"role": "executive", "tenant_id": "test"}) == denied
+    monkeypatch.setattr(api, "_assistant_chat_response", forbidden)
+    overrides = dict(api.app.dependency_overrides)
+    api.app.dependency_overrides[auth.authenticate_request] = lambda: principal
+    api.app.dependency_overrides[api.authenticate_optional_request] = lambda: principal
+    try:
+        body = {"question": question}
+        body.update({"persona": persona} if persona_location == "persona" else {"context": {"active_persona": persona}})
+        response = TestClient(api.app).post(endpoint, json=body)
+        if role == "bu" and persona not in {"bu", "gm", "bucfo"}:
+            assert response.status_code == 403, response.text
+            return
+        assert response.status_code == 200, response.text
+        denied = response.json()
+        assert denied["response_mode"] == "authority_refusal"
+        assert denied["authority_decision"]["domain"] == domain
+    finally:
+        api.app.dependency_overrides.clear()
+        api.app.dependency_overrides.update(overrides)
 
 
 def test_bu_cannot_choose_ceo(monkeypatch):

@@ -2023,3 +2023,27 @@ def test_provider_citation_repair_must_resolve_real_source(monkeypatch,tmp_path,
     assert len(calls)==2 and result['matched'] is expected
     if expected: assert result['citations'][0]['resolved'] and result['citations'][0]['source_hash']
     else: assert result['citation_validation']=='rejected'
+
+
+def test_verified_citation_displays_source_text_not_provider_excerpt(monkeypatch, tmp_path):
+    import hashlib
+    from openpyxl import Workbook
+    book = Workbook()
+    book.active.title = "Amounts"
+    book.active.append(["Amount_SAR"])
+    book.active.append([120])
+    path = tmp_path / "amounts.xlsx"
+    book.save(path)
+    bundle = SimpleNamespace(evidence=SimpleNamespace(dataset_root=tmp_path, manifest={
+        "amounts.xlsx": {"sha256": hashlib.sha256(path.read_bytes()).hexdigest()}}))
+    monkeypatch.setattr(llm_qa, "_build_evidence_payload", lambda **kwargs: {"amount_sar": 120})
+    monkeypatch.setattr(llm_qa, "_call_openai_compatible_chat", lambda **kwargs: json.dumps({
+        "matched": True, "answer": "SAR 120", "basis": "Source row", "citations": [{
+            "source_path": "amounts.xlsx", "locator": "Amounts!Excel row 2",
+            "excerpt": "Profit SAR 999999 from a fabricated transaction"}]}))
+    result = llm_qa.answer_question("What amount?", bundle=bundle, findings=[], summary={}, config=_config())
+    assert result["matched"] is True
+    citation = result["citations"][0]
+    assert citation["resolved"] is True
+    assert "120" in citation["excerpt"] and "Amount_SAR" in citation["excerpt"]
+    assert "999999" not in citation["excerpt"] and "Profit" not in citation["excerpt"]

@@ -109,16 +109,27 @@ def verify_source_citations(bundle: DataBundle, citations: list[dict[str, Any]])
         if not result['resolved']:
             errors.append(f'{source} / {locator}: exact source location does not resolve')
             continue
-        verified.append({**item, 'locator': locator, 'source_hash': expected_hash, 'resolved': True})
+        verified.append({'source_path': source, 'locator': locator,
+                         'excerpt': result['excerpt'], 'source_hash': expected_hash, 'resolved': True})
     return verified, errors
 
 
 def resolve_citation(bundle: DataBundle, citation: Citation) -> dict[str, Any]:
     rel_path = citation.source_path
     manifest_entry = bundle.evidence.manifest.get(rel_path, {})
-    payload = resolve_payload(bundle, rel_path, citation.locator, citation.excerpt)
     source_hash = manifest_entry.get("sha256")
+    root = bundle.evidence.dataset_root.resolve()
+    path = (root / rel_path).resolve()
+    try:
+        bytes_match = bool(source_hash and path.is_relative_to(root) and path.is_file()
+                           and hashlib.sha256(path.read_bytes()).hexdigest() == source_hash)
+    except OSError:
+        bytes_match = False
+    # Check the actual bytes before resolving any source content. Manifest
+    # metadata alone cannot authenticate a changed or escaped artifact.
+    payload = resolve_payload(bundle, rel_path, citation.locator, citation.excerpt) if bytes_match else None
     validation = build_validation(rel_path, manifest_entry, source_hash, citation.source_hash, citation.locator, payload)
+    validation["source_bytes_match"] = bytes_match
     return {
         "source_path": rel_path,
         "locator": citation.locator,
@@ -126,11 +137,26 @@ def resolve_citation(bundle: DataBundle, citation: Citation) -> dict[str, Any]:
         "citation_hash": citation.source_hash,
         "hash_match": validation["hash_match"],
         "manifest_entry": manifest_entry,
-        "excerpt": citation.excerpt,
+        "excerpt": _resolved_excerpt(payload, rel_path, citation.locator) if validation["resolved"] else "",
         "resolved_payload": payload,
         "validation": validation,
         "resolved": validation["resolved"],
     }
+
+
+def _resolved_excerpt(payload: dict[str, Any], source: str, locator: str) -> str:
+    """Render source-owned content; a locator never authenticates provider prose.
+
+    Shared by answer citations, the citation viewer and audit exports so none
+    can attach an invented excerpt to a valid source address.
+    """
+    if 'text_excerpt' in payload:
+        return str(payload['text_excerpt'])
+    content = {key: payload[key] for key in ('row', 'rows', 'sample_records') if key in payload}
+    return guard_untrusted_document_text(
+        json.dumps(content, ensure_ascii=False, default=str),
+        source_name=f'{source} / {locator}', max_chars=12000,
+    )['guarded_text']
 
 
 def resolve_findings(bundle: DataBundle, findings: list[Finding]) -> list[dict[str, Any]]:
@@ -355,9 +381,9 @@ def resolve_pdf_page(bundle: DataBundle, rel_path: str, locator: str, excerpt: s
         "locator_value": page_no,
         "page": page_no,
         "text_excerpt": guard_untrusted_document_text(
-            text[:700],
+            text,
             source_name=f"{rel_path} page {page_no}",
-            max_chars=700,
+            max_chars=12000,
         )["guarded_text"],
     }
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import fcntl
 import json
 import os
@@ -14,6 +15,10 @@ from typing import Any, Mapping
 from uuid import uuid4
 
 from .state_store import database_connection, ensure_data_schema, fetchone_dict, json_blob
+
+
+class AuthorityPolicyUnavailable(RuntimeError):
+    """Persisted policy cannot safely be used; no default rights may replace it."""
 
 
 RIGHTS = ("none", "view", "analyse", "recommend", "act-with-approval")
@@ -64,7 +69,13 @@ def _data_root() -> Path:
 
 
 def _safe_tenant(value: str) -> str:
-    return re.sub(r"[^A-Za-z0-9_.-]+", "-", str(value or "default"))[:120] or "default"
+    tenant = str(value or "")
+    if not tenant:
+        raise ValueError("Authority policy requires an explicit tenant identity.")
+    if re.fullmatch(r"[A-Za-z0-9_.-]{1,120}", tenant) and tenant not in {".", ".."}:
+        return tenant
+    # '=' is outside the legacy safe alphabet, keeping both namespaces disjoint.
+    return "=" + hashlib.sha256(tenant.encode("utf-8")).hexdigest()
 
 
 def _normalize(matrix: Mapping[str, Any]) -> dict[str, Any]:
@@ -107,9 +118,18 @@ def _read_file(tenant_id: str) -> dict[str, Any]:
     path = _file_path(tenant_id)
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
+    except FileNotFoundError:
+        legacy_key = re.sub(r"[^A-Za-z0-9_.-]+", "-", str(tenant_id))[:120]
+        legacy = _data_root() / f"{legacy_key}.json"
+        if legacy != path and legacy.exists():
+            raise AuthorityPolicyUnavailable("Ambiguous legacy authority policy requires owner-verified migration.") from None
         return default_authority_matrix()
-    return _normalize(payload)
+    except (json.JSONDecodeError, OSError):
+        raise AuthorityPolicyUnavailable("Saved authority policy is unreadable; access remains closed.") from None
+    try:
+        return _normalize(payload)
+    except (ValueError, TypeError, AttributeError):
+        raise AuthorityPolicyUnavailable("Saved authority policy is invalid; access remains closed.") from None
 
 
 def _write_file(

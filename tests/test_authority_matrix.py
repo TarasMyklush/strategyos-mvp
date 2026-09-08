@@ -104,3 +104,41 @@ def test_default_store_uses_writable_workspace_root(tmp_path, monkeypatch) -> No
     monkeypatch.delenv("STRATEGYOS_AUTHORITY_DATA_DIR", raising=False)
     monkeypatch.setenv("STRATEGYOS_WORKSPACE_ROOT", str(tmp_path))
     assert authority_module._data_root() == tmp_path / ".strategyos_mvp_data" / "authority"
+
+
+@pytest.mark.parametrize("first,second", [("tenant/a", "tenant-a"), ("tenant:a", "tenant/a"), ("a" * 121, "a" * 120 + "b")])
+def test_file_policy_keys_do_not_alias_tenants(authority_store, first, second):
+    assert authority_module._file_path(first) != authority_module._file_path(second)
+    matrix = authority_module.default_authority_matrix()
+    matrix["subjects"][0]["rights"]["finance"] = "none"
+    authority_module.save_authority_matrix(first, matrix, actor="test", expected_version=1)
+    assert authority_module.get_authority_matrix(first)["subjects"][0]["rights"]["finance"] == "none"
+    assert authority_module.get_authority_matrix(second)["subjects"][0]["rights"]["finance"] == "analyse"
+
+
+@pytest.mark.parametrize("content", ["{broken", "[]", '{"subjects": []}'])
+def test_invalid_saved_policy_never_restores_default_permissions(authority_store, content):
+    (authority_store / "tenant-a.json").write_text(content)
+    with pytest.raises(RuntimeError, match="access remains closed"):
+        authority_module.get_authority_matrix("tenant-a")
+
+
+def test_ambiguous_legacy_policy_requires_verified_owner(authority_store):
+    (authority_store / "tenant-a.json").write_text(json.dumps(authority_module.default_authority_matrix()))
+    with pytest.raises(RuntimeError, match="owner-verified migration"):
+        authority_module.get_authority_matrix("tenant/a")
+
+
+@pytest.mark.parametrize("endpoint", ["/qa", "/assistant/chat"])
+def test_unreadable_policy_returns_service_unavailable_before_loading(authority_store, monkeypatch, endpoint):
+    from strategyos_mvp import api
+    def unavailable(tenant):
+        raise authority_module.AuthorityPolicyUnavailable("Saved authority policy is unreadable")
+    def forbidden(*args, **kwargs):
+        pytest.fail("An unavailable policy must not reach an answer loader")
+    monkeypatch.setattr(api, "get_authority_matrix", unavailable)
+    monkeypatch.setattr(api, "_resolve_qa_context", forbidden)
+    monkeypatch.setattr(api, "_assistant_chat_response", forbidden)
+    response = TestClient(app).post(endpoint, json={"persona": "ceo", "question": "Show revenue"})
+    assert response.status_code == 503
+    assert "Access remains closed" in response.json()["detail"]

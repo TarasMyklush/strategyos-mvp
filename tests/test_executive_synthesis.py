@@ -87,3 +87,14 @@ def test_default_cache_uses_writable_workspace_root(tmp_path, monkeypatch) -> No
     monkeypatch.delenv("STRATEGYOS_EXECUTIVE_SYNTHESIS_CACHE_DIR", raising=False)
     monkeypatch.setenv("STRATEGYOS_WORKSPACE_ROOT", str(tmp_path))
     assert synthesis._cache_root() == tmp_path / ".strategyos_mvp_data" / "executive_synthesis"
+
+
+def test_provider_cannot_relabel_existing_thread_figures(tmp_path, monkeypatch):
+    monkeypatch.setenv("STRATEGYOS_EXECUTIVE_SYNTHESIS_CACHE_DIR", str(tmp_path))
+    monkeypatch.setattr(synthesis, "_provider_batch", lambda developments, threads: {
+        "thread_summaries": [{"thread_id": "a2a-1", "key_figures": ["Profit increased 16%", "Loss SAR 2.4M"]}]
+    })
+    result = synthesis.synthesize_strategy_enrichment(_payload())
+    figures = result["assistant_threads"]["threads"][0]["key_figures"]
+    assert "16%" in figures and "SAR 2.4M" in figures
+    assert all("Profit" not in figure and "Loss" not in figure for figure in figures)

@@ -169,3 +169,22 @@ def test_question_bank_is_not_indexed_even_with_an_arbitrary_filename(tmp_path):
     path=tmp_path/'business.xlsx';book.save(path)
     evidence=SimpleNamespace(dataset_root=tmp_path,manifest={path.name:{'sha256':hashlib.sha256(path.read_bytes()).hexdigest()}},pdf_text={})
     assert list(source_search.source_records(evidence))==[]
+
+
+def test_citation_viewer_rejects_changed_bytes_and_untrusted_excerpt(tmp_path):
+    import hashlib
+    from types import SimpleNamespace
+    from strategyos_mvp.citation_resolver import resolve_citation
+    from strategyos_mvp.models import Citation
+    source = tmp_path / "brief.txt"
+    source.write_text("Revenue SAR 120.")
+    digest = hashlib.sha256(source.read_bytes()).hexdigest()
+    bundle = SimpleNamespace(dataset_root=tmp_path, evidence=SimpleNamespace(
+        dataset_root=tmp_path, manifest={"brief.txt": {"sha256": digest}}, pdf_text={}))
+    citation = Citation("brief.txt", "brief.txt", "Revenue SAR 999.", source_hash=digest)
+    result = resolve_citation(bundle, citation)
+    assert result["resolved"] and "120" in result["excerpt"] and "999" not in result["excerpt"]
+    source.write_text("Revenue SAR 999.")
+    result = resolve_citation(bundle, citation)
+    assert not result["resolved"] and not result["validation"]["source_bytes_match"]
+    assert result["excerpt"] == "" and result["resolved_payload"] is None

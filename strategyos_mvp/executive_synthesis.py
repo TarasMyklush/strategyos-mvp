@@ -48,7 +48,7 @@ def _jsonable(value: Any) -> Any:
 
 def _fingerprint(payload: dict[str, Any]) -> str:
     relevant = {
-        "claim_contract_version": 3,
+        "claim_contract_version": 4,
         "plan_health": payload.get("plan_health"),
         "initiative_drifts": payload.get("initiative_drifts"),
         "milestone_drifts": payload.get("milestone_drifts"),
@@ -278,7 +278,9 @@ def synthesize_strategy_enrichment(payload: dict[str, Any]) -> dict[str, Any]:
         summaries.append({
             **fallback,
             "executive_summary": summary[:520] if summary else fallback["executive_summary"],
-            "key_figures": list(candidate.get("key_figures") or fallback["key_figures"])[:6],
+            # Figures are a source-derived display contract, including labels
+            # and order. Numeric membership cannot authorize relabeling them.
+            "key_figures": fallback["key_figures"][:6],
             "synthesized_by": "llm-batch-grounded" if summary else fallback["synthesized_by"],
         })
     summary_map = {item["thread_id"]: item for item in summaries}
