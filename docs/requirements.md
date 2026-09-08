@@ -230,3 +230,21 @@ completed history, full member mapping, accountability and bilingual-label check
 A separate plan-authorized reviewer approves the configuration. An operator may
 then publish it once to an immutable receipt and generated plan proposal. Approved
 labels produce a validated board template without changing figures or evidence.
+
+**REQ-34 — Durable board template registry and generated pack history.**
+An authorized operator can register consecutive, immutable tenant board-template
+versions. Manual registrations retain their origin; templates generated from an
+approved Strategic Advisor configuration retain the configuration ID, version and
+digest as server-derived provenance. A conflicting retry or skipped version fails.
+Presentation templates remain unable to supply figures, formulas, source locations
+or evidence overrides.
+
+An authorized whole-company reader can generate an immutable pack record only from
+a saved analysis and registered template version. The record binds the analysis,
+plan, actuals, template, language and composer version and preserves the exact
+composed pages under a separate payload digest. Generation is idempotent. History
+can be reopened and downloaded as PDF or PPTX. Each read and download rechecks current
+source export eligibility and evidence bytes, then compares a fresh binding with
+the saved record. It reports current or stale with reasons and never rewrites saved
+pages. Tenant row-level security and append-only database privileges cover both new
+tables; restricted identities cannot list or create records.

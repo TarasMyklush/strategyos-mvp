@@ -59,13 +59,32 @@ CREATE TABLE IF NOT EXISTS strategyos_intent_advisor_publications (
  FOREIGN KEY(tenant_key, plan_id, plan_version)
  REFERENCES strategyos_intent_plan_versions(tenant_key, plan_id, version)
 );
+CREATE TABLE IF NOT EXISTS strategyos_intent_board_templates (
+ tenant_key text NOT NULL, template_id text NOT NULL, version integer NOT NULL CHECK(version > 0),
+ payload jsonb NOT NULL, digest text NOT NULL, origin jsonb NOT NULL,
+ created_by text NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(tenant_key, template_id, version)
+);
+CREATE TABLE IF NOT EXISTS strategyos_intent_board_packs (
+ tenant_key text NOT NULL, pack_id text NOT NULL, analysis_id text NOT NULL,
+ template_id text NOT NULL, template_version integer NOT NULL, language text NOT NULL,
+ payload jsonb NOT NULL, digest text NOT NULL,
+ created_by text NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(tenant_key, pack_id),
+ FOREIGN KEY(tenant_key, analysis_id)
+ REFERENCES strategyos_intent_analyses(tenant_key, analysis_id),
+ FOREIGN KEY(tenant_key, template_id, template_version)
+ REFERENCES strategyos_intent_board_templates(tenant_key, template_id, version),
+ CHECK(language IN ('en', 'ar', 'bilingual'))
+);
 CREATE OR REPLACE FUNCTION strategyos_intent_reject_change() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN RAISE EXCEPTION 'Intent history is immutable; append a new version or event'; END $$;
 DO $$ DECLARE table_name text; BEGIN
  FOREACH table_name IN ARRAY ARRAY['strategyos_intent_plan_versions', 'strategyos_intent_actual_versions',
    'strategyos_intent_ratifier_events', 'strategyos_intent_ratifications', 'strategyos_intent_analyses',
    'strategyos_intent_advisor_configs', 'strategyos_intent_advisor_approvals',
-   'strategyos_intent_advisor_publications'] LOOP
+   'strategyos_intent_advisor_publications', 'strategyos_intent_board_templates',
+   'strategyos_intent_board_packs'] LOOP
   IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = table_name || '_immutable'
       AND tgrelid = to_regclass(table_name)) THEN
    EXECUTE format('CREATE TRIGGER %I BEFORE UPDATE OR DELETE ON %I FOR EACH ROW EXECUTE FUNCTION strategyos_intent_reject_change()',

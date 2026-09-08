@@ -94,7 +94,7 @@ def compose(principal, analysis_id, request):
         registered_sources(tenant, row['source_pack_id'], references, principal=principal, purpose='export')
     # Do not disclose revisions from a source whose access has been revoked.
     from .dimensional_intent_sources import SourceUnavailable
-    warnings = []
+    warnings, newer_records = [], {}
     for key, candidates, kind in [('new_plan', newer_plans, 'plan'), ('new_actuals', newer_actuals, 'actuals')]:
         for row in candidates:
             store._checked(row)
@@ -103,6 +103,8 @@ def compose(principal, analysis_id, request):
             except (PermissionError, SourceUnavailable):
                 continue
             warnings.append(key)
+            newer_records[key] = ({'plan_id': row['plan_id'], 'version': row['version'], 'digest': row['digest']}
+                                  if kind == 'plan' else {'revision': row['revision'], 'digest': row['digest']})
             break
     lang, template = request.language, request.template
     def label(value):
@@ -156,16 +158,16 @@ def compose(principal, analysis_id, request):
         add(word('evidence', lang) + ' [' + str(e['number']) + ']',
             [e['cell_id'] + ' / ' + e['side'], source['path'], source['locator'], 'SHA-256: ' + source['sha256']],
             {'1': e['path']})
-    binding = {'composer_version': 'board-pack.v1', 'analysis_hash': analysis_id, 'plan_digest': result['plan_import_digest'],
+    binding = {'composer_version': 'board-pack.v2', 'analysis_hash': analysis_id, 'plan_digest': result['plan_import_digest'],
                'actual_digest': result['actual_import_digest'], 'template': template.model_dump(mode='json'),
-               'language': lang, 'warnings': warnings}
+               'language': lang, 'warnings': warnings, 'newer_records': newer_records}
     add('Snapshot references / مراجع اللقطة', [
         'Analysis: ' + analysis_id,
         'Plan SHA-256: ' + result['plan_import_digest'],
         'Actuals SHA-256: ' + result['actual_import_digest'],
         'Template SHA-256: ' + fingerprint(template.model_dump(mode='json')),
         'Pack SHA-256: ' + fingerprint(binding),
-        'Composer: board-pack.v1', word('assurance', lang)])
+        'Composer: board-pack.v2', word('assurance', lang)])
     return {'schema_version': 1, 'pack_hash': fingerprint(binding), 'binding': binding,
             'checked_at': datetime.now(timezone.utc).isoformat(), 'pages': pages, 'evidence': evidence,
             'untranslated_labels': sorted({v for c in result['cells'] for v in [c['metric'], *c['dimensions'].keys(), *c['dimensions'].values()] if v not in template.labels}) if lang != 'en' else []}

@@ -20,7 +20,7 @@ import pytest
 from strategyos_mvp import auth, dimensional_intent_sources as sources
 from strategyos_mvp import dimensional_intent_store as store
 from strategyos_mvp.dimensional_intent_api import router
-from strategyos_mvp.dimensional_plan import Actuals, Plan
+from strategyos_mvp.dimensional_plan import Actuals, Plan, fingerprint
 from strategyos_mvp.plan_decomposition import DecompositionRequest, HistoricalDecompositionRequest
 from strategyos_mvp.advisor_config import AdvisorConfiguration
 from strategyos_mvp import advisor_config_store
@@ -387,7 +387,7 @@ def test_migration_is_idempotent_and_not_run_implicitly(setup):
     store.initialize()
     assert store.read_plan(s['executive'], s['p']['plan_id'], 1)['governance_status'] == 'proposed'
     with s['connect']() as conn:
-        conn.execute('DROP TABLE strategyos_intent_analyses')
+        conn.execute('DROP TABLE strategyos_intent_analyses CASCADE')
     with pytest.raises(store.Unavailable, match='migration'):
         store.read_plan(s['executive'], s['p']['plan_id'], 1)
 
@@ -580,6 +580,92 @@ def test_board_pack_bidi_preserves_signed_decimals_and_dates():
     for value in ['2026-09-07', '-60.25', '+80.50', '0.0001']:
         assert value in visual('الانحراف: ' + value)
         assert '\u200e' + value + '\u200e' in mark_ltr('الانحراف: ' + value)
+
+
+def test_recorded_board_template_and_pack_history_are_immutable_and_downloadable(setup):
+    from strategyos_mvp import board_pack, board_pack_store
+    s = setup
+    approve(s, import_pair(s)); analysis = analyse(s)
+    template = board_pack.PackTemplate(
+        template_id='healthcare-board', version=1,
+        labels={'revenue': board_pack.Translation(en='Revenue', ar='الإيرادات')})
+    registered = board_pack_store.register(s['operator'], template)
+    assert registered['digest'] == fingerprint(template.model_dump(mode='json'))
+    assert registered['origin'] == {'type': 'manual'}
+    assert board_pack_store.register(s['operator'], template) == registered
+    changed = template.model_copy(update={'accent': '#123456'})
+    with pytest.raises(store.Conflict, match='different content'):
+        board_pack_store.register(s['operator'], changed)
+    with pytest.raises(store.Conflict, match='consecutive'):
+        board_pack_store.register(s['operator'], template.model_copy(update={'version': 3}))
+    record = board_pack_store.create_pack(s['executive'], analysis['analysis_hash'],
+                                          template.template_id, template.version, 'bilingual')
+    assert record['freshness']['status'] == 'current'
+    assert record['pack_id'] == record['pack']['pack_hash']
+    assert record['pack']['binding']['analysis_hash'] == analysis['analysis_hash']
+    repeated = board_pack_store.create_pack(s['executive'], analysis['analysis_hash'],
+                                            template.template_id, template.version, 'bilingual')
+    assert repeated['pack'] == record['pack']
+    assert repeated['digest'] == record['digest']
+    history = board_pack_store.packs(s['executive'], analysis['analysis_hash'])
+    assert [item['pack_id'] for item in history['packs']] == [record['pack_id']]
+    s['current']['principal'] = s['executive']
+    created_api = s['client'].post('/api/intent/dimensional/analyses/' + analysis['analysis_hash'] + '/board-packs',
+                                   json={'template_id': template.template_id, 'template_version': 1,
+                                         'language': 'bilingual'})
+    assert created_api.status_code == 200, created_api.text
+    assert created_api.json()['pack_id'] == record['pack_id']
+    assert s['client'].get('/api/intent/dimensional/board-packs',
+                           params={'analysis_id': analysis['analysis_hash']}).json()['packs'][0]['pack_id'] == record['pack_id']
+    base = '/api/intent/dimensional/board-packs/' + record['pack_id']
+    assert s['client'].get(base).json()['freshness']['status'] == 'current'
+    for format in ['pdf', 'pptx']:
+        response = s['client'].get(base + '/' + format)
+        assert response.status_code == 200
+        assert response.headers['X-Kyvern-Pack-Hash'] == record['pack_id']
+        assert response.headers['X-Kyvern-Pack-Freshness'] == 'current'
+    with s['connect']() as conn:
+        for table in ['strategyos_intent_board_templates', 'strategyos_intent_board_packs']:
+            with pytest.raises(psycopg.Error, match='immutable'):
+                conn.execute(sql.SQL('UPDATE {} SET tenant_key=tenant_key').format(sql.Identifier(table)))
+            conn.rollback()
+
+
+def test_recorded_pack_reports_staleness_without_rewriting_snapshot(setup):
+    from strategyos_mvp import board_pack, board_pack_store
+    s = setup
+    approve(s, import_pair(s)); analysis = analyse(s)
+    template = board_pack.PackTemplate(template_id='stale-board', version=1)
+    board_pack_store.register(s['operator'], template)
+    record = board_pack_store.create_pack(s['executive'], analysis['analysis_hash'], 'stale-board', 1, 'en')
+    original_digest = record['digest']
+    newer = deepcopy(s['a']); newer['revision'] = 'newer-board-actuals'
+    store.import_actuals(s['operator'], Actuals.model_validate(newer), s['pack'])
+    stale = board_pack_store.read_pack(s['executive'], record['pack_id'])
+    assert stale['freshness']['status'] == 'stale'
+    assert stale['freshness']['reasons'] == ['new_actuals']
+    assert stale['digest'] == original_digest
+    assert stale['pack'] == record['pack']
+    with s['connect']() as conn:
+        conn.execute('UPDATE strategyos_source_access_policies SET export_allowed=false')
+    with pytest.raises(PermissionError):
+        board_pack_store.read_pack(s['executive'], record['pack_id'])
+
+
+def test_board_template_registry_api_roles(setup):
+    from strategyos_mvp import board_pack
+    s = setup
+    template = board_pack.PackTemplate(template_id='api-board', version=1)
+    created = s['client'].post('/api/intent/dimensional/board-templates', json=template.model_dump(mode='json'))
+    assert created.status_code == 200, created.text
+    assert created.json()['template']['template_id'] == 'api-board'
+    assert s['client'].get('/api/intent/dimensional/board-templates').json()['templates'][0]['template_id'] == 'api-board'
+    s['current']['principal'] = s['executive']
+    assert s['client'].post('/api/intent/dimensional/board-templates', json=template.model_dump(mode='json')).status_code == 403
+    assert s['client'].get('/api/intent/dimensional/board-templates').status_code == 200
+    for role in ['bu', 'system', 'analyst']:
+        s['current']['principal'] = {**s['executive'], 'role': role}
+        assert s['client'].get('/api/intent/dimensional/board-templates').status_code == 403
 
 
 def decomposition_body(s, digest):
@@ -841,6 +927,11 @@ def test_advisor_configuration_is_versioned_approved_and_published_without_sourc
     template = advisor_config_store.template(s['executive'], body['config_id'], 1)
     assert template['client']['ar'] == body['client']['ar']
     assert template['labels']['hospital']['en'] == 'Hospital'
+    from strategyos_mvp import board_pack_store
+    registered_template = board_pack_store.register_advisor(s['operator'], body['config_id'], 1)
+    assert registered_template['origin'] == {'type': 'advisor', 'config_id': body['config_id'],
+                                              'version': 1, 'config_digest': configured['digest']}
+    assert registered_template['template'] == template
     publication = advisor_config_store.publish(s['operator'], body['config_id'], 1, configured['digest'])
     assert publication['plan_version'] == 2
     assert advisor_config_store.publish(s['operator'], body['config_id'], 1, configured['digest']) == publication
@@ -885,6 +976,10 @@ def test_advisor_configuration_api_roles_and_complete_mapping(setup):
         'expected_digest': record['digest'], 'note': 'Reviewed all guided fields and source-bound mappings independently.'})
     assert approved.status_code == 200, approved.text
     assert s['client'].get(prefix + '/board-template').status_code == 200
+    assert s['client'].post(prefix + '/board-template/register', json={}).status_code == 403
     assert s['client'].post(prefix + '/publish', json={'expected_digest': record['digest']}).status_code == 403
     s['current']['principal'] = s['operator']
+    registered = s['client'].post(prefix + '/board-template/register', json={})
+    assert registered.status_code == 200, registered.text
+    assert registered.json()['origin']['type'] == 'advisor'
     assert s['client'].post(prefix + '/publish', json={'expected_digest': record['digest']}).status_code == 200

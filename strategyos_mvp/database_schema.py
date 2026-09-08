@@ -311,7 +311,7 @@ def provision_preview_runtime(conn, destination: Path, *, role='strategyos_previ
         cur.execute(sql.SQL('GRANT INSERT,UPDATE,DELETE ON strategyos_claim_projection_cache TO {}').format(sql.Identifier(projector_role)))
         intent_tables=','.join('strategyos_intent_' + name for name in (
             'plan_versions','actual_versions','ratifier_events','ratifications','analyses',
-            'advisor_configs','advisor_approvals','advisor_publications'))
+            'advisor_configs','advisor_approvals','advisor_publications','board_templates','board_packs'))
         for login in (request_role,worker_role,projector_role):
             cur.execute(sql.SQL('REVOKE ALL PRIVILEGES ON '+intent_tables+' FROM {}').format(sql.Identifier(login)))
         cur.execute(sql.SQL('GRANT SELECT,INSERT ON '+intent_tables+' TO {}').format(sql.Identifier(request_role)))

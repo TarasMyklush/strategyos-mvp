@@ -109,6 +109,7 @@ def read(principal, config_id, version):
             'can_approve': current and actor != row['created_by'] and not approval and
                            principal['role'] in intent.RATIFY_ROLES and bool(grant and grant['enabled']),
             'can_publish': current and principal['role'] in intent.IMPORT_ROLES and bool(approval) and not publication,
+            'can_register_template': principal['role'] in intent.IMPORT_ROLES and bool(approval),
         })
     return result
 

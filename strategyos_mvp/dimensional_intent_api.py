@@ -14,6 +14,7 @@ from .dimensional_plan import Actuals, Contract, Name, Plan
 from .plan_decomposition import DecompositionRequest, HistoricalDecompositionRequest
 from .advisor_config import AdvisorConfiguration
 from . import advisor_config_store as advisor_store
+from . import board_pack_store
 from . import dimensional_intent_store as store
 from .dimensional_intent_sources import SourceUnavailable
 
@@ -85,6 +86,12 @@ class AnalysisRequest(Contract):
     plan_version: Version
     actual_revision: Key
     as_of: date
+
+
+class RecordedPackRequest(Contract):
+    template_id: Key
+    template_version: Version
+    language: Literal['en', 'ar', 'bilingual'] = 'bilingual'
 
 
 def perform(fn):
@@ -169,6 +176,12 @@ def advisor_board_template(config_id: str, version: Annotated[int, Path(ge=1)],
     return perform(lambda: advisor_store.template(principal, config_id, version))
 
 
+@router.post('/advisor/configurations/{config_id}/versions/{version}/board-template/register')
+def register_advisor_board_template(config_id: str, version: Annotated[int, Path(ge=1)],
+                                    principal: dict[str, Any] = require_role('operator')):
+    return perform(lambda: board_pack_store.register_advisor(principal, config_id, version))
+
+
 @router.put('/plans/{plan_id}/ratifier')
 def set_ratifier(plan_id: str, body: RatifierChange,
                  principal: dict[str, Any] = require_role('tenant_admin')):
@@ -240,6 +253,57 @@ from . import board_pack
 def board_template(principal: dict[str, Any] = require_role('operator', 'reviewer', 'executive')):
     perform(lambda: store._scope(principal))
     return board_pack.PackTemplate().model_dump(mode='json')
+
+
+@router.post('/board-templates')
+def register_board_template(body: board_pack.PackTemplate,
+                            principal: dict[str, Any] = require_role('operator')):
+    return perform(lambda: board_pack_store.register(principal, body))
+
+
+@router.get('/board-templates')
+def board_templates(principal: dict[str, Any] = require_role('operator', 'reviewer', 'executive')):
+    return perform(lambda: board_pack_store.templates(principal))
+
+
+@router.get('/board-templates/{template_id}/versions/{version}')
+def read_board_template(template_id: str, version: Annotated[int, Path(ge=1)],
+                        principal: dict[str, Any] = require_role('operator', 'reviewer', 'executive')):
+    return perform(lambda: board_pack_store.read_template(principal, template_id, version))
+
+
+@router.post('/analyses/{analysis_id}/board-packs')
+def create_recorded_board_pack(analysis_id: str, body: RecordedPackRequest,
+                               principal: dict[str, Any] = require_role('operator', 'reviewer', 'executive')):
+    return perform(lambda: board_pack_store.create_pack(
+        principal, analysis_id, body.template_id, body.template_version, body.language))
+
+
+@router.get('/board-packs')
+def board_pack_history(analysis_id: str | None = None,
+                       limit: Annotated[int, Query(ge=1, le=50)] = 25,
+                       principal: dict[str, Any] = require_role('operator', 'reviewer', 'executive')):
+    return perform(lambda: board_pack_store.packs(principal, analysis_id, limit))
+
+
+@router.get('/board-packs/{pack_id}')
+def read_recorded_board_pack(pack_id: str,
+                             principal: dict[str, Any] = require_role('operator', 'reviewer', 'executive')):
+    return perform(lambda: board_pack_store.read_pack(principal, pack_id))
+
+
+@router.get('/board-packs/{pack_id}/{format}')
+def download_recorded_board_pack(pack_id: str, format: Literal['pdf', 'pptx'],
+                                 principal: dict[str, Any] = require_role('operator', 'reviewer', 'executive')):
+    record = perform(lambda: board_pack_store.read_pack(principal, pack_id))
+    origin = urlsplit(os.environ.get('STRATEGYOS_PUBLIC_URL', ''))
+    public_url = f'{origin.scheme}://{origin.netloc}' if origin.scheme in {'https', 'http'} and origin.netloc else ''
+    content = perform(lambda: (board_pack.export_pdf if format == 'pdf' else board_pack.export_pptx)(record['pack'], public_url))
+    media = 'application/pdf' if format == 'pdf' else 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    return Response(content=content, media_type=media, headers={
+        'Content-Disposition': f'attachment; filename="kyvern-board-{pack_id[:16]}.{format}"',
+        'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store',
+        'X-Kyvern-Pack-Hash': pack_id, 'X-Kyvern-Pack-Freshness': record['freshness']['status']})
 
 
 @router.post('/analyses/{analysis_id}/board-pack')

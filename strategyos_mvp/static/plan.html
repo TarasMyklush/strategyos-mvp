@@ -945,7 +945,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
       <div id="advisor-checks"></div>
       <div id="advisor-review-allocations" class="vault-table"></div>
       <form id="advisor-approve-form" hidden><label class="vault-field">Independent review note<textarea id="advisor-review-note" required minlength="20" maxlength="2000" rows="3"></textarea></label><button type="submit">Approve configuration</button></form>
-      <div class="vault-actions"><button id="advisor-publish" type="button" hidden>Publish plan proposal</button><button id="advisor-use-template" type="button" class="secondary" hidden>Use approved board labels</button></div>
+      <div class="vault-actions"><button id="advisor-publish" type="button" hidden>Publish plan proposal</button><button id="advisor-use-template" type="button" class="secondary" hidden>Register approved board template</button></div>
     </div>
   </div>
   <div id="drift-panel" class="vault-panel" hidden>
@@ -967,14 +967,19 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   <div id="board-pack" class="vault-panel" hidden>
     <h2>Board pack composer</h2>
     <p>Turn this saved analysis into an evidence-linked board review. Figures stay bound to this version; exports check current source permissions and flag newer records.</p>
-    <div class="vault-controls"><label class="vault-field">Language<select id="pack-language"><option value="bilingual">English + العربية</option><option value="en">English</option><option value="ar">العربية</option></select></label></div>
+    <div class="vault-controls">
+      <label class="vault-field">Saved template version<select id="pack-template-select"><option value="">Choose a saved template</option></select></label>
+      <label class="vault-field">Language<select id="pack-language"><option value="bilingual">English + العربية</option><option value="en">English</option><option value="ar">العربية</option></select></label>
+    </div>
     <details style="margin-top:18px"><summary>Client template</summary>
       <p class="vault-note">Set client names, headings, colour and EN/AR labels in this reusable template. Labels translate exact metric and dimension names; figures and evidence cannot be overridden.</p>
       <label class="vault-field">Load template JSON<input type="file" id="pack-load-template" accept=".json,application/json"></label>
       <label class="vault-field">Template JSON<textarea id="pack-template" rows="12" spellcheck="false" aria-label="Board pack template JSON"></textarea></label>
-      <button type="button" class="secondary" id="pack-save-template">Download template</button>
+      <div class="vault-actions"><button type="button" id="pack-register-template">Register template version</button><button type="button" class="secondary" id="pack-save-template">Download template JSON</button></div>
     </details>
-    <div class="vault-actions"><button type="button" id="pack-preview-button">Preview pack</button><button type="button" class="secondary" id="pack-pptx">Download PPTX</button><button type="button" class="secondary" id="pack-pdf">Download PDF</button></div>
+    <div class="vault-actions"><button type="button" id="pack-preview-button">Generate recorded pack</button><button type="button" class="secondary" id="pack-pptx">Download PPTX</button><button type="button" class="secondary" id="pack-pdf">Download PDF</button></div>
+    <h3>Generated pack history</h3>
+    <div class="vault-controls"><label class="vault-field">Recorded pack<select id="pack-history-select"><option value="">Choose a generated pack</option></select></label><button type="button" class="secondary" id="pack-history-load">Open recorded pack</button></div>
     <p class="vault-note">PDF embeds its fonts. For editable Arabic slides, install Noto Sans Arabic on the presenting computer. Source labels keep their original language unless translated in the template.</p>
     <p id="pack-status" role="status" aria-live="polite" class="vault-message"></p><div id="pack-preview"></div>
   </div>

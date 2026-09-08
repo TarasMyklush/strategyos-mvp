@@ -30,6 +30,10 @@ def test_plan_page_fetches_governed_api_payload_instead_of_static_truth() -> Non
     assert 'id="advisor-allocations"' in html
     assert "Save ready configuration" in html
     assert "/static/advisor_console.js" in html
+    assert 'id="pack-template-select"' in html
+    assert "Register template version" in html
+    assert "Generate recorded pack" in html
+    assert 'id="pack-history-select"' in html
     assert "/static/plan_data.js" not in html
     assert "window.STRATEGYOS_PLAN" not in html
     assert 'font-size: clamp(30px, 4vw, 40px);' in html
