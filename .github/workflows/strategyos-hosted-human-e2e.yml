@@ -1,0 +1,46 @@
+name: StrategyOS Hosted Human E2E
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: strategyos-hosted-human-e2e
+  cancel-in-progress: false
+
+jobs:
+  walkthrough:
+    name: Executive Chromium walkthrough
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: hetzner-branch
+    env:
+      STRATEGYOS_PUBLIC_URL: ${{ vars.STRATEGYOS_PUBLIC_URL }}
+      STRATEGYOS_IDP_TEST_USERS: ${{ secrets.STRATEGYOS_IDP_TEST_USERS }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: "3.12"
+
+      - name: Install browser runner
+        run: |
+          python -m pip install playwright==1.55.0
+          python -m playwright install --with-deps chromium
+
+      - name: Walk the deployed executive story
+        run: python scripts/hosted_human_e2e.py --output-dir hosted-human-e2e
+
+      - name: Upload screenshots, downloads and report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hosted-human-e2e-${{ github.run_id }}
+          path: hosted-human-e2e/
+          if-no-files-found: error
+          retention-days: 30
