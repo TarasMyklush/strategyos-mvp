@@ -12,7 +12,10 @@ from pathlib import Path
 
 from . import state_store
 from .config import CONFIG
-from .dimensional_plan import Actuals, Plan, evaluate, fingerprint
+from .dimensional_plan import (
+    Actuals, Plan, actual_source_references, evaluate, fingerprint,
+    plan_source_references,
+)
 from .dimensional_intent_sources import registered_sources
 
 READ_ROLES = {'operator', 'tenant_operator', 'reviewer', 'auditor', 'executive', 'tenant_admin'}
@@ -106,7 +109,7 @@ def _actuals(conn, tenant, revision):
 def _sources(principal, row, *, kind, verify_bytes=True):
     tenant, _ = _scope(principal)
     value = Plan.model_validate(row['payload']) if kind == 'plan' else Actuals.model_validate(row['payload'])
-    references = [c.source for c in value.cells] if kind == 'plan' else [o.source for o in value.observations]
+    references = plan_source_references(value) if kind == 'plan' else actual_source_references(value)
     primary = registered_sources(tenant, row['source_pack_id'], references, verify_bytes=verify_bytes, principal=principal)
     if kind == 'plan' and value.derivation and value.derivation.historical_source_pack_id:
         history_references = [item.basis for item in value.derivation.allocations]
@@ -123,6 +126,9 @@ def _public(row):
 def _plan_payload(plan):
     payload = plan.model_dump(mode='json')
     payload['cells'].sort(key=lambda c: c['id'])
+    payload['price_volume_mix_policies'].sort(key=lambda item: item['bridge_id'])
+    for bridge in payload['price_volume_mix_policies']:
+        bridge['rows'].sort(key=lambda item: item['member'])
     for members in payload['dimensions'].values():
         members.sort()
     return payload
@@ -436,6 +442,9 @@ def import_actuals(principal, actuals: Actuals, source_pack_id: str):
         raise ValueError('Duplicate actual tuples must be reconciled before import.')
     payload = actuals.model_dump(mode='json')
     payload['observations'].sort(key=lambda o: cell_key(o['metric'], o['dimensions']))
+    payload['price_volume_mix'].sort(key=lambda item: item['bridge_id'])
+    for bridge in payload['price_volume_mix']:
+        bridge['rows'].sort(key=lambda item: item['member'])
     encoded, digest = _encode(payload), fingerprint(payload)
     _sources(principal, {'payload': payload, 'source_pack_id': source_pack_id}, kind='actuals')
     with _connection() as conn:

@@ -174,7 +174,7 @@ def fixture_structure_body():
         'values': [{'source_value': 'Group', 'target': 'group'}],
     }]
     configured = {
-        'product': ['item-a'],
+        'product': ['item-a', 'item-b'],
         'region': ['all-regions', 'north', 'south'],
         'client': ['retail', 'institution', 'hospital', 'pharmacy'],
     }
@@ -947,6 +947,66 @@ def test_whole_objective_multidimensional_decomposition_findings_and_explanation
                                       '/explain', params={'cell_id': 'south-pharmacy'})
     assert api_explanation.status_code == 200
     assert api_explanation.json()['answer'] == explanation['answer']
+
+
+def test_price_volume_mix_runs_through_durable_analysis_and_board_pack(setup):
+    from strategyos_mvp import board_pack
+    s = setup
+    source = deepcopy(s['p']['cells'][0]['source'])
+    s['p']['dimensions']['product'] = ['item-a', 'item-b']
+    s['p']['dimensions']['region'] = ['north']
+    s['p']['dimensions']['client'] = ['retail']
+    s['p']['metrics']['revenue']['planned_total'] = '300'
+    s['p']['cells'] = [
+        {**deepcopy(s['p']['cells'][0]), 'id': 'item-a', 'target': '100',
+         'dimensions': {'product': 'item-a', 'region': 'north', 'client': 'retail'}},
+        {**deepcopy(s['p']['cells'][1]), 'id': 'item-b', 'target': '200',
+         'dimensions': {'product': 'item-b', 'region': 'north', 'client': 'retail'}},
+    ]
+    s['p']['price_volume_mix_policies'] = [{
+        'bridge_id': 'commercial-bridge', 'metric': 'revenue', 'mix_dimension': 'product',
+        'currency_unit': 'SAR', 'price_unit': 'SAR/unit', 'volume_unit': 'unit',
+        'decimal_places': 2,
+        'rows': [
+            {'member': 'item-a', 'cell_id': 'item-a', 'planned_price': '10', 'planned_volume': '10',
+             'price_source': source, 'volume_source': source},
+            {'member': 'item-b', 'cell_id': 'item-b', 'planned_price': '20', 'planned_volume': '10',
+             'price_source': source, 'volume_source': source},
+        ],
+    }]
+    s['a']['observations'] = [
+        {'metric': 'revenue', 'dimensions': {'product': 'item-a', 'region': 'north', 'client': 'retail'},
+         'unit': 'SAR', 'value': '135', 'source': source},
+        {'metric': 'revenue', 'dimensions': {'product': 'item-b', 'region': 'north', 'client': 'retail'},
+         'unit': 'SAR', 'value': '198', 'source': source},
+    ]
+    s['a']['price_volume_mix'] = [{
+        'bridge_id': 'commercial-bridge', 'currency_unit': 'SAR',
+        'price_unit': 'SAR/unit', 'volume_unit': 'unit',
+        'rows': [
+            {'member': 'item-a', 'actual_price': '9', 'actual_volume': '15',
+             'price_source': source, 'volume_source': source},
+            {'member': 'item-b', 'actual_price': '22', 'actual_volume': '9',
+             'price_source': source, 'volume_source': source},
+        ],
+    }]
+    approve(s, import_pair(s))
+    result = analyse(s)
+    assert result['price_volume_mix'][0]['effects'] == {
+        'volume': '60.00', 'mix': '-30.00', 'price': '3.00',
+        'observed_variance': '33', 'reconstructed_variance': '33.00',
+    }
+    finding = next(item for item in result['findings'] if item['finding_type'] == 'price_volume_mix')
+    assert finding['reconciles'] is True
+    response = s['client'].get('/api/intent/dimensional/analyses/' + result['analysis_hash'])
+    assert response.status_code == 200
+    assert response.json()['price_volume_mix'][0]['formula_version'] == 'price-volume-mix.v1'
+    pack = board_pack.compose(s['executive'], result['analysis_hash'], board_pack.PackRequest(language='bilingual'))
+    assert pack['binding']['composer_version'] == 'board-pack.v3'
+    bridge_page = next(page for page in pack['pages'] if 'Price / volume / mix bridge' in page['title'])
+    assert any('60.00' in line for line in bridge_page['lines'])
+    assert any('33.00' in line for line in bridge_page['lines'])
+    assert any('[1]' in line for line in bridge_page['lines'])
 
 
 def test_multidimensional_decomposition_rejects_unconfigured_or_undeclared_members(setup):

@@ -142,13 +142,21 @@
     var findings = $('analysis-findings'); findings.replaceChildren();
     (result.findings || []).forEach(function (finding) {
       var card = node('article'), refs = node('div'); card.className = 'pack-page'; refs.className = 'vault-actions';
-      card.append(node('h3', finding.finding_type === 'offset' ? 'Offset across cells' : 'Concentration above threshold'),
+      var titles = { offset: 'Offset across cells', concentration: 'Concentration above threshold', price_volume_mix: 'Price / volume / mix bridge' };
+      card.append(node('h3', titles[finding.finding_type] || 'Evidence-bound finding'),
         node('p', finding.narrative), node('p', 'Ratified plan ' + finding.plan_citation.plan_id + ' · Version ' + finding.plan_citation.version));
+      if (finding.finding_type === 'price_volume_mix') {
+        card.append(node('p', 'Volume ' + finding.effects.volume + ' · Mix ' + finding.effects.mix + ' · Price ' + finding.effects.price + ' · Observed ' + finding.effects.observed_variance + ' ' + finding.currency_unit),
+          node('p', finding.reconciles ? 'Exact reconciliation verified.' : 'Reconciliation failed.'));
+      }
       var cells = finding.cells || [finding]; cells.forEach(function (item) {
         if (item.plan_source) refs.appendChild(link(item.cell_id + ' · Plan', '/analyses/' + result.analysis_hash + '/evidence?side=plan&cell_id=' + encodeURIComponent(item.cell_id)));
         if (item.actual_source) refs.appendChild(link(item.cell_id + ' · Actuals', '/analyses/' + result.analysis_hash + '/evidence?side=actuals&cell_id=' + encodeURIComponent(item.cell_id)));
       });
       card.appendChild(refs); findings.appendChild(card);
+    });
+    (result.price_volume_mix || []).filter(function (bridge) { return bridge.status !== 'reconciled'; }).forEach(function (bridge) {
+      findings.appendChild(node('p', 'Price / volume / mix bridge ' + bridge.bridge_id + ': ' + label(bridge.status) + '.'));
     });
     result.rollups.forEach(function (r) {
       if (!(result.findings || []).length && r.offset_detected) findings.appendChild(node('p', r.metric + ': the total is ' + label(r.status).toLowerCase() + ', but its composition differs. Behind: ' + r.behind_cells.join(', ') + '. Ahead: ' + r.ahead_cells.join(', ') + '.'));

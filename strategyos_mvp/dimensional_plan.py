@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import date
-from decimal import Decimal, localcontext
+from decimal import Decimal, ROUND_HALF_EVEN, localcontext
 import hashlib
 import json
 from pathlib import Path
@@ -129,6 +129,42 @@ class ConcentrationPolicy(Contract):
     threshold_percent: Amount = Field(gt=0, lt=100)
 
 
+class PriceVolumePlanRow(Contract):
+    member: Name
+    cell_id: Name
+    planned_price: Amount = Field(ge=0)
+    planned_volume: Amount = Field(gt=0)
+    price_source: SourceReference
+    volume_source: SourceReference
+
+
+class PriceVolumeMixPolicy(Contract):
+    bridge_id: Name
+    metric: Name
+    mix_dimension: Name
+    currency_unit: Name
+    price_unit: Name
+    volume_unit: Name
+    decimal_places: int = Field(default=2, ge=0, le=12, strict=True)
+    rows: list[PriceVolumePlanRow] = Field(min_length=2, max_length=5000)
+
+
+class PriceVolumeActualRow(Contract):
+    member: Name
+    actual_price: Amount = Field(ge=0)
+    actual_volume: Amount = Field(ge=0)
+    price_source: SourceReference
+    volume_source: SourceReference
+
+
+class PriceVolumeMixActual(Contract):
+    bridge_id: Name
+    currency_unit: Name
+    price_unit: Name
+    volume_unit: Name
+    rows: list[PriceVolumeActualRow] = Field(min_length=2, max_length=5000)
+
+
 class Plan(Contract):
     schema_version: Literal[1]
     plan_id: Name
@@ -146,6 +182,7 @@ class Plan(Contract):
     dimensions: dict[Name, list[Name]] = Field(min_length=1)
     metrics: dict[Name, Metric] = Field(min_length=1)
     concentration_policies: list[ConcentrationPolicy] = Field(default_factory=list, max_length=50)
+    price_volume_mix_policies: list[PriceVolumeMixPolicy] = Field(default_factory=list, max_length=100)
     cells: list[Cell] = Field(min_length=1, max_length=100000)
     derivation: PlanDerivation | None = None
 
@@ -185,6 +222,37 @@ class Plan(Contract):
                     raise ValueError("Every metric requires plan cells.")
                 if totals[metric] != definition.planned_total:
                     raise ValueError(f"{metric}: cell targets do not reconcile to planned_total.")
+        bridge_ids = [policy.bridge_id for policy in self.price_volume_mix_policies]
+        if len(bridge_ids) != len(set(bridge_ids)):
+            raise ValueError("Price/volume/mix bridge IDs must be unique.")
+        cell_by_id = {cell.id: cell for cell in self.cells}
+        bridge_cells = set()
+        for policy in self.price_volume_mix_policies:
+            if policy.metric not in self.metrics or policy.mix_dimension not in self.dimensions:
+                raise ValueError("Price/volume/mix policy references an unknown metric or dimension.")
+            if policy.currency_unit != self.metrics[policy.metric].unit:
+                raise ValueError("Price/volume/mix currency unit must match its metric unit.")
+            members = [row.member for row in policy.rows]
+            cells = [row.cell_id for row in policy.rows]
+            if len(members) != len(set(members)) or len(cells) != len(set(cells)):
+                raise ValueError("Price/volume/mix rows require unique members and cells.")
+            if bridge_cells.intersection(cells):
+                raise ValueError("A plan cell can belong to only one price/volume/mix bridge.")
+            bridge_cells.update(cells)
+            scopes = set()
+            for row in policy.rows:
+                cell = cell_by_id.get(row.cell_id)
+                if (cell is None or cell.metric != policy.metric or
+                        cell.dimensions.get(policy.mix_dimension) != row.member):
+                    raise ValueError("Price/volume/mix row must match its metric, cell and mix member.")
+                if row.member not in self.dimensions[policy.mix_dimension]:
+                    raise ValueError("Price/volume/mix row references an unknown mix member.")
+                if cell.target != row.planned_price * row.planned_volume:
+                    raise ValueError("Plan cell target must equal its disclosed price multiplied by volume.")
+                scopes.add(tuple(sorted((key, value) for key, value in cell.dimensions.items()
+                                        if key != policy.mix_dimension)))
+            if len(scopes) != 1:
+                raise ValueError("Price/volume/mix rows must share one comparable dimensional scope.")
         if self.derivation:
             if self.derivation.parent_plan_id != self.plan_id or self.derivation.parent_version >= self.version:
                 raise ValueError("Decomposition lineage must reference an earlier version of this plan.")
@@ -229,6 +297,18 @@ class Actuals(Contract):
     revision: Name
     recorded_on: date
     observations: list[Observation] = Field(max_length=100000)
+    price_volume_mix: list[PriceVolumeMixActual] = Field(default_factory=list, max_length=100)
+
+    @model_validator(mode="after")
+    def validate_price_volume_mix(self):
+        ids = [item.bridge_id for item in self.price_volume_mix]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Actual price/volume/mix bridge IDs must be unique.")
+        for bridge in self.price_volume_mix:
+            members = [row.member for row in bridge.rows]
+            if len(members) != len(set(members)):
+                raise ValueError("Actual price/volume/mix members must be unique.")
+        return self
 
 
 def cell_key(metric, dimensions):
@@ -259,6 +339,126 @@ def fingerprint(value):
 def classify(delta, direction, tolerance):
     favorable = delta if direction == "higher_is_better" else -delta
     return "behind" if favorable < -tolerance else "ahead" if favorable > tolerance else "on_plan"
+
+
+def plan_source_references(plan: Plan) -> list[SourceReference]:
+    references = [cell.source for cell in plan.cells]
+    for bridge in plan.price_volume_mix_policies:
+        for row in bridge.rows:
+            references.extend((row.price_source, row.volume_source))
+    return references
+
+
+def actual_source_references(actuals: Actuals) -> list[SourceReference]:
+    references = [observation.source for observation in actuals.observations]
+    for bridge in actuals.price_volume_mix:
+        for row in bridge.rows:
+            references.extend((row.price_source, row.volume_source))
+    return references
+
+
+def _price_volume_mix_bridges(plan, actuals, rows, check_plan, check_actual):
+    """Return deterministic, exactly reconciled commercial bridges.
+
+    The ordering is disclosed: volume at planned average price, price at actual
+    volume, then mix as the exact reconciliation remainder.  Rounding uses
+    half-even at the configured currency precision and only mix absorbs it.
+    """
+    actual_by_id = {item.bridge_id: item for item in actuals.price_volume_mix}
+    row_by_cell = {row["cell_id"]: row for row in rows}
+    bridges = []
+    for policy in sorted(plan.price_volume_mix_policies, key=lambda item: item.bridge_id):
+        basis = actual_by_id.get(policy.bridge_id)
+        scope_cell = next(cell for cell in plan.cells if cell.id == policy.rows[0].cell_id)
+        scope = {key: value for key, value in scope_cell.dimensions.items() if key != policy.mix_dimension}
+        if basis is None:
+            bridges.append({
+                "bridge_id": policy.bridge_id, "metric": policy.metric, "status": "missing_actual_basis",
+                "mix_dimension": policy.mix_dimension, "scope": scope, "currency_unit": policy.currency_unit,
+                "price_unit": policy.price_unit, "volume_unit": policy.volume_unit,
+                "missing_members": sorted(row.member for row in policy.rows),
+                "formula_version": "price-volume-mix.v1",
+            })
+            continue
+        if (basis.currency_unit, basis.price_unit, basis.volume_unit) != (
+                policy.currency_unit, policy.price_unit, policy.volume_unit):
+            raise ValueError("Actual price/volume/mix units must exactly match the approved policy.")
+        plan_by_member = {row.member: row for row in policy.rows}
+        actual_by_member = {row.member: row for row in basis.rows}
+        if set(plan_by_member) != set(actual_by_member):
+            raise ValueError("Actual price/volume/mix members must exactly match the approved policy.")
+        missing_revenue = sorted(row.cell_id for row in policy.rows
+                                 if row_by_cell[row.cell_id]["actual"] is None)
+        if missing_revenue:
+            bridges.append({
+                "bridge_id": policy.bridge_id, "metric": policy.metric, "status": "missing_revenue_actuals",
+                "mix_dimension": policy.mix_dimension, "scope": scope, "currency_unit": policy.currency_unit,
+                "price_unit": policy.price_unit, "volume_unit": policy.volume_unit,
+                "missing_cells": missing_revenue, "formula_version": "price-volume-mix.v1",
+            })
+            continue
+        details = []
+        with localcontext() as ctx:
+            ctx.prec = 80
+            planned_revenue = planned_volume = actual_revenue = actual_volume = Decimal(0)
+            price_effect_raw = Decimal(0)
+            for member in sorted(plan_by_member):
+                planned, actual = plan_by_member[member], actual_by_member[member]
+                check_plan(planned.price_source)
+                check_plan(planned.volume_source)
+                check_actual(actual.price_source)
+                check_actual(actual.volume_source)
+                row = row_by_cell[planned.cell_id]
+                calculated_actual = actual.actual_price * actual.actual_volume
+                if Decimal(row["actual"]) != calculated_actual:
+                    raise ValueError("Actual revenue cell must equal its disclosed price multiplied by volume.")
+                planned_revenue += planned.planned_price * planned.planned_volume
+                planned_volume += planned.planned_volume
+                actual_revenue += calculated_actual
+                actual_volume += actual.actual_volume
+                price_effect_raw += (actual.actual_price - planned.planned_price) * actual.actual_volume
+                details.append({
+                    "member": member, "cell_id": planned.cell_id,
+                    "planned_price": str(planned.planned_price), "planned_volume": str(planned.planned_volume),
+                    "actual_price": str(actual.actual_price), "actual_volume": str(actual.actual_volume),
+                    "planned_revenue": str(planned.planned_price * planned.planned_volume),
+                    "actual_revenue": str(calculated_actual),
+                    "plan_revenue_source": row["plan_source"], "actual_revenue_source": row["actual_source"],
+                    "plan_price_source": planned.price_source.model_dump(mode="json"),
+                    "plan_volume_source": planned.volume_source.model_dump(mode="json"),
+                    "actual_price_source": actual.price_source.model_dump(mode="json"),
+                    "actual_volume_source": actual.volume_source.model_dump(mode="json"),
+                })
+            quantum = Decimal(1).scaleb(-policy.decimal_places)
+            if planned_revenue.quantize(quantum) != planned_revenue or actual_revenue.quantize(quantum) != actual_revenue:
+                raise ValueError("Bridge revenue exceeds the approved currency precision.")
+            planned_average_price = planned_revenue / planned_volume
+            volume_effect = (planned_average_price * (actual_volume - planned_volume)).quantize(
+                quantum, rounding=ROUND_HALF_EVEN)
+            price_effect = price_effect_raw.quantize(quantum, rounding=ROUND_HALF_EVEN)
+            observed_variance = actual_revenue - planned_revenue
+            mix_effect = observed_variance - volume_effect - price_effect
+            reconstructed = volume_effect + mix_effect + price_effect
+        bridges.append({
+            "bridge_id": policy.bridge_id, "metric": policy.metric, "status": "reconciled",
+            "mix_dimension": policy.mix_dimension, "scope": scope, "currency_unit": policy.currency_unit,
+            "price_unit": policy.price_unit, "volume_unit": policy.volume_unit,
+            "decimal_places": policy.decimal_places, "formula_version": "price-volume-mix.v1",
+            "calculation_order": ["volume_at_planned_average_price", "price_at_actual_volume",
+                                  "mix_as_exact_reconciliation_remainder"],
+            "rounding": "half_even; mix absorbs currency rounding remainder",
+            "plan": {"revenue": str(planned_revenue), "volume": str(planned_volume),
+                     "average_price": str(planned_average_price)},
+            "actual": {"revenue": str(actual_revenue), "volume": str(actual_volume)},
+            "effects": {"volume": str(volume_effect), "mix": str(mix_effect), "price": str(price_effect),
+                        "observed_variance": str(observed_variance),
+                        "reconstructed_variance": str(reconstructed)},
+            "reconciles": reconstructed == observed_variance, "rows": details,
+        })
+    unknown = sorted(set(actual_by_id) - {item.bridge_id for item in plan.price_volume_mix_policies})
+    if unknown:
+        raise ValueError("Actual price/volume/mix data references an unapproved bridge: " + ", ".join(unknown))
+    return bridges
 
 
 def evaluate(plan: Plan, actuals: Actuals, *, source_root: Path, company_id: str, as_of: date, actual_source_root: Path | None = None) -> dict:
@@ -334,12 +534,25 @@ def evaluate(plan: Plan, actuals: Actuals, *, source_root: Path, company_id: str
                 "measured_cells": len(selected) - len(missing), "planned_cells": len(selected),
                 "offset_detected": complete and status in {"on_plan", "ahead"} and bool(behind) and bool(ahead),
                 "behind_cells": behind, "ahead_cells": ahead})
+    price_volume_mix = _price_volume_mix_bridges(
+        plan, actuals, rows,
+        lambda source: check(source, root),
+        lambda source: check(source, actual_root),
+    )
     plan_payload = plan.model_dump(mode="json")
     plan_payload["cells"] = sorted(plan_payload["cells"], key=lambda c: c["id"])
+    plan_payload["price_volume_mix_policies"] = sorted(
+        plan_payload["price_volume_mix_policies"], key=lambda item: item["bridge_id"])
+    for bridge in plan_payload["price_volume_mix_policies"]:
+        bridge["rows"].sort(key=lambda item: item["member"])
     for members in plan_payload["dimensions"].values():
         members.sort()
     actual_payload = actuals.model_dump(mode="json")
     actual_payload["observations"] = sorted(actual_payload["observations"], key=lambda o: cell_key(o["metric"], o["dimensions"]))
+    actual_payload["price_volume_mix"] = sorted(
+        actual_payload["price_volume_mix"], key=lambda item: item["bridge_id"])
+    for bridge in actual_payload["price_volume_mix"]:
+        bridge["rows"].sort(key=lambda item: item["member"])
     plan_hash, actual_hash = fingerprint(plan_payload), fingerprint(actual_payload)
     findings = []
     for rollup in rollups:
@@ -402,12 +615,37 @@ def evaluate(plan: Plan, actuals: Actuals, *, source_root: Path, company_id: str
                               str(policy.threshold_percent) + "% threshold. Compared with ratified plan " +
                               plan.plan_id + " version " + str(plan.version) + "."),
             })
-    result = {"schema_version": 1, "formula_version": "cell-variance.v2", "company_id": company_id,
+    for bridge in price_volume_mix:
+        if bridge["status"] != "reconciled":
+            continue
+        effects = bridge["effects"]
+        identity = {"type": "price_volume_mix", "bridge_id": bridge["bridge_id"],
+                    "plan_hash": plan_hash, "actuals_hash": actual_hash}
+        findings.append({
+            "finding_id": fingerprint(identity), "finding_type": "price_volume_mix",
+            "metric": bridge["metric"], "status": "reconciled", "bridge_id": bridge["bridge_id"],
+            "mix_dimension": bridge["mix_dimension"], "scope": bridge["scope"],
+            "currency_unit": bridge["currency_unit"], "price_unit": bridge["price_unit"],
+            "volume_unit": bridge["volume_unit"], "formula_version": bridge["formula_version"],
+            "calculation_order": bridge["calculation_order"], "rounding": bridge["rounding"],
+            "plan": bridge["plan"], "actual": bridge["actual"], "effects": effects,
+            "reconciles": bridge["reconciles"],
+            "cells": [{"cell_id": row["cell_id"], "member": row["member"],
+                       "plan_source": row["plan_revenue_source"],
+                       "actual_source": row["actual_revenue_source"]} for row in bridge["rows"]],
+            "input_rows": bridge["rows"],
+            "plan_citation": {"plan_id": plan.plan_id, "version": plan.version, "digest": plan_hash},
+            "narrative": (bridge["metric"] + " actual minus plan is " + effects["observed_variance"] +
+                          " " + bridge["currency_unit"] + ": volume " + effects["volume"] +
+                          ", mix " + effects["mix"] + ", and price " + effects["price"] +
+                          ". The effects reconcile exactly to the observed variance."),
+        })
+    result = {"schema_version": 1, "formula_version": "cell-variance.v3", "company_id": company_id,
         "plan_id": plan.plan_id, "plan_version": plan.version, "period": plan.period.model_dump(mode="json"),
         "as_of": as_of.isoformat(), "plan_hash": plan_hash, "actuals_hash": actual_hash,
         "approval_status": plan.status, "approval_basis": "imported_metadata_not_authorization_verified",
         "comparison_basis": "imported_ratified_plan" if plan.status == "ratified" else "proposed_plan_preview",
-        "cells": rows, "rollups": rollups, "findings": findings}
+        "cells": rows, "rollups": rollups, "price_volume_mix": price_volume_mix, "findings": findings}
     result["analysis_hash"] = fingerprint(result)
     return result
 

@@ -137,6 +137,91 @@ def test_ratification_is_imported_not_certified(bundle):
     assert result['approval_basis'] == 'imported_metadata_not_authorization_verified'
 
 
+def price_volume_mix_bundle(bundle):
+    plan, actuals, _ = bundle
+    source = deepcopy(plan['cells'][0]['source'])
+    plan['dimensions']['product'] = ['item-a', 'item-b']
+    plan['dimensions']['region'] = ['north']
+    plan['dimensions']['client'] = ['retail']
+    plan['cells'] = [
+        {**deepcopy(plan['cells'][0]), 'id': 'item-a', 'target': '100',
+         'dimensions': {'product': 'item-a', 'region': 'north', 'client': 'retail'}},
+        {**deepcopy(plan['cells'][1]), 'id': 'item-b', 'target': '200',
+         'dimensions': {'product': 'item-b', 'region': 'north', 'client': 'retail'}},
+    ]
+    plan['metrics']['revenue']['planned_total'] = '300'
+    plan['price_volume_mix_policies'] = [{
+        'bridge_id': 'commercial-bridge', 'metric': 'revenue', 'mix_dimension': 'product',
+        'currency_unit': 'SAR', 'price_unit': 'SAR/unit', 'volume_unit': 'unit',
+        'decimal_places': 2,
+        'rows': [
+            {'member': 'item-a', 'cell_id': 'item-a', 'planned_price': '10', 'planned_volume': '10',
+             'price_source': source, 'volume_source': source},
+            {'member': 'item-b', 'cell_id': 'item-b', 'planned_price': '20', 'planned_volume': '10',
+             'price_source': source, 'volume_source': source},
+        ],
+    }]
+    actuals['observations'] = [
+        {'metric': 'revenue', 'dimensions': {'product': 'item-a', 'region': 'north', 'client': 'retail'},
+         'unit': 'SAR', 'value': '135', 'source': source},
+        {'metric': 'revenue', 'dimensions': {'product': 'item-b', 'region': 'north', 'client': 'retail'},
+         'unit': 'SAR', 'value': '198', 'source': source},
+    ]
+    actuals['price_volume_mix'] = [{
+        'bridge_id': 'commercial-bridge', 'currency_unit': 'SAR',
+        'price_unit': 'SAR/unit', 'volume_unit': 'unit',
+        'rows': [
+            {'member': 'item-a', 'actual_price': '9', 'actual_volume': '15',
+             'price_source': source, 'volume_source': source},
+            {'member': 'item-b', 'actual_price': '22', 'actual_volume': '9',
+             'price_source': source, 'volume_source': source},
+        ],
+    }]
+    return bundle
+
+
+def test_price_volume_mix_reconciles_exactly_from_disclosed_units(bundle):
+    result = run(price_volume_mix_bundle(bundle))
+    bridge = result['price_volume_mix'][0]
+    assert bridge['status'] == 'reconciled'
+    assert bridge['effects'] == {
+        'volume': '60.00', 'mix': '-30.00', 'price': '3.00',
+        'observed_variance': '33', 'reconstructed_variance': '33.00',
+    }
+    assert bridge['reconciles'] is True
+    finding = next(item for item in result['findings'] if item['finding_type'] == 'price_volume_mix')
+    assert finding['formula_version'] == 'price-volume-mix.v1'
+    assert finding['calculation_order'] == [
+        'volume_at_planned_average_price', 'price_at_actual_volume',
+        'mix_as_exact_reconciliation_remainder',
+    ]
+    assert len(finding['input_rows']) == 2
+
+
+@pytest.mark.parametrize('change,match', [
+    ('unit', 'units must exactly match'),
+    ('members', 'members must exactly match'),
+    ('actual_revenue', 'revenue cell must equal'),
+    ('plan_revenue', 'target must equal'),
+])
+def test_price_volume_mix_fails_closed_on_inconsistent_basis(bundle, change, match):
+    price_volume_mix_bundle(bundle)
+    if change == 'unit': bundle[1]['price_volume_mix'][0]['price_unit'] = 'USD/unit'
+    if change == 'members': bundle[1]['price_volume_mix'][0]['rows'][1]['member'] = 'item-c'
+    if change == 'actual_revenue': bundle[1]['observations'][0]['value'] = '134'
+    if change == 'plan_revenue': bundle[0]['price_volume_mix_policies'][0]['rows'][0]['planned_price'] = '11'
+    with pytest.raises(ValueError, match=match):
+        run(bundle)
+
+
+def test_price_volume_mix_discloses_missing_actual_basis(bundle):
+    price_volume_mix_bundle(bundle)
+    bundle[1]['price_volume_mix'] = []
+    result = run(bundle)
+    assert result['price_volume_mix'][0]['status'] == 'missing_actual_basis'
+    assert not any(item['finding_type'] == 'price_volume_mix' for item in result['findings'])
+
+
 def test_cli_is_read_only_and_errors_have_no_partial_result(bundle):
     p, a, root = bundle
     for name, data in [('plan', p), ('actuals', a)]:

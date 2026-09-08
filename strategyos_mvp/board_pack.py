@@ -13,7 +13,10 @@ import re
 from pydantic import Field, field_validator
 
 from . import dimensional_intent_store as store
-from .dimensional_plan import Contract, Plan, Actuals, fingerprint
+from .dimensional_plan import (
+    Actuals, Contract, Plan, actual_source_references, fingerprint,
+    plan_source_references,
+)
 from .dimensional_intent_sources import registered_sources
 
 
@@ -58,6 +61,19 @@ WORDS = {
     'snapshot': ('Fixed snapshot. Downloaded files do not refresh automatically.', 'لقطة ثابتة. الملفات المحملة لا تتحدث تلقائياً.'),
     'assurance': ('Evidence file integrity checked; source values are not independently certified.', 'تم التحقق من سلامة ملفات الأدلة؛ لم يتم التصديق على قيم المصادر بشكل مستقل.'),
     'unplanned': ('Unplanned actual tuples: ', 'بنود فعلية خارج الخطة: '),
+    'finding': ('Evidence-bound finding', 'نتيجة مرتبطة بالأدلة'),
+    'price_volume_mix': ('Price / volume / mix bridge', 'تحليل السعر / الحجم / المزيج'),
+    'plan_revenue': ('Planned revenue', 'الإيراد المخطط'),
+    'actual_revenue': ('Actual revenue', 'الإيراد الفعلي'),
+    'volume_effect': ('Volume effect', 'أثر الحجم'),
+    'mix_effect': ('Mix effect', 'أثر المزيج'),
+    'price_effect': ('Price effect', 'أثر السعر'),
+    'observed_variance': ('Observed variance', 'الانحراف المرصود'),
+    'reconstructed_variance': ('Reconstructed variance', 'الانحراف المعاد بناؤه'),
+    'reconciliation': ('Exact reconciliation', 'مطابقة حسابية تامة'),
+    'concentration': ('Concentration above threshold', 'التركيز أعلى من الحد'),
+    'share': ('Share', 'الحصة'),
+    'threshold': ('Threshold', 'الحد'),
 }
 
 
@@ -89,8 +105,9 @@ def compose(principal, analysis_id, request):
             WHERE tenant_key=%s AND imported_at>%s AND payload->'period'=%s::jsonb ORDER BY imported_at DESC''',
             (tenant, actual['imported_at'], store._encode(actual['payload']['period'])))
         newer_actuals = [dict(zip([c.name for c in cursor.description], r)) for r in cursor.fetchall()]
-    for row, model, field in [(plan, Plan, 'cells'), (actual, Actuals, 'observations')]:
-        references = [item.source for item in getattr(model.model_validate(row['payload']), field)]
+    for row, model in [(plan, Plan), (actual, Actuals)]:
+        value = model.model_validate(row['payload'])
+        references = plan_source_references(value) if model is Plan else actual_source_references(value)
         registered_sources(tenant, row['source_pack_id'], references, principal=principal, purpose='export')
     # Do not disclose revisions from a source whose access has been revoked.
     from .dimensional_intent_sources import SourceUnavailable
@@ -153,12 +170,54 @@ def compose(principal, analysis_id, request):
             word('actual', lang) + ': ' + amount(c['actual']),
             word('variance', lang) + ': ' + amount(c['variance']),
             word('status', lang) + ': ' + word(c['status'], lang), word('evidence', lang) + ': ' + ' '.join(refs)])
+    evidence_numbers = {(item['cell_id'], item['side']): item['number'] for item in evidence}
+    for finding in result.get('findings', []):
+        finding_type = finding.get('finding_type')
+        refs = []
+        for cell in finding.get('cells', []):
+            for side in ('plan', 'actuals'):
+                number = evidence_numbers.get((cell.get('cell_id'), side))
+                if number is not None and number not in refs:
+                    refs.append(number)
+        if finding_type == 'price_volume_mix':
+            effects = finding['effects']
+            lines = [
+                label(finding['metric']) + ' (' + finding['currency_unit'] + ')',
+                word('plan_revenue', lang) + ': ' + finding['plan']['revenue'],
+                word('actual_revenue', lang) + ': ' + finding['actual']['revenue'],
+                word('volume_effect', lang) + ': ' + effects['volume'],
+                word('mix_effect', lang) + ': ' + effects['mix'],
+                word('price_effect', lang) + ': ' + effects['price'],
+                word('observed_variance', lang) + ': ' + effects['observed_variance'],
+                word('reconstructed_variance', lang) + ': ' + effects['reconstructed_variance'],
+                word('reconciliation', lang) + ': ' + ('✓' if finding['reconciles'] else '✕'),
+                word('evidence', lang) + ': ' + ' '.join('[' + str(number) + ']' for number in refs),
+            ]
+            add(word('price_volume_mix', lang), lines)
+        elif finding_type == 'offset':
+            arithmetic = finding['arithmetic']
+            add(word('finding', lang), [
+                label(finding['metric']), word('offset', lang),
+                word('behind', lang) + ': ' + arithmetic['actual_minus_plan_behind'],
+                word('ahead', lang) + ': ' + arithmetic['actual_minus_plan_ahead'],
+                word('variance', lang) + ': ' + arithmetic['net_variance'],
+                word('evidence', lang) + ': ' + ' '.join('[' + str(number) + ']' for number in refs),
+            ])
+        elif finding_type == 'concentration':
+            refs = [number for side in ('plan', 'actuals')
+                    if (number := evidence_numbers.get((finding['cell_id'], side))) is not None]
+            add(word('concentration', lang), [
+                label(finding['metric']) + ' · ' + label(finding['dimension']) + ': ' + label(finding['member']),
+                word('share', lang) + ': ' + finding['share_percent'] + '%',
+                word('threshold', lang) + ': ' + finding['threshold_percent'] + '%',
+                word('evidence', lang) + ': ' + ' '.join('[' + str(number) + ']' for number in refs),
+            ])
     for e in evidence:
         source = e['source']
         add(word('evidence', lang) + ' [' + str(e['number']) + ']',
             [e['cell_id'] + ' / ' + e['side'], source['path'], source['locator'], 'SHA-256: ' + source['sha256']],
             {'1': e['path']})
-    binding = {'composer_version': 'board-pack.v2', 'analysis_hash': analysis_id, 'plan_digest': result['plan_import_digest'],
+    binding = {'composer_version': 'board-pack.v3', 'analysis_hash': analysis_id, 'plan_digest': result['plan_import_digest'],
                'actual_digest': result['actual_import_digest'], 'template': template.model_dump(mode='json'),
                'language': lang, 'warnings': warnings, 'newer_records': newer_records}
     add('Snapshot references / مراجع اللقطة', [
@@ -167,7 +226,7 @@ def compose(principal, analysis_id, request):
         'Actuals SHA-256: ' + result['actual_import_digest'],
         'Template SHA-256: ' + fingerprint(template.model_dump(mode='json')),
         'Pack SHA-256: ' + fingerprint(binding),
-        'Composer: board-pack.v2', word('assurance', lang)])
+        'Composer: board-pack.v3', word('assurance', lang)])
     return {'schema_version': 1, 'pack_hash': fingerprint(binding), 'binding': binding,
             'checked_at': datetime.now(timezone.utc).isoformat(), 'pages': pages, 'evidence': evidence,
             'untranslated_labels': sorted({v for c in result['cells'] for v in [c['metric'], *c['dimensions'].keys(), *c['dimensions'].values()] if v not in template.labels}) if lang != 'en' else []}
