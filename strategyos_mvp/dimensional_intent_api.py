@@ -13,8 +13,10 @@ from .auth import require_role
 from .dimensional_plan import Actuals, Contract, Name, Plan
 from .plan_decomposition import DecompositionRequest, HistoricalDecompositionRequest
 from .advisor_config import AdvisorConfiguration
+from .tenant_structure import TenantStructureConfiguration
 from . import advisor_config_store as advisor_store
 from . import board_pack_store
+from . import tenant_structure_store
 from . import dimensional_intent_store as store
 from .dimensional_intent_sources import SourceUnavailable
 
@@ -145,6 +147,30 @@ def decompose_plan_from_history(plan_id: str, version: Annotated[int, Path(ge=1)
 def create_advisor_configuration(body: AdvisorConfiguration,
                                  principal: dict[str, Any] = require_role('operator')):
     return perform(lambda: advisor_store.create(principal, body))
+
+
+@router.post('/advisor/structure-configurations')
+def create_structure_configuration(body: TenantStructureConfiguration,
+                                   principal: dict[str, Any] = require_role('operator')):
+    return perform(lambda: tenant_structure_store.create(principal, body))
+
+
+@router.get('/advisor/structure-configurations')
+def structure_configurations(principal: dict[str, Any] = require_role('operator', 'reviewer', 'executive')):
+    return perform(lambda: tenant_structure_store.catalog(principal))
+
+
+@router.get('/advisor/structure-configurations/{config_id}/versions/{version}')
+def read_structure_configuration(config_id: str, version: Annotated[int, Path(ge=1)],
+                                 principal: dict[str, Any] = require_role('operator', 'reviewer', 'executive')):
+    return perform(lambda: tenant_structure_store.read(principal, config_id, version))
+
+
+@router.post('/advisor/structure-configurations/{config_id}/versions/{version}/approve')
+def approve_structure_configuration(config_id: str, version: Annotated[int, Path(ge=1)], body: Ratification,
+                                    principal: dict[str, Any] = require_role('tenant_admin')):
+    return perform(lambda: tenant_structure_store.approve(
+        principal, config_id, version, body.expected_digest, body.note))
 
 
 @router.get('/advisor/configurations')

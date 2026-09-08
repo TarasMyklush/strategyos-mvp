@@ -5,8 +5,11 @@
 | Priority | Deliverable | Definition of done | Dependency |
 | --- | --- | --- | --- |
 | Closed P0 | History-derived decomposition | Deployed: one selected prior snapshot produces disclosed weights; adjustments bridge from history to proposal; missing values never become zero | Hosted acceptance recorded |
-| Closed P0 | Guided Strategic Advisor console | Deployed: a strategy advisor configures governed source bindings, dimensions, owners, tolerances and complete bilingual board labels without JSON or an engineering ticket; readiness, approval and publication are visible | Hosted acceptance recorded |
+| P0 | Organization/dimension structure | Guided immutable versions, independent approval and plan bindings are deployed; finish hosted acceptance before closing | Registered source systems |
+| P0 | Granular plan completion | Whole-objective/multi-level decomposition, per-cell drift, concentration and assistant citation acceptance on realistic data | Approved structure contract |
+| Spec complete | Strategic Advisor console | Capture → configure → ratify workstreams, template outputs, gauges and missing-info routing are specified; implementation remains incremental | `strategic-advisor-console-spec.md` |
 | Closed P1 | Board template registry and pack history | Deployed: tenant template versions and generated pack records are durable, permissioned, downloadable and stale-aware | Hosted acceptance recorded |
+| P0 | Synthetic outreach surface | Full draft/approval/send/reply/flag lifecycle and people coverage work with the connector disabled | Typed outreach objects |
 | P1 | Healthcare/pharma demo pack | Three synthetic stories run from governed evidence through cell drift and board pack, with sector details confined to configuration | History-derived decomposition for the mix story |
 | P1 | Price/volume/mix bridge | Exact, unit-safe bridge reconciles price, volume and mix effects to the observed variance | Explicit price and volume source fields |
 | P2 | Executive adoption loop | One executive request creates an accountable owner task; reply proposes a governed update and closure remains reviewable | Advisor configuration and outreach workflow |
@@ -47,12 +50,12 @@ input, not authorization to change board intent.
 
 ## 2. Strategic Advisor configuration console
 
-The first guided client setup is implemented on `/plan`. It stores immutable
-configuration versions, derives plan and historical source bindings from authorized
-records, shows readiness, requires a separate plan-authorized reviewer, records a
-publication receipt and creates a history-derived plan proposal. Its approved
-English/Arabic labels load directly into the board composer. It does not contain
-source-policy controls.
+The first objective/decomposition setup is implemented on `/plan`. The new
+organization/dimension workstream adds sector-neutral immutable configuration,
+registered-source mappings and independent tenant-admin approval. New plan imports
+must bind to the current approved structure. The complete console remains an
+incremental build governed by `strategic-advisor-console-spec.md`; the existing
+surfaces are foundations, not full WP11 acceptance.
 
 1. Capture company scope, executive sponsor, reporting period, source inventory,
    objectives and accountabilities using existing authorized records.

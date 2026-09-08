@@ -248,3 +248,23 @@ source export eligibility and evidence bytes, then compares a fresh binding with
 the saved record. It reports current or stale with reasons and never rewrites saved
 pages. Tenant row-level security and append-only database privileges cover both new
 tables; restricted identities cannot list or create records.
+
+**REQ-35 — Approved tenant organization and dimension structure.** A guided
+Strategic Advisor workstream records business units, reusable dimension/member
+hierarchies, bilingual labels and registered-source value mappings as a
+sector-neutral declarative configuration. Versions are consecutive and immutable.
+Hierarchy cycles, unknown parents, duplicate keys, missing dimension mappings,
+unknown targets and unregistered source systems fail closed. Source identities and
+permissions are resolved server-side; the configuration cannot grant access.
+
+The creator cannot approve a structure. A separate tenant administrator approves
+the exact configuration digest, and only the latest approved version is
+authoritative for new proposals. Every new durable plan import names that structure
+ID, version and digest plus a configured business-unit scope. The plan's dimension
+set must exactly match the approved structure and all members must be configured.
+A pending plan cannot be ratified or decomposed after its structure is superseded.
+Historical unbound plans remain readable and are labelled `legacy_unbound`.
+Guidance for complicated organizations is in
+[organization-structure-guidance.md](organization-structure-guidance.md); the full
+capture → configure → ratify product contract is in
+[strategic-advisor-console-spec.md](strategic-advisor-console-spec.md).

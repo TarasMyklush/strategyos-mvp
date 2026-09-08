@@ -90,6 +90,12 @@ class PlanDerivation(Contract):
     historical_source_pack_id: Name | None = None
 
 
+class StructureBinding(Contract):
+    config_id: Name
+    version: int = Field(ge=1, strict=True)
+    digest: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
 class Plan(Contract):
     schema_version: Literal[1]
     plan_id: Name
@@ -102,6 +108,8 @@ class Plan(Contract):
     ratified_by: Name | None = None
     ratified_on: date | None = None
     ratification: SourceReference | None = None
+    business_unit: Name | None = None
+    structure: StructureBinding | None = None
     dimensions: dict[Name, list[Name]] = Field(min_length=1)
     metrics: dict[Name, Metric] = Field(min_length=1)
     cells: list[Cell] = Field(min_length=1, max_length=100000)
@@ -109,6 +117,8 @@ class Plan(Contract):
 
     @model_validator(mode="after")
     def validate_plan(self):
+        if (self.business_unit is None) != (self.structure is None):
+            raise ValueError("Business-unit scope and organization-structure binding must be supplied together.")
         if self.effective_to < self.effective_from:
             raise ValueError("Effective dates are reversed.")
         if not (self.effective_from <= self.period.start <= self.period.end <= self.effective_to):

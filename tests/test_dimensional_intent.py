@@ -24,6 +24,8 @@ from strategyos_mvp.dimensional_plan import Actuals, Plan, fingerprint
 from strategyos_mvp.plan_decomposition import DecompositionRequest, HistoricalDecompositionRequest
 from strategyos_mvp.advisor_config import AdvisorConfiguration
 from strategyos_mvp import advisor_config_store
+from strategyos_mvp.tenant_structure import TenantStructureConfiguration
+from strategyos_mvp import tenant_structure_store
 
 FIXTURE = Path(__file__).parent / 'fixtures' / 'dimensional_plan'
 TODAY = datetime.now(timezone.utc).date()
@@ -92,6 +94,14 @@ def setup(postgres, monkeypatch, tmp_path):
     admin = principal('tenant_admin', 'admin')
     operator = principal('operator', 'operator')
     executive = principal('executive', 'executive')
+    fixture_structure = TenantStructureConfiguration.model_validate(fixture_structure_body())
+    structure_record = tenant_structure_store.create(operator, fixture_structure)
+    tenant_structure_store.approve(
+        admin, fixture_structure.config_id, fixture_structure.version, structure_record['digest'],
+        'Independently reviewed fixture organization and dimension structure.')
+    p['business_unit'] = 'group'
+    p['structure'] = {'config_id': fixture_structure.config_id, 'version': fixture_structure.version,
+                      'digest': structure_record['digest']}
     app = FastAPI()
     app.include_router(router)
     current = {'principal': operator}
@@ -117,6 +127,189 @@ def approve(s, plan):
 
 def analyse(s):
     return store.create_analysis(s['executive'], s['p']['plan_id'], s['p']['version'], s['a']['revision'], TODAY)
+
+
+def structure_body(company='Example Holdings', config_id='organization-structure'):
+    return {
+        'schema_version': 1, 'config_id': config_id, 'version': 1,
+        'company': {'en': company, 'ar': 'الشركة التجريبية'},
+        'business_units': [
+            {'key': 'group', 'label': {'en': 'Group', 'ar': 'المجموعة'}},
+            {'key': 'markets', 'parent': 'group', 'label': {'en': 'Markets', 'ar': 'الأسواق'}},
+        ],
+        'dimensions': [
+            {'key': 'region', 'label': {'en': 'Region', 'ar': 'المنطقة'}, 'members': [
+                {'key': 'all-regions', 'label': {'en': 'All regions', 'ar': 'كل المناطق'}},
+                {'key': 'north', 'parent': 'all-regions', 'label': {'en': 'North', 'ar': 'الشمال'}},
+            ]},
+            {'key': 'client', 'label': {'en': 'Client', 'ar': 'العميل'}, 'members': [
+                {'key': 'all-clients', 'label': {'en': 'All clients', 'ar': 'كل العملاء'}},
+                {'key': 'institution', 'parent': 'all-clients',
+                 'label': {'en': 'Institution', 'ar': 'مؤسسة'}},
+            ]},
+        ],
+        'source_mappings': [
+            {'source_key': 'intent-proof', 'source_field': 'business_unit',
+             'target_type': 'business_unit', 'values': [
+                 {'source_value': 'Group', 'target': 'group'},
+                 {'source_value': 'Markets', 'target': 'markets'}]},
+            {'source_key': 'intent-proof', 'source_field': 'region',
+             'target_type': 'dimension', 'target_key': 'region', 'values': [
+                 {'source_value': 'ALL', 'target': 'all-regions'},
+                 {'source_value': 'N', 'target': 'north'}]},
+            {'source_key': 'intent-proof', 'source_field': 'counterparty',
+             'target_type': 'dimension', 'target_key': 'client', 'values': [
+                 {'source_value': 'ALL', 'target': 'all-clients'},
+                 {'source_value': 'INST', 'target': 'institution'}]},
+        ],
+    }
+
+
+def fixture_structure_body():
+    dimensions = []
+    mappings = [{
+        'source_key': 'intent-proof', 'source_field': 'business_unit',
+        'target_type': 'business_unit',
+        'values': [{'source_value': 'Group', 'target': 'group'}],
+    }]
+    configured = {
+        'product': ['item-a'],
+        'region': ['north', 'south'],
+        'client': ['retail', 'institution', 'hospital', 'pharmacy'],
+    }
+    for key, members in configured.items():
+        dimensions.append({
+            'key': key, 'label': {'en': key.title(), 'ar': 'بُعد ' + key},
+            'members': [{'key': member, 'label': {'en': member.title(), 'ar': 'قيمة ' + member}}
+                        for member in members],
+        })
+        mappings.append({
+            'source_key': 'intent-proof', 'source_field': key,
+            'target_type': 'dimension', 'target_key': key,
+            'values': [{'source_value': member.upper(), 'target': member} for member in members],
+        })
+    return {
+        'schema_version': 1, 'config_id': 'fixture-structure', 'version': 1,
+        'company': {'en': 'Fixture Company', 'ar': 'شركة الاختبار'},
+        'business_units': [{'key': 'group', 'label': {'en': 'Group', 'ar': 'المجموعة'}}],
+        'dimensions': dimensions, 'source_mappings': mappings,
+    }
+
+
+def test_tenant_structure_contract_is_sector_neutral_hierarchical_and_complete():
+    healthcare = TenantStructureConfiguration.model_validate(structure_body('Healthcare Distribution'))
+    exchange_body = structure_body('Securities Exchange', 'exchange-structure')
+    exchange_body['dimensions'] = [{
+        'key': 'instrument', 'label': {'en': 'Instrument', 'ar': 'الأداة'},
+        'members': [{'key': 'equity', 'label': {'en': 'Equity', 'ar': 'أسهم'}}],
+    }]
+    exchange_body['source_mappings'] = [exchange_body['source_mappings'][0], {
+        'source_key': 'intent-proof', 'source_field': 'security_type',
+        'target_type': 'dimension', 'target_key': 'instrument',
+        'values': [{'source_value': 'EQ', 'target': 'equity'}],
+    }]
+    exchange = TenantStructureConfiguration.model_validate(exchange_body)
+    assert healthcare.dimensions[0].key == 'region'
+    assert exchange.dimensions[0].key == 'instrument'
+    broken = structure_body()
+    broken['business_units'][0]['parent'] = 'markets'
+    with pytest.raises(ValueError, match='cycle'):
+        TenantStructureConfiguration.model_validate(broken)
+    broken = structure_body()
+    broken['source_mappings'].pop()
+    with pytest.raises(ValueError, match='required'):
+        TenantStructureConfiguration.model_validate(broken)
+    broken = structure_body()
+    broken['source_mappings'][1]['values'][1]['target'] = 'unconfigured'
+    with pytest.raises(ValueError, match='not configured'):
+        TenantStructureConfiguration.model_validate(broken)
+
+
+def test_tenant_structure_versions_readiness_approval_and_api(setup):
+    s = setup
+    configuration = TenantStructureConfiguration.model_validate(structure_body())
+    created = tenant_structure_store.create(s['operator'], configuration)
+    assert created['readiness']['status'] == 'ready'
+    assert all(created['readiness']['checks'].values())
+    assert created['source_bindings'] == [{'source_key': 'intent-proof', 'source_system_id': 1}]
+    assert tenant_structure_store.create(s['operator'], configuration) == created
+    with pytest.raises(PermissionError):
+        tenant_structure_store.approve(s['operator'], configuration.config_id, 1, created['digest'],
+                                       'Reviewed organization, dimensions and mappings.')
+    approval = tenant_structure_store.approve(s['admin'], configuration.config_id, 1, created['digest'],
+                                               'Reviewed organization, dimensions and mappings independently.')
+    assert approval['config_digest'] == created['digest']
+    approved = tenant_structure_store.read(s['executive'], configuration.config_id, 1)
+    assert approved['readiness']['status'] == 'approved'
+    assert approved['authoritative'] is True
+    changed = structure_body(); changed['company']['en'] = 'Changed'
+    with pytest.raises(store.Conflict, match='different content'):
+        tenant_structure_store.create(s['operator'], TenantStructureConfiguration.model_validate(changed))
+    second = structure_body(); second['version'] = 2; second['company']['en'] = 'Example Holdings v2'
+    proposed = tenant_structure_store.create(s['operator'], TenantStructureConfiguration.model_validate(second))
+    assert proposed['authoritative'] is False
+    assert tenant_structure_store.read(s['executive'], configuration.config_id, 1)['authoritative'] is True
+    skipped = structure_body(); skipped['version'] = 4
+    with pytest.raises(store.Conflict, match='consecutive'):
+        tenant_structure_store.create(s['operator'], TenantStructureConfiguration.model_validate(skipped))
+    unknown = structure_body(config_id='unknown-source')
+    unknown['source_mappings'][0]['source_key'] = 'not-registered'
+    with pytest.raises(ValueError, match='Register'):
+        tenant_structure_store.create(s['operator'], TenantStructureConfiguration.model_validate(unknown))
+    s['current']['principal'] = s['operator']
+    listed = s['client'].get('/api/intent/dimensional/advisor/structure-configurations')
+    assert listed.status_code == 200
+    assert any(item['config_id'] == 'organization-structure' and item['version'] == 1 and item['approved']
+               for item in listed.json()['configurations'])
+    read = s['client'].get('/api/intent/dimensional/advisor/structure-configurations/organization-structure/versions/1')
+    assert read.status_code == 200 and read.json()['payload']['dimensions'][0]['key'] == 'region'
+    assert s['client'].post('/api/intent/dimensional/advisor/structure-configurations',
+                            json=configuration.model_dump(mode='json')).status_code == 200
+    with s['connect']() as conn:
+        for table in ['strategyos_intent_structure_configs', 'strategyos_intent_structure_approvals']:
+            with pytest.raises(psycopg.Error, match='immutable'):
+                conn.execute(sql.SQL('UPDATE {} SET tenant_key=tenant_key').format(sql.Identifier(table)))
+            conn.rollback()
+
+
+def test_plan_import_and_ratification_require_current_approved_structure(setup):
+    s = setup
+    unbound = deepcopy(s['p'])
+    unbound.pop('business_unit'); unbound.pop('structure')
+    with pytest.raises(ValueError, match='approved organization-structure'):
+        store.import_plan(s['operator'], Plan.model_validate(unbound), s['pack'])
+    changed_digest = deepcopy(s['p'])
+    changed_digest['structure']['digest'] = '0' * 64
+    with pytest.raises(store.Conflict, match='fingerprint'):
+        store.import_plan(s['operator'], Plan.model_validate(changed_digest), s['pack'])
+    unknown_member = deepcopy(s['p'])
+    unknown_member['dimensions']['client'].append('unconfigured-client')
+    with pytest.raises(ValueError, match='outside the approved'):
+        store.import_plan(s['operator'], Plan.model_validate(unknown_member), s['pack'])
+    imported = store.import_plan(s['operator'], Plan.model_validate(s['p']), s['pack'])
+    current = store.read_plan(s['executive'], s['p']['plan_id'], 1)
+    assert current['structure']['status'] == 'current'
+    assert current['structure']['business_unit'] == 'group'
+
+    successor_body = fixture_structure_body()
+    successor_body['version'] = 2
+    successor_body['company']['en'] = 'Fixture Company Updated'
+    successor = tenant_structure_store.create(
+        s['operator'], TenantStructureConfiguration.model_validate(successor_body))
+    pending_structure = deepcopy(s['p'])
+    pending_structure['version'] = 2
+    pending_structure['structure'] = {'config_id': 'fixture-structure', 'version': 2,
+                                      'digest': successor['digest']}
+    with pytest.raises(store.Conflict, match='independently approved'):
+        store.import_plan(s['operator'], Plan.model_validate(pending_structure), s['pack'])
+    tenant_structure_store.approve(
+        s['admin'], 'fixture-structure', 2, successor['digest'],
+        'Independently reviewed the updated fixture organization structure.')
+    assert store.read_plan(s['executive'], s['p']['plan_id'], 1)['structure']['status'] == 'superseded'
+    store.set_ratifier(s['admin'], s['p']['plan_id'], s['executive']['subject'], True, 0)
+    with pytest.raises(store.Conflict, match='superseded'):
+        store.ratify(s['executive'], s['p']['plan_id'], 1, imported['digest'],
+                     'Reviewed the targets, owners and source evidence.')
 
 
 def test_durable_roundtrip_and_immutable_history(setup):

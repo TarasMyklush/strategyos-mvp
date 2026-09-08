@@ -148,11 +148,15 @@ rights below; being an executive alone does not confer ratification permission.
 |---|---|---|
 | `GET /catalog?offset=0&limit=25` | Allowed whole-company reader | Eligible plan/actual summaries, pagination and caller capabilities |
 | `GET /plans/{plan_id}/versions/{version}/evidence?cell_id=...` | Allowed whole-company reader | Hash-checked source attachment for pre-ratification review |
-| `POST /plans` | Operator, tenant operator or tenant admin | `{source_pack_id, plan}`; returns immutable proposal, digest and importer |
+| `POST /plans` | Operator, tenant operator or tenant admin | `{source_pack_id, plan}`; plan includes `business_unit` and an approved `{structure: {config_id, version, digest}}`; returns immutable proposal, digest and importer |
 | `GET /plans/{plan_id}/versions/{version}` | Allowed whole-company reader | Original payload plus separate `governance_status` and ratification receipt |
 | `GET /plans/{plan_id}/ratifier?subject=...` | Tenant admin | Current grant revision, or disabled/revision 0 |
 | `PUT /plans/{plan_id}/ratifier` | Tenant admin | `{subject, enabled, expected_revision}`; appends grant/revocation event |
 | `POST /plans/{plan_id}/versions/{version}/ratify` | Granted executive, reviewer or tenant admin | `{expected_digest, note}`; note is 20–2,000 characters |
+| `POST /advisor/structure-configurations` | Operator, tenant operator or tenant admin | Declarative business units, dimensions, hierarchies and registered-source mappings; saves an immutable version |
+| `GET /advisor/structure-configurations` | Allowed whole-company reader | Structure version catalog and approval state |
+| `GET /advisor/structure-configurations/{config_id}/versions/{version}` | Allowed whole-company reader | Exact payload, source bindings, readiness, approval and authoritative status |
+| `POST /advisor/structure-configurations/{config_id}/versions/{version}/approve` | Tenant admin distinct from creator | `{expected_digest, note}`; approves the exact structure version |
 | `POST /actuals` | Operator, tenant operator or tenant admin | `{source_pack_id, actuals}`; returns immutable actual revision |
 | `GET /actuals/{revision}` | Allowed whole-company reader | Original actual payload and importer |
 | `POST /analyses` | Allowed whole-company reader | `{plan_id, plan_version, actual_revision, as_of}`; calculates and persists a snapshot |

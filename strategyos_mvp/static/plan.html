@@ -904,6 +904,42 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   <div id="advisor-console" class="vault-panel">
     <div class="section-head"><div><div class="section-eyebrow">Client setup</div><h2>Strategic Advisor console</h2></div><button id="advisor-refresh" class="secondary" type="button">Refresh configurations</button></div>
     <p>Configure one approved objective, its historical allocation, accountabilities and bilingual board labels. Source bindings come from governed records and cannot be edited here.</p>
+    <details id="structure-setup">
+      <summary>Organization and dimension structure</summary>
+      <p class="vault-note">Define the business units in scope, reusable dimension hierarchies and how registered source fields map to them. Save a new version when the structure changes; a separate tenant administrator approves the authoritative version.</p>
+      <div class="vault-controls">
+        <label class="vault-field">Saved structure<select id="structure-select"><option value="">Choose a saved structure</option></select></label>
+        <button id="structure-open" type="button" class="secondary">Open</button>
+      </div>
+      <form id="structure-form">
+        <div class="vault-controls">
+          <label class="vault-field">Configuration ID<input id="structure-id" required maxlength="160" pattern="[A-Za-z0-9][A-Za-z0-9_.-]*" value="organization-structure"></label>
+          <label class="vault-field">Version<input id="structure-version" type="number" min="1" value="1" required></label>
+          <label class="vault-field">Company · English<input id="structure-company-en" required maxlength="100"></label>
+          <label class="vault-field">الشركة · العربية<input id="structure-company-ar" required maxlength="100" dir="rtl"></label>
+        </div>
+        <h3>Business units in scope</h3>
+        <div id="structure-business-units"></div>
+        <button id="structure-add-unit" type="button" class="secondary">Add business unit</button>
+        <h3>Dimensions and hierarchy</h3>
+        <div id="structure-dimensions"></div>
+        <button id="structure-add-dimension" type="button" class="secondary">Add dimension</button>
+        <h3>Registered source mappings</h3>
+        <p class="vault-note">Add one mapping for the business-unit structure and one for every configured dimension. Source values must map to configured keys.</p>
+        <div id="structure-mappings"></div>
+        <button id="structure-add-mapping" type="button" class="secondary">Add source mapping</button>
+        <div class="vault-actions"><button type="submit">Save structure version</button></div>
+      </form>
+      <div id="structure-review" hidden>
+        <h3 id="structure-review-title">Structure review</h3>
+        <div id="structure-review-summary" class="vault-metadata"></div>
+        <form id="structure-approve-form" hidden>
+          <label class="vault-field">Independent review note<textarea id="structure-review-note" minlength="20" maxlength="2000" rows="3" required></textarea></label>
+          <button type="submit">Approve authoritative structure</button>
+        </form>
+      </div>
+      <p id="structure-status" class="vault-message" role="status" aria-live="polite"></p>
+    </details>
     <div class="vault-controls">
       <label class="vault-field">Saved configuration<select id="advisor-select"><option value="">Choose a configuration</option></select></label>
       <button id="advisor-load-saved" class="secondary" type="button">Open</button>
@@ -993,7 +1029,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   </div>
   <div id="import-panel" class="vault-panel" hidden>
     <details><summary>Import plan and actual snapshots</summary>
-      <p>Use validated JSON extracts and an existing registered evidence pack. A plan import always creates a proposal.</p>
+      <p>Use validated JSON extracts and an existing registered evidence pack. A plan import always creates a proposal. New plans must name a configured business-unit scope and the ID, version and digest of the current approved organization structure.</p>
       <form id="plan-import-form"><h3>Plan proposal</h3><div class="vault-controls"><label class="vault-field">Plan evidence pack<input id="plan-pack" required maxlength="160"></label><label class="vault-field">Plan JSON<input id="plan-file" type="file" accept=".json,application/json" required></label><button type="submit">Import proposal</button></div></form>
       <form id="actual-import-form" style="margin-top:24px"><h3>Actual snapshot</h3><div class="vault-controls"><label class="vault-field">Actual evidence pack<input id="actual-pack" required maxlength="160"></label><label class="vault-field">Actuals JSON<input id="actual-file" type="file" accept=".json,application/json" required></label><button type="submit">Import actuals</button></div></form>
     </details>
@@ -1004,5 +1040,6 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 <script src="/static/board_pack.js" defer></script>
 <script src="/static/intent_vault.js" defer></script>
 <script src="/static/advisor_console.js" defer></script>
+<script src="/static/structure_console.js" defer></script>
 </body>
 </html>

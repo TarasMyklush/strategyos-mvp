@@ -106,7 +106,9 @@
     window.dispatchEvent(new CustomEvent('kyvern-plan', { detail: state.record }));
     var record = state.record, plan = record.payload;
     $('plan-title').textContent = record.plan_id + ' · Version ' + record.version;
-    $('plan-metadata').replaceChildren(node('p', label(record.governance_status)), node('p', plan.period.start + ' to ' + plan.period.end), node('p', 'Imported by ' + record.imported_by));
+    var structureText = record.structure.status === 'legacy_unbound' ? 'Legacy plan · no structure binding' :
+      'Structure ' + record.structure.config_id + ' v' + record.structure.version + ' · ' + label(record.structure.status) + ' · ' + record.structure.business_unit;
+    $('plan-metadata').replaceChildren(node('p', label(record.governance_status)), node('p', plan.period.start + ' to ' + plan.period.end), node('p', structureText), node('p', 'Imported by ' + record.imported_by));
     $('approval-note').textContent = record.ratification ? 'Ratified by ' + record.ratification.approved_by + ' on ' + record.ratification.approved_at.slice(0, 10) + '. ' + record.ratification.note : 'This is a proposal. A separately authorized reviewer must ratify it before drift can be calculated.';
     table('plan-cells', ['Cell / dimensions', 'Metric', 'Owner', 'Target', 'Tolerance', 'Evidence'], plan.cells.map(function (c) {
       return [c.id + ' · ' + dimensions(c.dimensions), c.metric, c.owner, c.target + ' ' + plan.metrics[c.metric].unit, c.tolerance,

@@ -128,6 +128,58 @@ def _plan_payload(plan):
     return payload
 
 
+def _validate_structure_binding(conn, tenant, plan, *, require_current=True):
+    """Prove that plan granularity comes from an independently approved tenant structure."""
+    if plan.structure is None or plan.business_unit is None:
+        raise ValueError('New plan imports require an approved organization-structure version and business-unit scope.')
+    binding = plan.structure
+    row = _checked(_row(conn, '''SELECT * FROM strategyos_intent_structure_configs
+        WHERE tenant_key=%s AND config_id=%s AND version=%s''',
+        (tenant, binding.config_id, binding.version)))
+    if row['digest'] != binding.digest:
+        raise Conflict('Organization structure fingerprint differs from the plan binding.')
+    approval = _row(conn, '''SELECT config_digest FROM strategyos_intent_structure_approvals
+        WHERE tenant_key=%s AND config_id=%s AND version=%s''',
+        (tenant, binding.config_id, binding.version))
+    if not approval or approval['config_digest'] != row['digest']:
+        raise Conflict('Plans can only use an independently approved organization structure.')
+    latest_approved = conn.execute('''SELECT COALESCE(MAX(version),0)
+        FROM strategyos_intent_structure_approvals WHERE tenant_key=%s AND config_id=%s''',
+        (tenant, binding.config_id)).fetchone()[0]
+    if require_current and latest_approved != binding.version:
+        raise Conflict('The plan structure is superseded; bind the current approved organization structure.')
+    from .tenant_structure import TenantStructureConfiguration
+    configuration = TenantStructureConfiguration.model_validate(row['payload'])
+    units = {unit.key for unit in configuration.business_units}
+    if plan.business_unit not in units:
+        raise ValueError('Plan business-unit scope is not present in the approved organization structure.')
+    configured = {dimension.key: {member.key for member in dimension.members}
+                  for dimension in configuration.dimensions}
+    if set(plan.dimensions) != set(configured):
+        raise ValueError('Plan dimensions must exactly match the approved organization structure.')
+    for dimension, members in plan.dimensions.items():
+        unknown = sorted(set(members) - configured[dimension])
+        if unknown:
+            raise ValueError(dimension + ' contains members outside the approved organization structure: '
+                             + ', '.join(unknown) + '.')
+    return {'status': 'current' if latest_approved == binding.version else 'superseded',
+            'config_id': binding.config_id, 'version': binding.version,
+            'digest': binding.digest, 'business_unit': plan.business_unit}
+
+
+def _structure_status(conn, tenant, plan):
+    if plan.structure is None:
+        return {'status': 'legacy_unbound'}
+    return _validate_structure_binding(conn, tenant, plan, require_current=False)
+
+
+def _validate_existing_structure(conn, tenant, plan):
+    """Enforce current bindings while preserving pre-cutover immutable records."""
+    if plan.structure is not None:
+        return _validate_structure_binding(conn, tenant, plan)
+    return {'status': 'legacy_unbound'}
+
+
 def import_plan(principal, plan: Plan, source_pack_id: str):
     tenant, actor = _scope(principal, IMPORT_ROLES)
     if plan.company_id != tenant:
@@ -143,6 +195,7 @@ def import_plan(principal, plan: Plan, source_pack_id: str):
     _sources(principal, {'payload': payload, 'source_pack_id': source_pack_id}, kind='plan')
     with _connection() as conn:
         _lock(conn, tenant, plan.plan_id)
+        _validate_structure_binding(conn, tenant, plan)
         existing = _row(conn, '''SELECT * FROM strategyos_intent_plan_versions
             WHERE tenant_key=%s AND plan_id=%s AND version=%s''', (tenant, plan.plan_id, plan.version))
         if existing:
@@ -176,6 +229,7 @@ def create_decomposition(principal, plan_id, version, request):
     with _connection() as conn:
         _lock(conn, tenant, plan_id)
         parent = _plan(conn, tenant, plan_id, version)
+        _validate_existing_structure(conn, tenant, Plan.model_validate(parent['payload']))
         if parent['digest'] != request.parent_digest:
             raise Conflict('Parent plan fingerprint differs from the version reviewed.')
         approval = _row(conn, '''SELECT version FROM strategyos_intent_ratifications
@@ -223,6 +277,7 @@ def history_candidates(principal, plan_id, version, parent_cell_id, split_dimens
     _key(actual_revision)
     with _connection() as conn:
         parent = _plan(conn, tenant, plan_id, version)
+        _validate_existing_structure(conn, tenant, Plan.model_validate(parent['payload']))
         actual_row = _actuals(conn, tenant, actual_revision)
         approval = conn.execute('''SELECT 1 FROM strategyos_intent_ratifications
             WHERE tenant_key=%s AND plan_id=%s AND version=%s''', (tenant, plan_id, version)).fetchone()
@@ -263,6 +318,7 @@ def create_history_decomposition(principal, plan_id, version, request):
     with _connection() as conn:
         _lock(conn, tenant, plan_id)
         parent = _plan(conn, tenant, plan_id, version)
+        _validate_existing_structure(conn, tenant, Plan.model_validate(parent['payload']))
         actual_row = _actuals(conn, tenant, request.historical_actual_revision)
         if parent['digest'] != request.parent_digest:
             raise Conflict('Parent plan fingerprint differs from the version reviewed.')
@@ -340,8 +396,10 @@ def read_plan(principal, plan_id, version):
         approval = _row(conn, '''SELECT approved_by, approved_at, plan_digest, grant_revision, note
             FROM strategyos_intent_ratifications WHERE tenant_key=%s AND plan_id=%s AND version=%s''',
             (tenant, plan_id, version))
+        structure = _structure_status(conn, tenant, Plan.model_validate(row['payload']))
     _sources(principal, row, kind='plan')
     return {**_public(row), 'governance_status': 'ratified' if approval else 'proposed',
+            'structure': structure,
             'ratification': _public(approval) if approval else None,
             'permissions': {'can_ratify': principal['role'] in RATIFY_ROLES and bool(grant and grant['enabled'])
                             and row['imported_by'] != actor and not approval}}
@@ -393,6 +451,7 @@ def ratify(principal, plan_id, version, expected_digest, note):
         row = _plan(conn, tenant, plan_id, version)
         if row['digest'] != expected_digest:
             raise Conflict('Plan fingerprint differs from the version reviewed.')
+        _validate_existing_structure(conn, tenant, Plan.model_validate(row['payload']))
         grant = _row(conn, '''SELECT revision,enabled FROM strategyos_intent_ratifier_events
             WHERE tenant_key=%s AND plan_id=%s AND subject=%s ORDER BY revision DESC LIMIT 1''',
             (tenant, plan_id, actor))
