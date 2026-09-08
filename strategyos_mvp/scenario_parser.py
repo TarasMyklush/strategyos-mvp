@@ -788,6 +788,14 @@ def _governed_revenue_baseline(context: Mapping[str, Any]) -> dict[str, Any] | N
                 "locator": "components.revenue_actual,components.revenue_plan",
                 "excerpt": "",
             }]
+        records = getattr(context.get("bundle"), "authorized_claim_records", None)
+        if records is not None:
+            from .fact_rendering import fact_registry
+            claims = payload.get("component_claims") or {}
+            refs = [claims.get(component, {}).get("claim_revision_id") for component in ['revenue_actual', 'revenue_plan']]
+            support = _scenario_claim_support({"fact_registry": fact_registry(records),
+                "run_id": context.get("run_id") or summary.get("run_id")}, refs)
+            citations = support["citations"]
         return {
             "source_key": key,
             "period": str(payload.get("reporting_period_key") or summary.get("reporting_period") or "current governed period"),
@@ -834,6 +842,14 @@ def _governed_revenue_actual(context: Mapping[str, Any]) -> dict[str, Any] | Non
                 "locator": "components.revenue_actual",
                 "excerpt": "",
             }]
+        records = getattr(context.get("bundle"), "authorized_claim_records", None)
+        if records is not None:
+            from .fact_rendering import fact_registry
+            claims = payload.get("component_claims") or {}
+            refs = [claims.get(component, {}).get("claim_revision_id") for component in ['revenue_actual']]
+            support = _scenario_claim_support({"fact_registry": fact_registry(records),
+                "run_id": context.get("run_id") or summary.get("run_id")}, refs)
+            citations = support["citations"]
         return {
             "source_key": key,
             "period": str(payload.get("reporting_period_key") or summary.get("reporting_period") or "current governed period"),

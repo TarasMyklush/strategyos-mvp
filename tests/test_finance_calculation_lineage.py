@@ -110,3 +110,27 @@ def test_budget_bridge_reaches_http_with_immutable_calculation_inputs(monkeypatc
     finally:
         api.app.dependency_overrides.clear()
         api.app.dependency_overrides.update(overrides)
+
+
+@pytest.mark.parametrize('has_plan',[True,False])
+def test_revenue_target_retains_supported_flow_and_exact_input_refs(has_plan):
+    ctx=context()
+    if not has_plan:
+        records=[r for r in ctx['bundle'].authorized_claim_records if r['dimensions'].get('component_key')!='revenue_plan']
+        ctx['bundle'].authorized_claim_records=records
+        ctx['summary']['finance_kpi']=finance_payload_from_claim_snapshot({}, {'records':records})
+    result=parse_scenario('Revenue is at 99.4% of plan. How do we make it 100%?',ctx)
+    assert result.scenario_id=='revenue_plan_attainment'
+    assert result.scenario_type!='missing_data'
+    expected={'revision-revenue_actual','revision-revenue_plan'} if has_plan else {'revision-revenue_actual'}
+    assert {c['claim_revision_id'] for c in result.citations}==expected
+    assert result.calculations
+    assert all({f['claim_revision_id'] for f in step.inputs['facts']}==expected for step in result.calculations)
+
+
+def test_target_margin_keeps_authorized_calculation_under_shared_gate():
+    result=parse_scenario('How can we achieve a 25% EBITDA margin?',context())
+    assert result.scenario_id=='ebitda_target_margin'
+    assert result.scenario_type!='missing_data'
+    assert result.calculations and result.citations
+    assert all(step.inputs.get('facts') for step in result.calculations)
