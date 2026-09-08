@@ -330,3 +330,35 @@ outcomes include a confirmed commitment, updated forecast and two review risks.
 
 Evidence: [hosted acceptance](evidence/outreach-hosted-acceptance.json) and
 [workflow](https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34231325546).
+
+## Hosted commercial bridge and configured decision pack — 8 September 2026
+
+Release **3685a7f** is deployed to **https://new.strategyos.live/plan**. It adds
+an exact price/volume/mix bridge and a read-only configured demo pack with three
+synthetic healthcare distribution stories. The mix plan carries history-derived
+lineage, and every story reaches granular drift and a bilingual `board-pack.v3`
+snapshot.
+
+- The hosted service gate passed **2,381 tests with zero skips**, including the
+  required PostgreSQL, Neo4j and Qdrant proofs.
+- The immutable runtime image is
+  `sha256:1b8d249fa4955831f4808a6c9031ac8214b53a7ace49a5309f804b6a56ec79b1`.
+- The deployment backed up the preview database and passed worker health, protected
+  readiness, governed-surface, internal-edge and public HTTPS checks.
+- The bridge uses explicit currency, price and volume units. In the acceptance
+  story, volume `60.00`, mix `-30.00` and price `3.00` reconcile exactly to the
+  observed `33` SAR variance. Planned and actual revenue, price and volume each
+  have a direct authorized evidence link.
+- The hosted `demo_pack.js` and `intent_vault.js` exactly match the committed
+  assets. Anonymous `/plan` access redirects to sign-in; catalog, story and
+  evidence APIs return 401.
+- The local full suite passed **2,225 tests**, with 154 service tests explicitly
+  skipped outside dedicated environments. A focused browser walkthrough verified
+  the three-story catalog, bridge arithmetic, evidence drilldown and bilingual
+  board pages.
+- This acceptance uses synthetic data and imported simulated board metadata. It
+  does not certify real client source semantics or approval and does not add an
+  external email connector.
+
+Evidence: [hosted acceptance](evidence/p1-commercial-demo-hosted-acceptance.json)
+and [workflow](https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34239830135).

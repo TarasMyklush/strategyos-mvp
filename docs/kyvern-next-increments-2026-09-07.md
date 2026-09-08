@@ -10,13 +10,13 @@
 | Spec complete | Strategic Advisor console | Capture → configure → ratify workstreams, template outputs, gauges and missing-info routing are specified; implementation remains incremental | `strategic-advisor-console-spec.md` |
 | Closed P1 | Board template registry and pack history | Deployed: tenant template versions and generated pack records are durable, permissioned, downloadable and stale-aware | Hosted acceptance recorded |
 | Closed P0 | Synthetic outreach surface | Deployed: typed draft/approval/send/reply/flag lifecycle, structured outcomes and named people coverage with connector disabled | Hosted service and edge acceptance recorded |
-| P1 | Healthcare/pharma demo pack | Three synthetic stories run from governed evidence through cell drift and board pack, with sector details confined to configuration | History-derived decomposition for the mix story |
-| P1 | Price/volume/mix bridge | Exact, unit-safe bridge reconciles price, volume and mix effects to the observed variance | Explicit price and volume source fields |
+| Closed P1 | Healthcare/pharma demo pack | Deployed: three synthetic stories run from governed evidence through cell drift and bilingual board pack, with sector details confined to configuration | Hosted acceptance recorded |
+| Closed P1 | Price/volume/mix bridge | Deployed: exact, unit-safe bridge reconciles price, volume and mix effects to observed variance with direct input evidence | Hosted acceptance recorded |
 | P2 | Executive adoption loop | One executive request creates an accountable owner task; reply proposes a governed update and closure remains reviewable | Advisor configuration and outreach workflow |
 | Blocked | Minimal email connector | Allowlisted test-domain draft/send/reply/commitment path passes security and retention acceptance | Test domain access and connector credentials |
 
-All currently unblocked P0 increments are deployed. The connector can move into P1
-as soon as its dependency is available; the synthetic surface remains available.
+All currently unblocked P0 and P1 increments are deployed. The email connector is
+the remaining blocked item and can start when test-domain access and credentials are available.
 
 ## 1. Plan decomposition: engine proposes, Vault records
 
@@ -81,15 +81,21 @@ before calling the complete client board pack ready.
 
 ## 4. Sector demonstration and adoption
 
-Create a healthcare/pharma configuration pack and synthetic evidence for the three
-stories in the direction paper: regional miss offset by institutional business,
-tender win masking retail/margin erosion, and regional miss linked to credit hold
-and receivables. Add evidence and calculations before narrative. Demonstrate an
-executive request pulling an accountable owner into the review, then closing the
-loop with a recorded response and approved change.
+The deployed configuration pack and synthetic evidence now cover the three stories
+in the direction paper: regional miss offset by institutional business, commercial
+mix hidden by aggregate growth, and regional miss linked to a credit hold. The mix
+story carries history-derived plan lineage. Every story runs through deterministic
+cell drift and the bilingual board composer, while all sector terms remain in the
+configuration pack.
 
-Price/volume/mix requires explicit price, volume and mix inputs and a reconciled
-bridge. Current variance and offset detection do not implement that attribution.
+The deployed price/volume/mix engine requires explicit unit-tagged price and volume
+source fields, uses a disclosed calculation order and reconciles exactly to observed
+variance. Plan revenue, actual revenue, planned and actual price, and planned and
+actual volume are separately openable from the product and board pack.
+
+The remaining work in this section is the P2 executive adoption loop: demonstrate
+an executive request pulling an accountable owner into the review, then close it
+with a recorded response and approved change.
 
 ## 5. Minimal permissioned outreach connector
 

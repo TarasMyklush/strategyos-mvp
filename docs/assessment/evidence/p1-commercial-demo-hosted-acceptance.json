@@ -1,0 +1,99 @@
+{
+  "recorded_at": "2026-09-08T14:58:50Z",
+  "environment": "preview",
+  "base_url": "https://new.strategyos.live",
+  "release": {
+    "commit": "3685a7f0e798a6b94b9145cbd5f04d2c394181e2",
+    "image": "ghcr.io/tarasmyklush/strategyos-mvp@sha256:1b8d249fa4955831f4808a6c9031ac8214b53a7ace49a5309f804b6a56ec79b1",
+    "workflow_run": 34239830135,
+    "workflow_url": "https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34239830135",
+    "conclusion": "success"
+  },
+  "service_gate": {
+    "passed": 2381,
+    "skipped": 0,
+    "warnings": 6,
+    "duration_seconds": 428.79,
+    "required_service_proof_gate": "passed"
+  },
+  "deployment": {
+    "database_backup_before_migration": "passed",
+    "compose_stack": "passed",
+    "worker_health": "passed",
+    "protected_readiness": "passed",
+    "governed_cloud_surface": "passed",
+    "internal_edge": "passed",
+    "public_https_edge": "passed"
+  },
+  "price_volume_mix": {
+    "formula_version": "price-volume-mix.v1",
+    "currency_unit": "SAR",
+    "price_unit": "SAR/unit",
+    "volume_unit": "unit",
+    "planned_revenue": "300",
+    "actual_revenue": "333",
+    "effects": {
+      "volume": "60.00",
+      "mix": "-30.00",
+      "price": "3.00",
+      "observed_variance": "33",
+      "reconstructed_variance": "33.00"
+    },
+    "reconciles": true,
+    "rounding": "half_even; mix absorbs currency rounding remainder",
+    "direct_evidence_sides": [
+      "plan",
+      "actuals",
+      "plan_price",
+      "plan_volume",
+      "actual_price",
+      "actual_volume"
+    ]
+  },
+  "configured_demo_pack": {
+    "pack_sha256": "27e7b14401f5bc0d88020ac635260caf9ed8c7a8760a7601d040aebb153a1622",
+    "evidence_sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d",
+    "catalog_digest": "628733c20793a06f96c945d4feea3a35b5a127896be12e6d1e309c4ea1b3a98c",
+    "story_count": 3,
+    "story_ids": [
+      "regional-client-rescue",
+      "price-volume-mix",
+      "regional-credit-constraint"
+    ],
+    "history_derived_mix_plan": true,
+    "bilingual_board_pack": true,
+    "mode": "synthetic",
+    "sector_layer": "configuration_only",
+    "authority_effect": "none"
+  },
+  "hosted_checks": {
+    "demo_javascript_sha256": "2b8daff7f6b49125cc00968c04472d92b24eac844db5e750470d279976192b0c",
+    "committed_demo_javascript_sha256": "2b8daff7f6b49125cc00968c04472d92b24eac844db5e750470d279976192b0c",
+    "intent_javascript_sha256": "23f247e4ab568459e9bc6b9791ffcb4b95264e6dadafc7fa1ce68fe273c58df6",
+    "committed_intent_javascript_sha256": "23f247e4ab568459e9bc6b9791ffcb4b95264e6dadafc7fa1ce68fe273c58df6",
+    "asset_match": true,
+    "anonymous_plan_status": 307,
+    "anonymous_plan_redirect": "/login",
+    "anonymous_catalog_status": 401,
+    "anonymous_story_status": 401,
+    "anonymous_evidence_status": 401
+  },
+  "local_acceptance": {
+    "complete_suite_passed": 2225,
+    "complete_suite_skipped": 154,
+    "final_dimensional_and_demo_tests_passed": 110,
+    "wheel_contains_config_evidence_api_and_ui": true,
+    "focused_browser": [
+      "three configured stories rendered",
+      "commercial bridge arithmetic rendered",
+      "plan and actual evidence links rendered",
+      "bilingual board pages rendered"
+    ]
+  },
+  "limitations": {
+    "synthetic_data": true,
+    "real_client_approval": false,
+    "semantic_source_certification": false,
+    "external_email_connector": false
+  }
+}
