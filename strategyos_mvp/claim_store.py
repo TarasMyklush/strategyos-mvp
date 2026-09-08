@@ -884,18 +884,19 @@ class ClaimRepository:
                      query.subject_type,query.subject_type,query.subject_key,scopes,scopes,query.as_of_at),
                 )
                 rows = [_record(cur, row) for row in cur.fetchall()]
+                from .claim_read_batch import load_leaf_batch
+                read_batch = load_leaf_batch(cur, rows, tenant_id=tenant_id, as_of_at=query.as_of_at)
                 results: list[dict[str, Any]] = []
                 for row in rows:
-                    row["source_occurrence_keys"] = self._occurrence_keys(cur, row["id"])
-                    row["input_revision_ids"] = self._input_revision_ids(cur, row["id"])
+                    leaf = read_batch.get(str(row['id']))
+                    row["source_occurrence_keys"] = leaf['occurrences'] if leaf is not None else self._occurrence_keys(cur, row["id"])
+                    row["input_revision_ids"] = [] if leaf is not None else self._input_revision_ids(cur, row["id"])
                     claim = self._hydrate_claim(row)
-                    assessments = self._assessments(
-                        cur, claim.revision_id, as_of_at=query.as_of_at
-                    )
-                    source_details = self._source_details(cur, claim.revision_id, as_of_at=query.as_of_at)
-                    policies, missing_policy_sources = self._policies_for_revision(
-                        cur, tenant_id, claim.revision_id
-                    )
+                    assessments = leaf['assessments'] if leaf is not None else self._assessments(
+                        cur, claim.revision_id, as_of_at=query.as_of_at)
+                    source_details = leaf['sources'] if leaf is not None else self._source_details(cur, claim.revision_id, as_of_at=query.as_of_at)
+                    policies, missing_policy_sources = (leaf['policies'], leaf['missing']) if leaf is not None else self._policies_for_revision(
+                        cur, tenant_id, claim.revision_id)
                     if missing_policy_sources or not self._lineage_eligible(cur, claim, query, context):
                         continue
                     eligibility = claim_is_eligible(
@@ -919,9 +920,8 @@ class ClaimRepository:
                             and policy_allows(context=replace(context, purpose=UsePurpose.OPERATIONS),
                                 claim=claim, source_policies=policies).eligible)
                         record["indexing_allowed"] = bool(policies) and all(p.index_allowed for p in policies)
-                        record["superseded_since_analysis"] = not self._revision_is_current(
-                            cur, claim.revision_id, datetime.now(UTC)
-                        )
+                        record["superseded_since_analysis"] = not (leaf['current'] if leaf is not None else self._revision_is_current(
+                            cur, claim.revision_id, datetime.now(UTC)))
                         record["recalculation_allowed"] = (
                             claim.draft.production_method == 'calculated'
                             and bool(context.roles.intersection({'operator','tenant_admin','system'}))
@@ -1063,6 +1063,8 @@ class ClaimRepository:
                 has_more = limit is not None and len(rows) > limit
                 if has_more:
                     rows = rows[:limit]
+                from .claim_read_batch import load_leaf_batch
+                read_batch = load_leaf_batch(cur, rows, tenant_id=tenant_id, as_of_at=snapshot['as_of_at'])
                 records: list[dict[str, Any]] = []
                 denied_count = 0
                 quarantined_count = 0
@@ -1075,16 +1077,15 @@ class ClaimRepository:
                         denied_count += 1
                         quarantined_count += 1
                         continue
-                    row["source_occurrence_keys"] = self._occurrence_keys(cur, row["id"])
-                    row["input_revision_ids"] = self._input_revision_ids(cur, row["id"])
+                    leaf = read_batch.get(str(row['id']))
+                    row["source_occurrence_keys"] = leaf['occurrences'] if leaf is not None else self._occurrence_keys(cur, row["id"])
+                    row["input_revision_ids"] = [] if leaf is not None else self._input_revision_ids(cur, row["id"])
                     claim = self._hydrate_claim(row)
-                    assessments = self._assessments(
-                        cur, claim.revision_id, as_of_at=snapshot["as_of_at"]
-                    )
-                    source_details = self._source_details(cur, claim.revision_id, as_of_at=snapshot["as_of_at"])
-                    policies, missing_policy_sources = self._policies_for_revision(
-                        cur, tenant_id, claim.revision_id
-                    )
+                    assessments = leaf['assessments'] if leaf is not None else self._assessments(
+                        cur, claim.revision_id, as_of_at=snapshot["as_of_at"])
+                    source_details = leaf['sources'] if leaf is not None else self._source_details(cur, claim.revision_id, as_of_at=snapshot["as_of_at"])
+                    policies, missing_policy_sources = (leaf['policies'], leaf['missing']) if leaf is not None else self._policies_for_revision(
+                        cur, tenant_id, claim.revision_id)
                     query = ClaimQuery(
                         tenant_id=str(tenant_id),
                         metric_key=claim.draft.metric_key,
@@ -1114,9 +1115,8 @@ class ClaimRepository:
                         assessments=assessments,
                     )
                     record["selection_reason"] = row["selection_reason"]
-                    record["superseded_since_analysis"] = not self._revision_is_current(
-                        cur, claim.revision_id, datetime.now(UTC)
-                    )
+                    record["superseded_since_analysis"] = not (leaf['current'] if leaf is not None else self._revision_is_current(
+                        cur, claim.revision_id, datetime.now(UTC)))
                     records.append(record)
             conn.commit()
         # Pagination and frozen selection must not hide competing evidence that
@@ -1621,23 +1621,8 @@ class ClaimRepository:
             """,
             (revision_id, as_of_at, as_of_at),
         )
-        out: list[ClaimAssessment] = []
-        for row in cur.fetchall():
-            item = _record(cur, row)
-            out.append(
-                ClaimAssessment(
-                    claim_revision_id=str(item["claim_revision_id"]),
-                    assessment_type=item["assessment_type"],
-                    result=item["result"],
-                    rule_version=item["rule_version"],
-                    assessed_by=item["assessed_by"],
-                    assessed_at=item["assessed_at"],
-                    reasons=tuple(item.get("reasons") or []),
-                    scope_key=item.get("scope_key"),
-                    valid_until=item.get("valid_until"),
-                )
-            )
-        return out
+        from .claim_read_batch import assessment
+        return [assessment(_record(cur, row)) for row in cur.fetchall()]
 
     @staticmethod
     def _occurrence_keys(cur: Any, revision_id: str) -> list[str]:
@@ -1701,29 +1686,11 @@ class ClaimRepository:
             """,
             (revision_id, analysis_time, analysis_time),
         )
-        result: dict[str, dict[str, Any]] = {}
+        from .claim_read_batch import source_detail
+        result = {}
         for row in cur.fetchall():
             item = _record(cur, row)
-            result[str(item["occurrence_key"])] = {
-                "source_key": item["source_key"],
-                "registration_version": item.get("registration_version"),
-                "display_name": item["display_name"],
-                "origin_category": item["origin_category"],
-                "capture_method": item["capture_method"],
-                "provider_name": item.get("provider_name"),
-                "license_policy_ref": item.get("license_policy_ref"),
-                "sensitivity_class": item.get("sensitivity_class"),
-                "retention_class": item.get("retention_class"),
-                "author_identity": item.get("author_identity"),
-                "original_uri": item.get("original_uri"),
-                "source_native_id": item.get("source_native_id"),
-                "source_native_version": item.get("source_native_version"),
-                "published_at": item["published_at"].isoformat()
-                if item.get("published_at")
-                else None,
-                "received_at": item["received_at"].isoformat(),
-                "locator": item.get("source_locator"),
-            }
+            result[str(item['occurrence_key'])] = source_detail(item)
         return result
 
     @staticmethod
@@ -1758,19 +1725,8 @@ class ClaimRepository:
             if not item.get("allowed_roles") or not item.get("allowed_purposes"):
                 missing.append(str(item.get("source_key") or "unknown"))
                 continue
-            out.append(
-                SourceAccessPolicy(
-                    source_key=item["source_key"],
-                    allowed_roles=frozenset(item["allowed_roles"]),
-                    allowed_purposes=frozenset(item["allowed_purposes"]),
-                    allowed_business_units=frozenset(item.get("allowed_business_units") or []),
-                    export_allowed=bool(item["export_allowed"]),
-                    external_model_allowed=bool(item["external_model_allowed"]),
-                    quote_allowed=bool(item["quote_allowed"]),
-                    storage_allowed=bool(item["storage_allowed"]),
-                    index_allowed=bool(item["index_allowed"]),
-                )
-            )
+            from .claim_read_batch import policy
+            out.append(policy(item))
         return out, sorted(set(missing))
 
     @staticmethod

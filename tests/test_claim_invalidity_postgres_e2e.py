@@ -49,7 +49,8 @@ def test_invalid_input_blocks_direct_derived_snapshot_and_whole_run(ledger, monk
     assert values==[(100,),(100,)]
     assert members==2  # Eligibility changed; immutable history did not.
     from strategyos_mvp import finance_semantics_audit as audit, claim_store
-    monkeypatch.setattr(audit,'database_connection',lambda:(psycopg.connect(ledger[1]),None))
+    # A database session may serialize the same instant in a different zone.
+    monkeypatch.setattr(audit,'database_connection',lambda:(psycopg.connect(ledger[1], options='-c timezone=Asia/Dubai'),None))
     monkeypatch.setattr(claim_store,'ClaimRepository',lambda:repo)
     # Source byte verification has separate parser tests; here the real ledger
     # proves repeated negative assessments preserve their event identity/time.

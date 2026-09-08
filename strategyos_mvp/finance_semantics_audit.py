@@ -109,7 +109,7 @@ def record_invalidity(run_id: str, *, expected_audit_digest: str) -> dict[str, A
             assessment_type='validation',result='failed',
             rule_version='finance-source-semantics:' + str(report['source_semantics_version']),
             assessed_by='system:finance-semantics-audit',
-            assessed_at=previous[0] if previous else datetime.now(UTC),
+            assessed_at=previous[0].astimezone(UTC) if previous else datetime.now(UTC),
             reasons=(item['reason'], 'Verified source audit: ' + report['audit_digest']))
         receipts.append(repo.assess_claim(assessment,effect_key=effect_key))
     return {**report,'mode':'record_invalidity','assessments':receipts,
