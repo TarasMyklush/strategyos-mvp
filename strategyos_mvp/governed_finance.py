@@ -250,6 +250,7 @@ def _presentation_projection(
         cost_rows.append(
             {
                 "business_unit": business_unit,
+                "input_claim_revision_ids": [lanes[lane][2].get("claim_revision_id") for lane in ("actual", "plan")],
                 "component": component,
                 "actual_sar": format(actual, "f"),
                 "budget_sar": format(plan, "f"),
@@ -301,6 +302,7 @@ def _contributor_display_row(
     variance = actual - plan
     row: dict[str, Any] = {
         "label": str(dimensions.get("label") or ""),
+        "input_claim_revision_ids": [lanes[lane][2].get("claim_revision_id") for lane in ("actual", "plan")],
         "contributor_kind": str(dimensions.get("contributor_kind") or "business_unit"),
         "direction": "above_plan" if variance > 0 else "below_plan" if variance < 0 else "on_plan",
     }

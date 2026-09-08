@@ -686,6 +686,7 @@ def _governed_finance_baseline(context: Mapping[str, Any]) -> dict[str, Any] | N
             ebitda_bu_bridge.append(
                 {
                     "label": label,
+                    "input_claim_revision_ids": list(row.get("input_claim_revision_ids") or []) + list(cost_row.get("input_claim_revision_ids") or []),
                     "revenue_actual": _decimal_or_none(row.get("value_sar")),
                     "revenue_plan": _decimal_or_none(row.get("plan_sar")),
                     "revenue_variance": revenue_variance,
@@ -711,7 +712,18 @@ def _governed_finance_baseline(context: Mapping[str, Any]) -> dict[str, Any] | N
         ]
         cost_component_source = str(cost_components.get("source_file") or "").strip()
 
+        from .fact_rendering import fact_registry
+        records = getattr(context.get("bundle"), "authorized_claim_records", None)
+        registry = None if records is None else fact_registry(records)
+        run_id = context.get("run_id") or summary.get("run_id")
+        headline_refs = [record.get("claim_revision_id") for record in payload.get("component_claims", {}).values()]
+        support = _scenario_claim_support({"fact_registry": registry, "run_id": run_id}, headline_refs)
+        if support is not None:
+            citations = support["citations"]
         return {
+            "fact_registry": registry,
+            "run_id": run_id,
+            "headline_refs": headline_refs,
             "source_key": key,
             "period": str(payload.get("reporting_period_key") or summary.get("reporting_period") or "current governed period"),
             "currency": str(payload.get("reporting_currency") or "SAR"),
@@ -1576,7 +1588,7 @@ def _governed_bu_budget_row(
 ) -> Mapping[str, Any] | None:
     if not any(
         token in normalized_prompt
-        for token in ("against budget", "versus budget", "against plan", "versus plan")
+        for token in ("against budget", "versus budget", "against plan", "versus plan", "compare to budget", "compare to plan")
     ):
         return None
     candidates = [
@@ -1590,6 +1602,45 @@ def _governed_bu_budget_row(
         if _normalize(str(row.get("label") or "")) in normalized_prompt
     ]
     return exact[0] if len(exact) == 1 else None
+
+
+def _scenario_claim_support(baseline: Mapping[str, Any], refs: list[str]) -> dict[str, Any] | None:
+    """Keep calculation inputs tied to their authorized immutable revisions."""
+    registry = baseline.get("fact_registry")
+    if registry is None:
+        return None  # Offline legacy scenarios have no authenticated snapshot.
+    from .fact_rendering import render_selection
+    refs = list(dict.fromkeys(refs))
+    if not baseline.get("run_id") or not refs or any(ref not in registry for ref in refs):
+        return {"citations": [], "fact_cells": []}
+    result: dict[str, Any] = {"citations": [], "fact_cells": []}
+    for start in range(0, len(refs), 20):
+        rendered = render_selection({"matched": True, "fact_refs": refs[start:start + 20]},
+                                    registry, run_id=baseline["run_id"])
+        for key in result:
+            result[key].extend(rendered[key])
+    return result
+
+
+def _aligned_bu_inputs(support: Mapping[str, Any]) -> bool:
+    facts = support["fact_cells"]
+    if not facts:
+        return False
+    period = facts[0].get("period") or {}
+    return bool(period.get("start") and period.get("end")) and all(
+        fact.get("period") == period and fact.get("unit") == "SAR"
+        and fact.get("business_unit") == facts[0].get("business_unit")
+        for fact in facts
+    )
+
+
+def _missing_calculation_lineage(scenario_id: str) -> ScenarioResult:
+    return _scenario_missing_data_result(
+        scenario_id=scenario_id, scenario_label="Governed finance calculation",
+        answer="The authorized snapshot does not contain the complete immutable inputs needed to verify this calculation.",
+        missing_inputs=["authorized_calculation_input_revisions"], prompt_numbers=[],
+        suggestions=["Review the approved finance snapshot"],
+    )
 
 
 def _finance_bu_cost_ranking(normalized_prompt: str, baseline: Mapping[str, Any]) -> ScenarioResult | None:
@@ -1607,6 +1658,11 @@ def _finance_bu_cost_ranking(normalized_prompt: str, baseline: Mapping[str, Any]
     words = {"three": 3, "five": 5, "ten": 10}
     raw_count = count_match.group(1) if count_match else "3"
     count = min(20, words.get(raw_count) or int(raw_count))
+    support = _scenario_claim_support(baseline, [ref for row in rows for ref in row.get("input_claim_revision_ids", [])])
+    if support is not None and (not support["fact_cells"] or any(len(row.get("input_claim_revision_ids", [])) != 2 for row in rows)):
+        return _missing_calculation_lineage("governed_bu_cost_ranking")
+    if support is not None and not _aligned_bu_inputs(support):
+        return _missing_calculation_lineage("governed_bu_cost_ranking")
     lines = []
     for row in rows[:count]:
         amount, plan = _decimal_or_none(row["actual_sar"]), _decimal_or_none(row.get("budget_sar"))
@@ -1615,7 +1671,12 @@ def _finance_bu_cost_ranking(normalized_prompt: str, baseline: Mapping[str, Any]
         lines.append(f"{row['component']}: {_sar_executive_decimal(amount)} actual; " + (f"{_sar_executive_decimal(plan)} fixed budget; " if plan is not None else "") + f"{comparison}.")
     return ScenarioResult(scenario_id="governed_bu_cost_ranking", scenario_label="Business-unit cost components", matched=True,
         answer=f"For {baseline['period']}, the largest supplied cost components in {unit} are: " + " ".join(lines),
-        calculations=[], kg_context=[], citations=[{"source_path": baseline.get("cost_component_source"), "source_hash": baseline.get("cost_component_hash"), "locator": row.get("locator") or f"Cost components / {unit}", "excerpt": f"{row['component']}: actual SAR {row['actual_sar']}; fixed budget SAR {row.get('budget_sar')}"} for row in rows[:count]],
+        calculations=[] if support is None else [CalculationStep(
+            step_id="bu-cost-ranking-v1", description="Rank every supplied BU cost component and compare selected rows with fixed budget.",
+            formula="rank = descending abs(actual); variance = actual - fixed budget",
+            inputs={"facts": support["fact_cells"], "count": count},
+            result={"rows": rows[:count]}, unit="SAR", citations=support["citations"])],
+        kg_context=[], citations=support["citations"] if support is not None else [{"source_path": baseline.get("cost_component_source"), "source_hash": baseline.get("cost_component_hash"), "locator": row.get("locator") or f"Cost components / {unit}", "excerpt": f"{row['component']}: actual SAR {row['actual_sar']}; fixed budget SAR {row.get('budget_sar')}"} for row in rows[:count]],
         assumptions=["Ranked by absolute actual cost. Source commentary may refer to a different flexible budget."],
         basis="Deterministic ranking of all supplied component rows for this business unit; variance equals actual minus fixed budget.")
 
@@ -1658,6 +1719,13 @@ def _finance_bu_budget_result(
         and str(driver.get("business_unit") or "").strip().casefold() == label.casefold()
     ]
     drivers.sort(key=lambda driver: abs(_decimal_or_none(driver.get("variance_sar")) or Decimal(0)), reverse=True)
+    support = _scenario_claim_support(baseline, list(row.get("input_claim_revision_ids") or []) +
+        [ref for driver in drivers for ref in driver.get("input_claim_revision_ids", [])])
+    if support is not None and (not support["fact_cells"] or len(row.get("input_claim_revision_ids", [])) != 4
+            or any(len(driver.get("input_claim_revision_ids", [])) != 2 for driver in drivers)):
+        return _missing_calculation_lineage("governed_bu_budget_bridge")
+    if support is not None and not _aligned_bu_inputs(support):
+        return _missing_calculation_lineage("governed_bu_budget_bridge")
     drivers = drivers[:3]
     driver_lines = []
     for driver in drivers:
@@ -1708,9 +1776,14 @@ def _finance_bu_budget_result(
         scenario_label="Finance - Business-unit Budget Bridge",
         matched=True,
         answer=answer,
-        calculations=[],
+        calculations=[] if support is None else [CalculationStep(
+            step_id="bu-budget-bridge-v1", description="Calculate aligned BU EBITDA and rank cost variances.",
+            formula="EBITDA = revenue - operating cost; variance = actual - plan; drivers ranked by abs(variance)",
+            inputs={"facts": support["fact_cells"]},
+            result={"ebitda_actual_sar": str(ebitda_actual), "ebitda_plan_sar": str(ebitda_plan),
+                    "ebitda_variance_sar": str(ebitda_variance)}, unit="SAR", citations=support["citations"])],
         kg_context=[],
-        citations=citations,
+        citations=citations if support is None else support["citations"],
         assumptions=[],
         basis=(
             "Deterministic business-unit actual-versus-plan bridge from the approved "
@@ -1748,6 +1821,11 @@ def _finance_ebitda_bu_bridge_result(baseline: Mapping[str, Any]) -> ScenarioRes
             suggestions=["Connect the approved BU budget bridge"],
         )
 
+    support = _scenario_claim_support(baseline, list(baseline.get("headline_refs") or []) +
+        [ref for row in bridge for ref in row.get("input_claim_revision_ids", [])])
+    if support is not None and (not support["fact_cells"] or any(len(row.get("input_claim_revision_ids", [])) != 4 for row in bridge)):
+        return _missing_calculation_lineage("governed_ebitda_bu_bridge")
+
     actual_value = Decimal(actual)
     plan_value = Decimal(plan)
     variance = actual_value - plan_value
@@ -1775,9 +1853,13 @@ def _finance_ebitda_bu_bridge_result(baseline: Mapping[str, Any]) -> ScenarioRes
         scenario_label="Finance - EBITDA Business-unit Bridge",
         matched=True,
         answer=answer,
-        calculations=[],
+        calculations=[] if support is None else [CalculationStep(
+            step_id="ebitda-bu-attribution-v1", description="Reconcile group and BU actual-versus-plan differences.",
+            formula="group variance = EBITDA actual - plan; BU variance = revenue variance - operating cost variance",
+            inputs={"facts": support["fact_cells"]}, result={"group_variance_sar": str(variance),
+                "business_units": bridge}, unit="SAR", citations=support["citations"])],
         kg_context=[],
-        citations=list(baseline["citations"]),
+        citations=list(baseline["citations"]) if support is None else support["citations"],
         assumptions=[],
         basis=(
             "Deterministic EBITDA variance and BU attribution from the aligned group budget; "
@@ -3332,7 +3414,7 @@ SCENARIO_SUGGESTIONS: tuple[str, ...] = (
 )
 
 
-def parse_scenario(prompt: str, context: dict[str, Any]) -> ScenarioResult:
+def _parse_scenario(prompt: str, context: dict[str, Any]) -> ScenarioResult:
     """Parse a scenario prompt and return a structured ScenarioResult.
 
     Tries each registered ScenarioFamily in priority order. Returns the first
@@ -3518,3 +3600,29 @@ def register_llm_probe(probe_fn: Callable[[str, dict[str, Any]], dict[str, Any] 
 
 def get_llm_probes() -> list[Callable]:
     return list(_LLM_PROBES)
+
+
+def parse_scenario(prompt: str, context: dict[str, Any]) -> ScenarioResult:
+    """Enforce immutable evidence on every authenticated deterministic route."""
+    result = _parse_scenario(prompt, context)
+    records = getattr(context.get("bundle"), "authorized_claim_records", None)
+    if records is None or not result.matched or result.scenario_type in {"missing_data", "unmatched", "error"}:
+        return result
+    from .fact_rendering import fact_registry
+    registry = fact_registry(records)
+    run_id = context.get("run_id") or (context.get("summary") or {}).get("run_id")
+    refs = [citation.get("claim_revision_id") for citation in result.citations]
+    if not run_id or not refs or any(ref not in registry for ref in refs):
+        return _missing_calculation_lineage(result.scenario_id)
+    support = _scenario_claim_support({"fact_registry": registry, "run_id": run_id}, refs)
+    # Re-render links and descriptions from current authorized facts; legacy
+    # handlers cannot smuggle stale paths or provider-authored citation text.
+    result.citations = support["citations"]
+    for calculation in result.calculations:
+        calc_refs = [citation.get("claim_revision_id") for citation in calculation.citations]
+        if any(ref not in registry for ref in calc_refs):
+            return _missing_calculation_lineage(result.scenario_id)
+        calc_support = _scenario_claim_support({"fact_registry": registry, "run_id": run_id}, calc_refs or refs)
+        calculation.citations = calc_support["citations"]
+        calculation.inputs["facts"] = calc_support["fact_cells"]
+    return result

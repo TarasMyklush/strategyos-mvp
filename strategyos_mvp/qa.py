@@ -161,7 +161,7 @@ class _Intent:
 
 def _ledger_for(question: str, bundle: _DataBundle) -> tuple[str, pd.DataFrame, str]:
     """Pick AP (payables) or AR (receivables); default AP."""
-    if _has_any(question, "receivable", "ar", "customer", "collection", "sales"):
+    if _has_any(question, "receivable", "receivables", "ar", "customer", "customers", "collection", "collections", "sales"):
         return "ar_ledger", bundle.ar, "AR"
     return "ap_ledger", bundle.ap, "AP"
 
@@ -192,7 +192,18 @@ def _handle_invoice_metric(question: str, bundle: _DataBundle, findings: list[_F
     frame, notes = _apply_filters(question, frame)
     note_text = (" (" + ", ".join(notes) + ")") if notes else ""
 
+    extreme = 'max' if _has_any(question, 'largest', 'highest', 'biggest', 'maximum', 'max') else (
+        'min' if _has_any(question, 'smallest', 'lowest', 'minimum', 'min') else None)
+    if extreme:
+        if frame.empty:
+            return _needs(role, 'at least one matching invoice')
+        value = float(getattr(frame['Amount_SAR'], extreme)())
+        return {'matched':True, 'answer':f"The {('largest' if extreme == 'max' else 'smallest')} {label} invoice amount{note_text} is {_sar(value)}.",
+            'value':round(value,2),'unit':'SAR','basis':f"{extreme} of Amount_SAR over {len(frame):,} {label} rows{note_text}.",
+            'citations':[_ledger_citation(bundle,role,f'{label} ledger Amount_SAR')],'available':True}
     if _has_any(question, "average", "avg", "mean"):
+        if frame.empty:
+            return _needs(role, 'at least one matching invoice')
         value = float(frame["Amount_SAR"].mean()) if len(frame) else 0.0
         return {
             "matched": True,
@@ -235,7 +246,7 @@ def _parse_top_n(question: str, default: int = 5) -> int:
 
 
 def _handle_top_parties(question: str, bundle: _DataBundle, findings: list[_Finding]) -> dict[str, _Any]:
-    if _has_any(question, "customer", "receivable"):
+    if _has_any(question, "customer", "customers", "receivable", "receivables"):
         role, frame, name_col, label = "ar_ledger", bundle.ar, "Customer_Name", "customers"
     else:
         role, frame, name_col, label = "ap_ledger", bundle.ap, "Vendor_Name", "vendors"
@@ -249,7 +260,7 @@ def _handle_top_parties(question: str, bundle: _DataBundle, findings: list[_Find
     listing = "; ".join(f"{r['name']} ({_sar(r['amount_sar'])})" for r in rows)
     return {
         "matched": True,
-        "answer": f"Top {len(rows)} {label} by spend: {listing}.",
+        "answer": f"Top {len(rows)} {label} by {'invoiced amount' if role == 'ar_ledger' else 'spend'}: {listing}.",
         "value": rows, "unit": "SAR",
         "basis": f"Amount_SAR grouped by {name_col}, sorted descending, top {n}.",
         "citations": [_ledger_citation(bundle, role, f"{name_col} / Amount_SAR")],
@@ -732,10 +743,11 @@ INTENTS: tuple[_Intent, ...] = (
            _handle_recoverable),
     _Intent("findings",
            lambda q: (_has(q, "finding") or _has(q, "findings"))
-           and not _has_any(q, "data quality", "quality issues", "reliable", "wrong signs", "stored as text"),
+           and not _has_any(q, "data quality", "quality issues", "reliable", "wrong signs", "stored as text", "goods receipts", "purchase orders", "invoices", "invoice", "grn", "three-way", "three way"),
            _handle_findings),
     _Intent("top_parties",
-           lambda q: _has(q, "top") and _has_any(q, "vendor", "vendors", "supplier", "suppliers", "customer", "customers"),
+           lambda q: _has(q, "top") and _has_any(q, "vendor", "vendors", "supplier", "suppliers", "customer", "customers")
+           and not _has_any(q, "profit", "profitability", "margin", "fully loaded", "fully-loaded", "growth", "volume", "retention", "churn", "why", "should", "recommend"),
            _handle_top_parties),
     _Intent("distinct_parties",
            lambda q: _has_any(q, "how many", "count", "number of", "distinct") and _has_any(q, "vendor", "vendors", "supplier", "customer", "customers"),
@@ -744,7 +756,9 @@ INTENTS: tuple[_Intent, ...] = (
            lambda q: _has_any(q, "spend", "spending", "paid", "pay") or (_has_any(q, "vendor", "supplier", "customer") and _has_any(q, "for")),
            _handle_named_party_spend),
     _Intent("invoice_metric",
-           lambda q: _has(q, "invoice") or _has(q, "invoices"),
+           lambda q: _has_any(q, "invoice", "invoices")
+           and _has_any(q, "total", "amount", "how many", "count", "number of", "average", "avg", "mean", "largest", "highest", "biggest", "maximum", "max", "smallest", "lowest", "minimum", "min")
+           and not _has_any(q, "reconcile", "match", "profit", "profitability", "margin", "why", "quality", "signs", "text", "policy", "should"),
            _handle_invoice_metric),
 )
 

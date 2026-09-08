@@ -228,3 +228,33 @@ def test_data_quality_question_is_not_claimed_by_recoverable_findings(qa_context
     question='How reliable is the data behind this report — what quality issues exist?'
     result=qa.answer_question(question,bundle=bundle,findings=findings)
     assert result['matched'] is False
+
+
+
+def test_customer_rankings_use_receivables_and_do_not_claim_profitability(qa_context):
+    bundle,findings=qa_context
+    result=qa.answer_question('Top 3 customers by invoiced amount',bundle=bundle,findings=findings)
+    expected=bundle.ar.groupby('Customer_Name')['Amount_SAR'].sum().sort_values(ascending=False).head(3)
+    assert [r['name'] for r in result['value']]==list(expected.index)
+    assert 'customers by invoiced amount' in result['answer']
+    question='What is the fully-loaded profitability of our top 10 customers?'
+    assert qa.answer_question(question,bundle=bundle,findings=findings)['matched'] is False
+    assert not qa.claims_question(question)
+
+
+@pytest.mark.parametrize('word,method',[('largest','max'),('smallest','min')])
+def test_invoice_extremes_are_not_answered_with_total_spend(qa_context,word,method):
+    bundle,findings=qa_context
+    result=qa.answer_question(f'What is the {word} AP invoice?',bundle=bundle,findings=findings)
+    assert result['value']==pytest.approx(float(getattr(bundle.ap['Amount_SAR'],method)()))
+
+
+@pytest.mark.parametrize('question',[
+    'How well do goods receipts match POs and invoices — where are the exceptions?',
+    'Why do invoice amounts fail to reconcile?',
+])
+def test_control_diagnostics_are_not_replaced_by_global_findings_or_invoice_totals(qa_context,question):
+    bundle,findings=qa_context
+    result=qa.answer_question(question,bundle=bundle,findings=findings)
+    assert result['matched'] is False
+    assert not qa.claims_question(question)
