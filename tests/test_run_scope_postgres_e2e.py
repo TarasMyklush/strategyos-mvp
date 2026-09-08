@@ -17,23 +17,32 @@ def test_shared_database_run_and_bu_isolation(monkeypatch, tmp_path):
     tenant_a, tenant_b = "scope-a-" + suffix, "scope-b-" + suffix
     baseline = state_store.CONFIG
     runs = []
-    for tenant, unit in ((tenant_a, "bu-a"), (tenant_b, "bu-b"), (tenant_a, "bu-c")):
+    owners = [(tenant_a, "bu-a"), (tenant_b, "bu-a"), (tenant_a, "bu-b"), (tenant_b, "bu-b")]
+    for tenant, unit in owners:
         monkeypatch.setattr(state_store, "CONFIG", replace(baseline, tenant_slug=tenant))
-        runs.append(state_store.create_run({"run_dir": str(tmp_path / unit), "dataset_root": str(tmp_path),
+        runs.append(state_store.create_run({"run_dir": str(tmp_path / tenant / unit), "dataset_root": str(tmp_path),
             "business_units": [unit], "status": "awaiting_review"}, requires_human_review=True)["run_id"])
-    token = access_scope.principal_scope.set({"tenant_id": tenant_a, "role": "bu", "business_units": ["bu-a"]})
+    from strategyos_mvp import api
+    operations = (state_store.get_run_detail, state_store.executive_snapshot_for_run,
+                  state_store.latest_checkpoint, lambda run_id: state_store.artifact_paths_for_run(None, run_id),
+                  state_store.executive_decisions_for_run, state_store.search_citations_for_run,
+                  api._qa_summary_for_run)
+    token = access_scope.principal_scope.set(None)
     try:
-        assert state_store.get_run_detail(runs[0])["run_id"] == runs[0]
-        for denied in runs[1:]:
-            for operation in (state_store.get_run_detail, state_store.executive_snapshot_for_run,
-                              state_store.latest_checkpoint, lambda run_id: state_store.artifact_paths_for_run(None, run_id),
-                              state_store.executive_decisions_for_run):
-                with pytest.raises(PermissionError):
-                    operation(denied)
-        assert {run["run_id"] for run in state_store.list_recent_runs()} == {runs[0]}
-        assert {run["run_id"] for run in state_store.list_pending_reviews()} == {runs[0]}
-        access_scope.principal_scope.set({"tenant_id": tenant_a, "role": "executive"})
-        assert {run["run_id"] for run in state_store.list_recent_runs()} == {runs[0], runs[2]}
+        for index, (tenant, unit) in enumerate(owners):
+            access_scope.principal_scope.set({"tenant_id": tenant, "role": "bu", "business_units": [unit]})
+            assert state_store.get_run_detail(runs[index])["run_id"] == runs[index]
+            for other, denied in enumerate(runs):
+                if other != index:
+                    for operation in operations:
+                        with pytest.raises(PermissionError):
+                            operation(denied)
+            assert {run["run_id"] for run in state_store.list_recent_runs()} == {runs[index]}
+            assert {run["run_id"] for run in state_store.list_pending_reviews()} == {runs[index]}
+        for tenant in (tenant_a, tenant_b):
+            access_scope.principal_scope.set({"tenant_id": tenant, "role": "executive"})
+            expected = {run for run, owner in zip(runs, owners) if owner[0] == tenant}
+            assert {run["run_id"] for run in state_store.list_recent_runs()} == expected
         access_scope.principal_scope.set({"tenant_id": tenant_a, "role": "bu"})
         with pytest.raises(PermissionError):
             state_store.get_run_detail(runs[0])

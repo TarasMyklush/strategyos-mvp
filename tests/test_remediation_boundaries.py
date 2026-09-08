@@ -90,3 +90,30 @@ def test_source_pack_paths_cannot_escape_and_identical_uploads_are_tenant_distin
         assert source_pack._deterministic_source_pack_id(entries) != first
     finally:
         access_scope.principal_scope.reset(token)
+
+
+def test_global_latest_and_current_pointers_cannot_cross_tenant_or_bu(tmp_path, monkeypatch):
+    import json
+    from dataclasses import replace
+    from strategyos_mvp import access_scope
+    monkeypatch.setattr(run_registry, "CONFIG", replace(run_registry.CONFIG, output_root=tmp_path))
+    owners = [("tenant-a", "bu-a"), ("tenant-b", "bu-a"), ("tenant-a", "bu-b"), ("tenant-b", "bu-b")]
+    records = []
+    for index, (tenant, unit) in enumerate(owners):
+        path = tmp_path / str(index) / "run_summary.json"
+        path.parent.mkdir()
+        summary = {"run_id": str(index), "status": "completed", "tenant_context": {"tenant_id": tenant}, "business_units": [unit]}
+        path.write_text(json.dumps(summary))
+        records.append((summary, path))
+    token = access_scope.principal_scope.set(None)
+    try:
+        for current, (tenant, unit) in enumerate(owners):
+            access_scope.principal_scope.set({"tenant_id": tenant, "role": "bu", "business_units": [unit]})
+            for pointed, (summary, path) in enumerate(records):
+                run_registry.update_latest_run_pointer(summary, path)
+                run_registry.update_current_run_pointer(summary, path)
+                assert run_registry.load_latest_run_summary()["run_id"] == str(current)
+                result = run_registry.load_current_run_summary()
+                assert (result["run_id"] if result else None) == (str(current) if pointed == current else None)
+    finally:
+        access_scope.principal_scope.reset(token)
