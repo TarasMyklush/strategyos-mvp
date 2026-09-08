@@ -837,6 +837,14 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .vault-note { font-size: 13px; margin-top: 14px; }
 .vault-panel summary { cursor: pointer; font-weight: 600; }
 .vault-panel details[open] summary { margin-bottom: 20px; }
+.demo-story-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 18px; }
+.demo-story-card { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 18px; background: var(--surface-alt); }
+.demo-story-card h3 { font-size: 18px; }
+.demo-story-card button { margin-top: 8px; }
+.demo-pack-flags { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.demo-board-pages { display: grid; gap: 10px; margin-top: 16px; }
+.demo-board-pages details { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; }
+.demo-board-pages ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
 @media(max-width:600px) { .vault-panel { padding: 18px 14px; } .topbar { flex-wrap: wrap; } }
 </style>
 </head>
@@ -855,6 +863,24 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 <div id="vault-error" class="vault-message vault-error" role="alert" hidden></div>
 <p id="vault-login" hidden><a href="/login">Sign in to Kyvern</a></p>
 <div id="vault-content" hidden>
+  <div id="demo-pack-panel" class="vault-panel" hidden>
+    <div class="section-head"><div><div class="section-eyebrow">Configured client pack</div><h2 id="demo-pack-title">Synthetic decision stories</h2></div><button id="demo-pack-close" class="secondary" type="button" hidden>Back to stories</button></div>
+    <p id="demo-pack-description"></p>
+    <div id="demo-pack-flags" class="demo-pack-flags"></div>
+    <div id="demo-pack-stories" class="demo-story-grid"></div>
+    <div id="demo-story-detail" hidden>
+      <h3 id="demo-story-title"></h3>
+      <p id="demo-story-question"></p>
+      <p id="demo-story-decision" class="status-note"></p>
+      <div id="demo-story-links"></div>
+      <div id="demo-story-rollups" class="vault-table"></div>
+      <div id="demo-story-findings"></div>
+      <div id="demo-story-cells" class="vault-table"></div>
+      <h3 style="margin-top:24px">Bilingual board-pack preview</h3>
+      <div id="demo-story-board" class="demo-board-pages"></div>
+    </div>
+    <p id="demo-pack-status" class="vault-message" role="status" aria-live="polite"></p>
+  </div>
   <div class="vault-panel">
     <div class="section-head"><div><div class="section-eyebrow">Plan of record</div><h2>Plans and versions</h2></div><button id="refresh" class="secondary" type="button">Refresh</button></div>
     <div class="vault-controls"><label class="vault-field">Select a plan version<select id="plan-select"><option value="">Choose a version</option></select></label><button id="more" class="secondary" type="button" hidden>Load older records</button></div>
@@ -1064,5 +1090,6 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 <script src="/static/advisor_console.js" defer></script>
 <script src="/static/structure_console.js" defer></script>
 <script src="/static/objective_decomposition.js" defer></script>
+<script src="/static/demo_pack.js" defer></script>
 </body>
 </html>

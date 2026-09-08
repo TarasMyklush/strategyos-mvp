@@ -1,0 +1,736 @@
+{
+  "schema_version": 1,
+  "pack_id": "configured-distribution-v1",
+  "label": "Healthcare and pharma distribution decisions",
+  "description": "Three synthetic decision stories that expose aggregate masking, commercial bridge effects and a linked operating constraint.",
+  "controls": {
+    "mode": "synthetic",
+    "persistence": "read_only",
+    "authority_effect": "none",
+    "sector_layer": "configuration_only"
+  },
+  "stories": [
+    {
+      "story_id": "regional-client-rescue",
+      "title": "Institutional client rescues regional misses",
+      "question": "Which product, region and client cells explain a total that appears broadly on plan?",
+      "decision_prompt": "Protect the institutional award while assigning recovery actions to the two community-channel owners.",
+      "plan": {
+        "schema_version": 1,
+        "plan_id": "regional-rescue-plan",
+        "company_id": "synthetic-distributor",
+        "version": 1,
+        "period": {
+          "start": "2026-08-01",
+          "end": "2026-08-31"
+        },
+        "effective_from": "2026-01-01",
+        "effective_to": "2026-12-31",
+        "status": "ratified",
+        "ratified_by": "Synthetic board",
+        "ratified_on": "2026-07-31",
+        "ratification": {
+          "path": "evidence.csv",
+          "locator": "synthetic board approval record",
+          "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+        },
+        "dimensions": {
+          "product": [
+            "cardio"
+          ],
+          "region": [
+            "central",
+            "west"
+          ],
+          "client": [
+            "community",
+            "nupco"
+          ]
+        },
+        "metrics": {
+          "revenue": {
+            "unit": "SAR",
+            "aggregation": "sum",
+            "direction": "higher_is_better",
+            "planned_total": "300",
+            "tolerance": "10"
+          }
+        },
+        "concentration_policies": [
+          {
+            "policy_id": "client-share",
+            "metric": "revenue",
+            "dimension": "client",
+            "threshold_percent": "60"
+          }
+        ],
+        "price_volume_mix_policies": [],
+        "cells": [
+          {
+            "id": "cardio-central-community",
+            "metric": "revenue",
+            "dimensions": {
+              "product": "cardio",
+              "region": "central",
+              "client": "community"
+            },
+            "owner": "Central channel lead",
+            "target": "100",
+            "tolerance": "0",
+            "source": {
+              "path": "evidence.csv",
+              "locator": "regional-rescue row 2",
+              "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+            }
+          },
+          {
+            "id": "cardio-west-community",
+            "metric": "revenue",
+            "dimensions": {
+              "product": "cardio",
+              "region": "west",
+              "client": "community"
+            },
+            "owner": "West regional lead",
+            "target": "100",
+            "tolerance": "0",
+            "source": {
+              "path": "evidence.csv",
+              "locator": "regional-rescue row 3",
+              "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+            }
+          },
+          {
+            "id": "cardio-central-nupco",
+            "metric": "revenue",
+            "dimensions": {
+              "product": "cardio",
+              "region": "central",
+              "client": "nupco"
+            },
+            "owner": "Institutional accounts lead",
+            "target": "100",
+            "tolerance": "0",
+            "source": {
+              "path": "evidence.csv",
+              "locator": "regional-rescue row 4",
+              "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+            }
+          }
+        ]
+      },
+      "actuals": {
+        "schema_version": 1,
+        "company_id": "synthetic-distributor",
+        "period": {
+          "start": "2026-08-01",
+          "end": "2026-08-31"
+        },
+        "kind": "actual",
+        "revision": "regional-rescue-actuals",
+        "recorded_on": "2026-08-31",
+        "observations": [
+          {
+            "metric": "revenue",
+            "dimensions": {
+              "product": "cardio",
+              "region": "central",
+              "client": "community"
+            },
+            "unit": "SAR",
+            "value": "60",
+            "source": {
+              "path": "evidence.csv",
+              "locator": "regional-rescue row 2, actual",
+              "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+            }
+          },
+          {
+            "metric": "revenue",
+            "dimensions": {
+              "product": "cardio",
+              "region": "west",
+              "client": "community"
+            },
+            "unit": "SAR",
+            "value": "55",
+            "source": {
+              "path": "evidence.csv",
+              "locator": "regional-rescue row 3, actual",
+              "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+            }
+          },
+          {
+            "metric": "revenue",
+            "dimensions": {
+              "product": "cardio",
+              "region": "central",
+              "client": "nupco"
+            },
+            "unit": "SAR",
+            "value": "180",
+            "source": {
+              "path": "evidence.csv",
+              "locator": "regional-rescue row 4, actual",
+              "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+            }
+          }
+        ],
+        "price_volume_mix": []
+      },
+      "board_template": {
+        "schema_version": 1,
+        "template_id": "regional-rescue-board",
+        "version": 1,
+        "title": {
+          "en": "Regional and client performance",
+          "ar": "مراجعة أداء التوزيع"
+        },
+        "client": {
+          "en": "Synthetic healthcare distributor",
+          "ar": "موزع رعاية صحية تجريبي"
+        },
+        "accent": "#25335C",
+        "labels": {
+          "revenue": {
+            "en": "Net revenue",
+            "ar": "صافي الإيرادات"
+          },
+          "product": {
+            "en": "Product",
+            "ar": "المنتج"
+          },
+          "region": {
+            "en": "Region",
+            "ar": "المنطقة"
+          },
+          "client": {
+            "en": "Client",
+            "ar": "العميل"
+          },
+          "cardio": {
+            "en": "Cardiovascular portfolio",
+            "ar": "محفظة القلب"
+          },
+          "central": {
+            "en": "Central",
+            "ar": "الوسطى"
+          },
+          "west": {
+            "en": "West",
+            "ar": "الغربية"
+          },
+          "community": {
+            "en": "Community channel",
+            "ar": "قناة المجتمع"
+          },
+          "nupco": {
+            "en": "NUPCO",
+            "ar": "نوبكو"
+          }
+        }
+      },
+      "context_links": [
+        {
+          "from_cell_id": "cardio-central-nupco",
+          "relationship": "offsets",
+          "to_reference": "community-channel-misses",
+          "label": "The institutional award offsets two community-channel misses in the aggregate."
+        }
+      ]
+    },
+    {
+      "story_id": "price-volume-mix",
+      "title": "Volume growth hides adverse commercial mix",
+      "question": "How much of observed revenue variance comes from volume, price and mix using disclosed source fields?",
+      "decision_prompt": "Separate the volume benefit from adverse mix before deciding whether the apparent revenue outperformance is repeatable.",
+      "plan": {
+        "schema_version": 1,
+        "plan_id": "commercial-bridge-plan",
+        "company_id": "synthetic-distributor",
+        "version": 2,
+        "period": {
+          "start": "2026-08-01",
+          "end": "2026-08-31"
+        },
+        "effective_from": "2026-01-01",
+        "effective_to": "2026-12-31",
+        "status": "ratified",
+        "ratified_by": "Synthetic board",
+        "ratified_on": "2026-07-31",
+        "ratification": {
+          "path": "evidence.csv",
+          "locator": "synthetic board approval record",
+          "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+        },
+        "dimensions": {
+          "product": [
+            "infusion"
+          ],
+          "region": [
+            "central"
+          ],
+          "client": [
+            "retail",
+            "tender"
+          ]
+        },
+        "metrics": {
+          "revenue": {
+            "unit": "SAR",
+            "aggregation": "sum",
+            "direction": "higher_is_better",
+            "planned_total": "300",
+            "tolerance": "0"
+          }
+        },
+        "concentration_policies": [],
+        "price_volume_mix_policies": [
+          {
+            "bridge_id": "commercial-bridge",
+            "metric": "revenue",
+            "mix_dimension": "client",
+            "currency_unit": "SAR",
+            "price_unit": "SAR/unit",
+            "volume_unit": "unit",
+            "decimal_places": 2,
+            "rows": [
+              {
+                "member": "retail",
+                "cell_id": "infusion-retail",
+                "planned_price": "10",
+                "planned_volume": "10",
+                "price_source": {
+                  "path": "evidence.csv",
+                  "locator": "commercial-bridge row 5, planned_price",
+                  "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+                },
+                "volume_source": {
+                  "path": "evidence.csv",
+                  "locator": "commercial-bridge row 5, planned_volume",
+                  "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+                }
+              },
+              {
+                "member": "tender",
+                "cell_id": "infusion-tender",
+                "planned_price": "20",
+                "planned_volume": "10",
+                "price_source": {
+                  "path": "evidence.csv",
+                  "locator": "commercial-bridge row 6, planned_price",
+                  "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+                },
+                "volume_source": {
+                  "path": "evidence.csv",
+                  "locator": "commercial-bridge row 6, planned_volume",
+                  "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+                }
+              }
+            ]
+          }
+        ],
+        "cells": [
+          {
+            "id": "infusion-retail",
+            "metric": "revenue",
+            "dimensions": {
+              "product": "infusion",
+              "region": "central",
+              "client": "retail"
+            },
+            "owner": "Retail commercial lead",
+            "target": "100",
+            "tolerance": "0",
+            "source": {
+              "path": "evidence.csv",
+              "locator": "commercial-bridge row 5",
+              "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+            }
+          },
+          {
+            "id": "infusion-tender",
+            "metric": "revenue",
+            "dimensions": {
+              "product": "infusion",
+              "region": "central",
+              "client": "tender"
+            },
+            "owner": "Tender accounts lead",
+            "target": "200",
+            "tolerance": "0",
+            "source": {
+              "path": "evidence.csv",
+              "locator": "commercial-bridge row 6",
+              "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+            }
+          }
+        ],
+        "derivation": {
+          "kind": "decomposition",
+          "engine_version": "history-adjusted-allocation.v1",
+          "parent_plan_id": "commercial-bridge-plan",
+          "parent_version": 1,
+          "parent_digest": "00e43a78e7c47e0c3d0fb67607eba2c6833385ec3d09c5aa866bb243adb2ed49",
+          "parent_cell_id": "commercial-parent",
+          "split_dimension": "client",
+          "decimal_places": 2,
+          "remainder_rule": "final_lexicographic_cell",
+          "allocations": [
+            {
+              "cell_id": "infusion-retail",
+              "member": "retail",
+              "weight": "10",
+              "owner": "Retail commercial lead",
+              "tolerance": "0",
+              "basis": {
+                "path": "evidence.csv",
+                "locator": "commercial-bridge row 5",
+                "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+              },
+              "historical_value": "10",
+              "adjustment_percent": "0",
+              "effective_weight": "10"
+            },
+            {
+              "cell_id": "infusion-tender",
+              "member": "tender",
+              "weight": "20",
+              "owner": "Tender accounts lead",
+              "tolerance": "0",
+              "basis": {
+                "path": "evidence.csv",
+                "locator": "commercial-bridge row 6",
+                "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+              },
+              "historical_value": "20",
+              "adjustment_percent": "0",
+              "effective_weight": "20"
+            }
+          ],
+          "historical_actual_revision": "commercial-history-actuals",
+          "historical_actual_digest": "2c1e66a96c20c2100b21bbdd9bdee0b01abac7fabf29052a1af13d2614c24857",
+          "historical_source_pack_id": "configured-distribution-v1",
+          "request_hash": "47769022f4ca23f8104affa8ce4afbf2d6f4fbab5d38b6ff98591bac7705e02c"
+        }
+      },
+      "actuals": {
+        "schema_version": 1,
+        "company_id": "synthetic-distributor",
+        "period": {
+          "start": "2026-08-01",
+          "end": "2026-08-31"
+        },
+        "kind": "actual",
+        "revision": "commercial-bridge-actuals",
+        "recorded_on": "2026-08-31",
+        "observations": [
+          {
+            "metric": "revenue",
+            "dimensions": {
+              "product": "infusion",
+              "region": "central",
+              "client": "retail"
+            },
+            "unit": "SAR",
+            "value": "135",
+            "source": {
+              "path": "evidence.csv",
+              "locator": "commercial-bridge row 5, actual",
+              "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+            }
+          },
+          {
+            "metric": "revenue",
+            "dimensions": {
+              "product": "infusion",
+              "region": "central",
+              "client": "tender"
+            },
+            "unit": "SAR",
+            "value": "198",
+            "source": {
+              "path": "evidence.csv",
+              "locator": "commercial-bridge row 6, actual",
+              "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+            }
+          }
+        ],
+        "price_volume_mix": [
+          {
+            "bridge_id": "commercial-bridge",
+            "currency_unit": "SAR",
+            "price_unit": "SAR/unit",
+            "volume_unit": "unit",
+            "rows": [
+              {
+                "member": "retail",
+                "actual_price": "9",
+                "actual_volume": "15",
+                "price_source": {
+                  "path": "evidence.csv",
+                  "locator": "commercial-bridge row 5, actual_price",
+                  "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+                },
+                "volume_source": {
+                  "path": "evidence.csv",
+                  "locator": "commercial-bridge row 5, actual_volume",
+                  "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+                }
+              },
+              {
+                "member": "tender",
+                "actual_price": "22",
+                "actual_volume": "9",
+                "price_source": {
+                  "path": "evidence.csv",
+                  "locator": "commercial-bridge row 6, actual_price",
+                  "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+                },
+                "volume_source": {
+                  "path": "evidence.csv",
+                  "locator": "commercial-bridge row 6, actual_volume",
+                  "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "board_template": {
+        "schema_version": 1,
+        "template_id": "commercial-bridge-board",
+        "version": 1,
+        "title": {
+          "en": "Commercial bridge review",
+          "ar": "مراجعة أداء التوزيع"
+        },
+        "client": {
+          "en": "Synthetic healthcare distributor",
+          "ar": "موزع رعاية صحية تجريبي"
+        },
+        "accent": "#25335C",
+        "labels": {
+          "revenue": {
+            "en": "Net revenue",
+            "ar": "صافي الإيرادات"
+          },
+          "product": {
+            "en": "Product",
+            "ar": "المنتج"
+          },
+          "region": {
+            "en": "Region",
+            "ar": "المنطقة"
+          },
+          "client": {
+            "en": "Client",
+            "ar": "العميل"
+          },
+          "infusion": {
+            "en": "Infusion portfolio",
+            "ar": "محفظة المحاليل"
+          },
+          "central": {
+            "en": "Central",
+            "ar": "الوسطى"
+          },
+          "retail": {
+            "en": "Retail",
+            "ar": "التجزئة"
+          },
+          "tender": {
+            "en": "Tender",
+            "ar": "المناقصة"
+          }
+        }
+      },
+      "context_links": []
+    },
+    {
+      "story_id": "regional-credit-constraint",
+      "title": "Regional miss links to a credit constraint",
+      "question": "Which accountable revenue cell is behind plan, and what operating constraint should the executive investigate?",
+      "decision_prompt": "Resolve or consciously retain the credit hold before revising the regional recovery commitment.",
+      "plan": {
+        "schema_version": 1,
+        "plan_id": "credit-constraint-plan",
+        "company_id": "synthetic-distributor",
+        "version": 1,
+        "period": {
+          "start": "2026-08-01",
+          "end": "2026-08-31"
+        },
+        "effective_from": "2026-01-01",
+        "effective_to": "2026-12-31",
+        "status": "ratified",
+        "ratified_by": "Synthetic board",
+        "ratified_on": "2026-07-31",
+        "ratification": {
+          "path": "evidence.csv",
+          "locator": "synthetic board approval record",
+          "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+        },
+        "dimensions": {
+          "product": [
+            "oncology"
+          ],
+          "region": [
+            "east",
+            "west"
+          ],
+          "client": [
+            "private-hospital"
+          ]
+        },
+        "metrics": {
+          "revenue": {
+            "unit": "SAR",
+            "aggregation": "sum",
+            "direction": "higher_is_better",
+            "planned_total": "300",
+            "tolerance": "0"
+          }
+        },
+        "concentration_policies": [],
+        "price_volume_mix_policies": [],
+        "cells": [
+          {
+            "id": "oncology-east-private",
+            "metric": "revenue",
+            "dimensions": {
+              "product": "oncology",
+              "region": "east",
+              "client": "private-hospital"
+            },
+            "owner": "East key-account lead",
+            "target": "150",
+            "tolerance": "0",
+            "source": {
+              "path": "evidence.csv",
+              "locator": "credit-constraint row 7",
+              "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+            }
+          },
+          {
+            "id": "oncology-west-private",
+            "metric": "revenue",
+            "dimensions": {
+              "product": "oncology",
+              "region": "west",
+              "client": "private-hospital"
+            },
+            "owner": "West key-account lead",
+            "target": "150",
+            "tolerance": "0",
+            "source": {
+              "path": "evidence.csv",
+              "locator": "credit-constraint row 8",
+              "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+            }
+          }
+        ]
+      },
+      "actuals": {
+        "schema_version": 1,
+        "company_id": "synthetic-distributor",
+        "period": {
+          "start": "2026-08-01",
+          "end": "2026-08-31"
+        },
+        "kind": "actual",
+        "revision": "credit-constraint-actuals",
+        "recorded_on": "2026-08-31",
+        "observations": [
+          {
+            "metric": "revenue",
+            "dimensions": {
+              "product": "oncology",
+              "region": "east",
+              "client": "private-hospital"
+            },
+            "unit": "SAR",
+            "value": "80",
+            "source": {
+              "path": "evidence.csv",
+              "locator": "credit-constraint row 7, actual",
+              "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+            }
+          },
+          {
+            "metric": "revenue",
+            "dimensions": {
+              "product": "oncology",
+              "region": "west",
+              "client": "private-hospital"
+            },
+            "unit": "SAR",
+            "value": "160",
+            "source": {
+              "path": "evidence.csv",
+              "locator": "credit-constraint row 8, actual",
+              "sha256": "0353de2bdd3d6daf4a255cce585a61d62d70bf9f7bb0bd6acb8f3f802f88dd6d"
+            }
+          }
+        ],
+        "price_volume_mix": []
+      },
+      "board_template": {
+        "schema_version": 1,
+        "template_id": "credit-constraint-board",
+        "version": 1,
+        "title": {
+          "en": "Regional constraint review",
+          "ar": "مراجعة أداء التوزيع"
+        },
+        "client": {
+          "en": "Synthetic healthcare distributor",
+          "ar": "موزع رعاية صحية تجريبي"
+        },
+        "accent": "#25335C",
+        "labels": {
+          "revenue": {
+            "en": "Net revenue",
+            "ar": "صافي الإيرادات"
+          },
+          "product": {
+            "en": "Product",
+            "ar": "المنتج"
+          },
+          "region": {
+            "en": "Region",
+            "ar": "المنطقة"
+          },
+          "client": {
+            "en": "Client",
+            "ar": "العميل"
+          },
+          "oncology": {
+            "en": "Oncology portfolio",
+            "ar": "محفظة الأورام"
+          },
+          "east": {
+            "en": "East",
+            "ar": "الشرقية"
+          },
+          "west": {
+            "en": "West",
+            "ar": "الغربية"
+          },
+          "private-hospital": {
+            "en": "Private hospital",
+            "ar": "مستشفى خاص"
+          }
+        }
+      },
+      "context_links": [
+        {
+          "from_cell_id": "oncology-east-private",
+          "relationship": "constrained_by",
+          "to_reference": "credit-hold-account-17",
+          "label": "The eastern private-hospital account is linked to an active credit hold."
+        }
+      ]
+    }
+  ]
+}

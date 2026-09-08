@@ -1,0 +1,8 @@
+story,cell,planned_price,planned_volume,target,actual_price,actual_volume,actual,context
+regional-rescue,cardio-central-community,,,100,,,60,community channel below approved target
+regional-rescue,cardio-west-community,,,100,,,55,western region below approved target
+regional-rescue,cardio-central-nupco,,,100,,,180,institutional award offsets channel misses
+commercial-bridge,infusion-retail,10,10,100,9,15,135,unit volume grew at lower realized price
+commercial-bridge,infusion-tender,20,10,200,22,9,198,tender mix shifted while total revenue rose
+credit-constraint,oncology-east-private,,,150,,,80,account placed on credit hold
+credit-constraint,oncology-west-private,,,150,,,160,western account above approved target

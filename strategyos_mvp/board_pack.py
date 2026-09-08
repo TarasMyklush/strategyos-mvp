@@ -123,6 +123,22 @@ def compose(principal, analysis_id, request):
             newer_records[key] = ({'plan_id': row['plan_id'], 'version': row['version'], 'digest': row['digest']}
                                   if kind == 'plan' else {'revision': row['revision'], 'digest': row['digest']})
             break
+    return compose_snapshot(
+        result, request, analysis_id=analysis_id,
+        plan_digest=result['plan_import_digest'], actual_digest=result['actual_import_digest'],
+        warnings=warnings, newer_records=newer_records,
+    )
+
+
+def compose_snapshot(result, request, *, analysis_id, plan_digest, actual_digest,
+                     warnings=None, newer_records=None, evidence_url=None):
+    """Compose the same deterministic pages from an already verified analysis snapshot."""
+    warnings = list(warnings or [])
+    newer_records = dict(newer_records or {})
+    if evidence_url is None:
+        evidence_url = lambda side, cell_id: (
+            '/api/intent/dimensional/analyses/' + analysis_id + '/evidence?' +
+            urlencode({'side': side, 'cell_id': cell_id}))
     lang, template = request.language, request.template
     def label(value):
         return translated(template.labels[value], lang) if value in template.labels else value
@@ -160,7 +176,7 @@ def compose(principal, analysis_id, request):
             source = c[key]
             if source:
                 number = len(evidence) + 1
-                path = '/api/intent/dimensional/analyses/' + analysis_id + '/evidence?' + urlencode({'side': side, 'cell_id': c['cell_id']})
+                path = evidence_url(side, c['cell_id'])
                 evidence.append({'number': number, 'cell_id': c['cell_id'], 'side': side, 'source': source, 'path': path})
                 refs.append('[' + str(number) + ']')
         add(word('cells', lang), [c['cell_id'] + ' · ' + label(c['metric']) + ' (' + c['unit'] + ')',
@@ -217,13 +233,13 @@ def compose(principal, analysis_id, request):
         add(word('evidence', lang) + ' [' + str(e['number']) + ']',
             [e['cell_id'] + ' / ' + e['side'], source['path'], source['locator'], 'SHA-256: ' + source['sha256']],
             {'1': e['path']})
-    binding = {'composer_version': 'board-pack.v3', 'analysis_hash': analysis_id, 'plan_digest': result['plan_import_digest'],
-               'actual_digest': result['actual_import_digest'], 'template': template.model_dump(mode='json'),
+    binding = {'composer_version': 'board-pack.v3', 'analysis_hash': analysis_id, 'plan_digest': plan_digest,
+               'actual_digest': actual_digest, 'template': template.model_dump(mode='json'),
                'language': lang, 'warnings': warnings, 'newer_records': newer_records}
     add('Snapshot references / مراجع اللقطة', [
         'Analysis: ' + analysis_id,
-        'Plan SHA-256: ' + result['plan_import_digest'],
-        'Actuals SHA-256: ' + result['actual_import_digest'],
+        'Plan SHA-256: ' + plan_digest,
+        'Actuals SHA-256: ' + actual_digest,
         'Template SHA-256: ' + fingerprint(template.model_dump(mode='json')),
         'Pack SHA-256: ' + fingerprint(binding),
         'Composer: board-pack.v3', word('assurance', lang)])

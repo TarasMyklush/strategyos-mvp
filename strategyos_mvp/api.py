@@ -17147,3 +17147,5 @@ from .claim_api import router as claim_router
 app.include_router(claim_router)
 from .outreach_api import router as outreach_router
 app.include_router(outreach_router)
+from .demo_pack_api import router as demo_pack_router
+app.include_router(demo_pack_router)
