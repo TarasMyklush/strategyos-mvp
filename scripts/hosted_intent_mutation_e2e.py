@@ -288,6 +288,7 @@ def main() -> int:
 
             operator_page.goto(urljoin(base_url, "plan"), wait_until="domcontentloaded")
             operator_page.locator("#vault-content:not([hidden])").wait_for(timeout=20_000)
+            operator_page.locator("#import-panel summary").click()
             operator_page.locator("#plan-pack").fill(source_pack_id)
             operator_page.locator("#plan-file").set_input_files(str(plan_file))
             operator_page.locator("#plan-import-form").get_by_role("button", name="Import proposal").click()
@@ -305,6 +306,7 @@ def main() -> int:
             admin_page.locator("#vault-content:not([hidden])").wait_for(timeout=20_000)
             choose_plan(admin_page, 1)
             admin_page.locator("#ratifier-panel:not([hidden])").wait_for()
+            admin_page.locator("#ratifier-panel summary").click()
             ratifier_subject = executive_session["subject"]
             admin_page.locator("#ratifier-subject").fill(ratifier_subject)
             admin_page.get_by_role("button", name="Load permission").click()
@@ -341,6 +343,7 @@ def main() -> int:
             operator_page.goto(urljoin(base_url, "plan"), wait_until="domcontentloaded")
             operator_page.locator("#vault-content:not([hidden])").wait_for(timeout=20_000)
             choose_plan(operator_page, 1)
+            operator_page.locator("#import-panel summary").click()
             operator_page.locator("#actual-pack").fill(source_pack_id)
             operator_page.locator("#actual-file").set_input_files(str(actuals_file))
             operator_page.locator("#actual-import-form").get_by_role("button", name="Import actuals").click()
