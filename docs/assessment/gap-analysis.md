@@ -4,7 +4,7 @@ Assessment date: 2026-09-05. Reviewed baseline: `c03e95816dedf6dedf05778cb725d42
 
 The preview now runs the enriched approved synthetic dataset with durable review state, scoped local semantic retrieval, immutable board records and encrypted inference audit. The register below separates verified corrections from incomplete acceptance. It does not claim a complete enterprise product or a passed factual assistant gate.
 
-The register contains **33 gaps: 8 P0, 21 P1 and 4 P2**. 21 have partial remediation and 7 are closed. These are risk priorities, not a completion percentage.
+The register contains **33 gaps: 8 P0, 21 P1 and 4 P2**. 18 have partial remediation and 10 are closed. These are risk priorities, not a completion percentage.
 
 Revalidated 2026-09-08: Current P0 check: four of eight P0 gaps remain unclosed. G05 fabricated-number protection, G06 authority enforcement and G07 full multi-tenant isolation are partial; G10 factual answer quality is open. The hosted Intent mutation lifecycle passed, but its subsystem evidence does not satisfy the broader product-wide acceptance criteria.
 
@@ -32,9 +32,9 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 | [G02](#g02) | P0 | Release and data | Canonical release and hosted preview identity reconciled | closed |
 | [G03](#g03) | P0 | Quantitative correctness | Zero values disappear from Plan Health | closed |
 | [G04](#g04) | P1 | Quantitative correctness | Drift and direction depend on dataset labels and IDs | partial |
-| [G05](#g05) | P0 | AI assurance | Fabricated-number protection is not product-wide | partial |
-| [G06](#g06) | P0 | Access control | Authority enforcement is weaker than its published contract | partial |
-| [G07](#g07) | P0 | Access control | Shared multi-tenant run isolation is incomplete | partial |
+| [G05](#g05) | P0 | AI assurance | Fabricated-number protection is not product-wide | closed |
+| [G06](#g06) | P0 | Access control | Authority enforcement is weaker than its published contract | closed |
+| [G07](#g07) | P0 | Access control | Shared multi-tenant run isolation is incomplete | closed |
 | [G08](#g08) | P0 | Board governance | Frozen board memory is not demonstrated as an immutable snapshot | closed |
 | [G09](#g09) | P1 | Access control | Live sign-out does not invalidate the session | closed |
 | [G10](#g10) | P0 | Validation | Factual answer quality remains below the 45/50 release gate | open |
@@ -133,7 +133,7 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 <a id="g05"></a>
 ## G05 · P0 · Fabricated-number protection is not product-wide
 
-**Current position:** The current executive-synthesis path rejects changed or additional provider numbers and only accepts prose identical to the governed deterministic fallback. The answer acceptance scorer rejects extra fabricated quantities. These focused controls pass, but every model-generated assistant, chart, caption and export field is not yet represented as a typed approved fact/calculation reference, and causal validation remains separate and incomplete. Further remediation replaces provider citation excerpts with source-owned content, checks current artifact hashes, fixes financial notation parsing and keeps executive key figures source-derived. Semantic metric/period/subject binding and immutable claim-backed QA citations remain open.
+**Current position:** Authenticated model QA selects immutable approved facts; server rendering owns values, units, periods, causes and citations. Deterministic calculations retain typed input revisions and reject unverified legacy references. Shared finance presentation rejects wrong units and incompatible actual/plan, BU and group periods; supported revenue-target flows retain their source references. The validator accepted all 255 live approved finance records. Release fc53629 passed 2,626 service tests with zero skips, both hosted browser suites, nine targeted live cases, 73 resolving citations with matching input values, and browser fact-link clicks for budget and revenue-target answers. Experimental disabled/offline paths remain outside this enabled deployment acceptance; factual answer quality is tracked separately under G10.
 
 **Impact:** An evidence badge can accompany an unsupported quantitative claim, violating the defining deterministic-number contract.
 
@@ -143,14 +143,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** AI platform + quantitative QA
 
-**Evidence classification:** Revalidated 2026-09-08: partial; focused guards pass, product-wide quantitative and causal claim binding remains unproven.
+**Evidence classification:** Closed for enabled deployment paths, verified 2026-09-09
 
-**Evidence:** [Synthesis acceptance](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/executive_synthesis.py#L204>); [Probe results](<evidence/audit-probe-results.json>); [P0 reassessment, 8 September 2026](<evidence/p0-reassessment-2026-09-08.json>); [P0 remediation and remaining acceptance, 8 September](<evidence/p0-remediation-2026-09-08.json>).
+**Evidence:** [Synthesis acceptance](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/executive_synthesis.py#L204>); [Probe results](<evidence/audit-probe-results.json>); [P0 reassessment, 8 September 2026](<evidence/p0-reassessment-2026-09-08.json>); [P0 remediation and remaining acceptance, 8 September](<evidence/p0-remediation-2026-09-08.json>); [Live arithmetic, immutable citation and authority checks](<evidence/p0-targeted-live-0cbab3f.json>); [Final release, live calculation/citation and browser acceptance](<evidence/p0-final-acceptance-2026-09-09.json>).
 
 <a id="g06"></a>
 ## G06 · P0 · Authority enforcement is weaker than its published contract
 
-**Current position:** Shared authorization guards run before scoped loaders and propagate through provider executor threads. Service-backed negative tests pass. Hosted Chromium acceptance used separate operator, tenant-admin and executive identities and rejected importer plan ratification and advisor-creator approval. The required negative matrix across every persona, alias, mixed-domain phrasing and both /qa and /assistant/chat has not been completed. The new 128-case real HTTP matrix covers both endpoints, four roles, two persona-selection locations and eight restricted/mixed-domain prompts. Persisted policy corruption and tenant filename collisions fail closed. Explicit assistant-domain binding at the source policy layer remains absent.
+**Current position:** The negative HTTP matrix covers both QA routes, roles, aliases, nested persona selectors and mixed or unclassified question phrasing. Assistant domains and explicit user restrictions bind PolicyContext across executor threads. SQL checks root and dependency domains and BUs before selecting values. Direct claim reads enforce human restrictions; unclassified bulk access fails closed for restricted humans. Twin routes bind the same assistant authority. Corrupt or unavailable saved policies cannot fall back to broader access. Release fc53629 passed 2,626 service tests with zero skips and both hosted browser suites. Live /qa and /assistant/chat each denied a CFO HR request. The accepted production code paths are covered; no production promotion is claimed.
 
 **Impact:** A caller-controlled persona, alternate endpoint, or differently worded request can change the effective permission decision. The observed classifier mismatch alone does not prove that protected records were returned.
 
@@ -160,14 +160,14 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** Security + backend lead
 
-**Evidence classification:** Revalidated 2026-09-08: partial; service guards and the hosted Intent role workflow pass, the complete product-wide negative matrix remains open.
+**Evidence classification:** Closed for enabled deployment paths, verified 2026-09-09
 
-**Evidence:** [Authority classifier](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/authority_matrix.py#L218>); [Assistant boundary](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/api.py#L16612>); [Published contract](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/docs/authority-matrix-mvp.md#L17>); [Probe results](<evidence/audit-probe-results.json>); [P0 reassessment, 8 September 2026](<evidence/p0-reassessment-2026-09-08.json>); [Hosted human Intent mutation acceptance](<evidence/p1-human-intent-mutation-e2e-2026-09-08.json>); [P0 remediation and remaining acceptance, 8 September](<evidence/p0-remediation-2026-09-08.json>).
+**Evidence:** [Authority classifier](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/authority_matrix.py#L218>); [Assistant boundary](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/api.py#L16612>); [Published contract](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/docs/authority-matrix-mvp.md#L17>); [Probe results](<evidence/audit-probe-results.json>); [P0 reassessment, 8 September 2026](<evidence/p0-reassessment-2026-09-08.json>); [Hosted human Intent mutation acceptance](<evidence/p1-human-intent-mutation-e2e-2026-09-08.json>); [P0 remediation and remaining acceptance, 8 September](<evidence/p0-remediation-2026-09-08.json>); [Live arithmetic, immutable citation and authority checks](<evidence/p0-targeted-live-0cbab3f.json>); [Final release, live calculation/citation and browser acceptance](<evidence/p0-final-acceptance-2026-09-09.json>).
 
 <a id="g07"></a>
 ## G07 · P0 · Shared multi-tenant run isolation is incomplete
 
-**Current position:** Intent/Advisor records have tenant row-level security, cross-tenant store tests pass, live semantic canaries exclude a foreign tenant and wrong-tenant inference decryption is rejected. This does not yet demonstrate two tenants and two business units across every list, lookup, retrieval, search, export, question and latest-alias path in the product. The 2,535-test final service gate passes expanded two-tenant/two-BU ownership checks with overlapping BU names across run, snapshot, checkpoint, artifact, decisions, citation search, QA context and list access. Sixteen local latest/current owner/pointer combinations also pass; complete product-wide isolation remains unproven.
+**Current position:** Real PostgreSQL and HTTP tests use two tenants with overlapping east/west BU names and guessed IDs. They cover snapshot fact links, direct queries, export purposes, foreign run pages and artifacts, QA and assistant chat. A hostile ranking stub returns all four tenant/BU revisions; the search API returns only the caller’s authorized record. Provenance loading assertions reject foreign tenant/BU rows. Earlier run/list/checkpoint/decision/latest-pointer, RLS, semantic canary and audit-decryption proofs remain applicable. Synthesis and twin caches carry authority scope. Release fc53629 passed 2,626 service tests with zero skips and both hosted browser suites. Live /qa and /assistant/chat each denied a CFO HR request. The accepted production code paths are covered; no production promotion is claimed.
 
 **Impact:** The code does not substantiate the shared multi-tenant tier or per-BU confidentiality claim end to end. Separate deployment isolation can reduce this exposure for an initial pilot.
 
@@ -177,9 +177,9 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** Security + data architecture
 
-**Evidence classification:** Revalidated 2026-09-08: partial; subsystem RLS and live semantic canaries pass, full product-wide tenant/BU isolation acceptance remains open.
+**Evidence classification:** Closed for enabled deployment paths, verified 2026-09-09
 
-**Evidence:** [Run schema](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/deploy/postgres/schema.sql#L20>); [Run lookup](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/state_store.py#L372>); [Pointer selection](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/run_registry.py#L84>); [P0 reassessment, 8 September 2026](<evidence/p0-reassessment-2026-09-08.json>); [P0 remediation and remaining acceptance, 8 September](<evidence/p0-remediation-2026-09-08.json>).
+**Evidence:** [Run schema](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/deploy/postgres/schema.sql#L20>); [Run lookup](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/state_store.py#L372>); [Pointer selection](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/run_registry.py#L84>); [P0 reassessment, 8 September 2026](<evidence/p0-reassessment-2026-09-08.json>); [P0 remediation and remaining acceptance, 8 September](<evidence/p0-remediation-2026-09-08.json>); [Live arithmetic, immutable citation and authority checks](<evidence/p0-targeted-live-0cbab3f.json>); [Final release, live calculation/citation and browser acceptance](<evidence/p0-final-acceptance-2026-09-09.json>).
 
 <a id="g08"></a>
 ## G08 · P0 · Frozen board memory is not demonstrated as an immutable snapshot
@@ -218,7 +218,7 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 <a id="g10"></a>
 ## G10 · P0 · Factual answer quality remains below the 45/50 release gate
 
-**Current position:** The fixed 50-question c72387d run scored 22/50. Targeted source, guard and deterministic-revenue retests bring the latest complete release grading to 24/50, below 45/50: 14 insufficient-evidence, 10 partial and 2 calculation gaps remain. The grading names each source response; safe refusals and routing matches are not correctness passes. No later full-corpus result closes the gate.
+**Current position:** The fixed 50-question corpus across all 18 themes completed on 51b98e4: 50 HTTP 200 responses, median 23.19 seconds, maximum 43.16 seconds. There were 43 saved-source-policy refusals, three numerical answers missing immutable citations, three incorrect tabular routes and one refusal for missing consolidated COGS. Release fc53629 fixes discovered routing, lineage and comparison-contract defects; nine targeted cases passed, including expected refusals. The complete fixed corpus has not achieved the required correctness gate. This is not a 45/50 correctness pass. The source-owner external-model permission and missing authoritative business inputs remain outstanding; prior 24/50 grading belongs to an older release.
 
 **Impact:** A high answered count can be mistaken for the specified 45/50 correct, resolving-citation and zero-fabrication gate.
 
@@ -228,9 +228,9 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Suggested owner:** QA lead + domain reviewer
 
-**Evidence classification:** Revalidated 2026-09-08: open; the gate logic passes its tests, but the latest full independently graded release result is 24/50.
+**Evidence classification:** Open: source permissions and missing inputs block factual acceptance, 2026-09-09
 
-**Evidence:** [Corpus scorer](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/qa_regression_corpus.py#L57>); [Probe results](<evidence/audit-probe-results.json>); [P0 reassessment, 8 September 2026](<evidence/p0-reassessment-2026-09-08.json>); [P0 remediation and remaining acceptance, 8 September](<evidence/p0-remediation-2026-09-08.json>).
+**Evidence:** [Corpus scorer](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/qa_regression_corpus.py#L57>); [Probe results](<evidence/audit-probe-results.json>); [P0 reassessment, 8 September 2026](<evidence/p0-reassessment-2026-09-08.json>); [P0 remediation and remaining acceptance, 8 September](<evidence/p0-remediation-2026-09-08.json>); [Current fixed-50 live responses and classifications](<evidence/p0-live-factual-2026-09-09.json>); [Final targeted regressions; not a 45/50 factual score](<evidence/p0-final-acceptance-2026-09-09.json>).
 
 <a id="g11"></a>
 ## G11 · P1 · Portable datasets fixed; external-service acceptance remains open

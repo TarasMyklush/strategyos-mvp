@@ -1,0 +1,14 @@
+{
+  "fact_link_clicked": "/api/claims/snapshots/8627f532-b199-4278-b8ff-89dac2d5f5a3/revisions/9eeb1813-9c3c-4de3-8529-4de19566ebb7",
+  "immutable_fact_visible": true,
+  "url": "https://new.strategyos.live/executive?persona=ceo&board=pre&driver=operating_cost&company=strategyos-branch&portfolio=finance-diagnostics",
+  "status": 200,
+  "duration_seconds": 27.574,
+  "answer": "Revenue is SAR 4.0B against an aligned SAR 3.9B plan (102.6%). It is already at or above the requested 100.0% attainment for current governed period; no additional revenue is required to meet that target.",
+  "scenario_id": "revenue_plan_attainment",
+  "scenario_type": "deterministic",
+  "visible_answer_verified": true,
+  "synthetic_preview_only": true,
+  "application_revision": "fc53629c2fde3f1288471a19e8cbd93558670ae7",
+  "revision_verification": "Browser runner asserted the deployed revision before submitting the question."
+}

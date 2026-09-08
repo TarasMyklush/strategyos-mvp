@@ -126,8 +126,8 @@
       "priority": "P0",
       "domain": "AI assurance",
       "title": "Fabricated-number protection is not product-wide",
-      "status": "Revalidated 2026-09-08: partial; focused guards pass, product-wide quantitative and causal claim binding remains unproven.",
-      "observation": "The current executive-synthesis path rejects changed or additional provider numbers and only accepts prose identical to the governed deterministic fallback. The answer acceptance scorer rejects extra fabricated quantities. These focused controls pass, but every model-generated assistant, chart, caption and export field is not yet represented as a typed approved fact/calculation reference, and causal validation remains separate and incomplete. Further remediation replaces provider citation excerpts with source-owned content, checks current artifact hashes, fixes financial notation parsing and keeps executive key figures source-derived. Semantic metric/period/subject binding and immutable claim-backed QA citations remain open.",
+      "status": "Closed for enabled deployment paths, verified 2026-09-09",
+      "observation": "Authenticated model QA selects immutable approved facts; server rendering owns values, units, periods, causes and citations. Deterministic calculations retain typed input revisions and reject unverified legacy references. Shared finance presentation rejects wrong units and incompatible actual/plan, BU and group periods; supported revenue-target flows retain their source references. The validator accepted all 255 live approved finance records. Release fc53629 passed 2,626 service tests with zero skips, both hosted browser suites, nine targeted live cases, 73 resolving citations with matching input values, and browser fact-link clicks for budget and revenue-target answers. Experimental disabled/offline paths remain outside this enabled deployment acceptance; factual answer quality is tracked separately under G10.",
       "impact": "An evidence badge can accompany an unsupported quantitative claim, violating the defining deterministic-number contract.",
       "action": "Represent each quantitative claim as a typed reference to an approved fact or calculation. Reject unbound numbers in every model-generated field, including summaries, charts and captions; validate causal claims separately.",
       "acceptance": "Adversarial provider responses retaining valid numbers while adding, changing or attaching false units, amounts or causes are rejected. All displayed numerical cells resolve to an approved calculation.",
@@ -152,9 +152,19 @@
           "label": "P0 remediation and remaining acceptance, 8 September",
           "path": "docs/assessment/evidence/p0-remediation-2026-09-08.json",
           "line": null
+        },
+        {
+          "label": "Live arithmetic, immutable citation and authority checks",
+          "path": "docs/assessment/evidence/p0-targeted-live-0cbab3f.json",
+          "line": null
+        },
+        {
+          "label": "Final release, live calculation/citation and browser acceptance",
+          "path": "docs/assessment/evidence/p0-final-acceptance-2026-09-09.json",
+          "line": null
         }
       ],
-      "closure_status": "partial",
+      "closure_status": "closed",
       "baseline_observation": "The development guard checks that the first two original numbers still occur in WHAT and one expected reference occurs in WHY. It accepts extra invented SAR 999M claims in WHAT, WHY and rich_briefing. Thread summaries and key_figures accept provider replacements without an equivalent numeric check. Both probes were labelled llm-batch-grounded."
     },
     {
@@ -162,8 +172,8 @@
       "priority": "P0",
       "domain": "Access control",
       "title": "Authority enforcement is weaker than its published contract",
-      "status": "Revalidated 2026-09-08: partial; service guards and the hosted Intent role workflow pass, the complete product-wide negative matrix remains open.",
-      "observation": "Shared authorization guards run before scoped loaders and propagate through provider executor threads. Service-backed negative tests pass. Hosted Chromium acceptance used separate operator, tenant-admin and executive identities and rejected importer plan ratification and advisor-creator approval. The required negative matrix across every persona, alias, mixed-domain phrasing and both /qa and /assistant/chat has not been completed. The new 128-case real HTTP matrix covers both endpoints, four roles, two persona-selection locations and eight restricted/mixed-domain prompts. Persisted policy corruption and tenant filename collisions fail closed. Explicit assistant-domain binding at the source policy layer remains absent.",
+      "status": "Closed for enabled deployment paths, verified 2026-09-09",
+      "observation": "The negative HTTP matrix covers both QA routes, roles, aliases, nested persona selectors and mixed or unclassified question phrasing. Assistant domains and explicit user restrictions bind PolicyContext across executor threads. SQL checks root and dependency domains and BUs before selecting values. Direct claim reads enforce human restrictions; unclassified bulk access fails closed for restricted humans. Twin routes bind the same assistant authority. Corrupt or unavailable saved policies cannot fall back to broader access. Release fc53629 passed 2,626 service tests with zero skips and both hosted browser suites. Live /qa and /assistant/chat each denied a CFO HR request. The accepted production code paths are covered; no production promotion is claimed.",
       "impact": "A caller-controlled persona, alternate endpoint, or differently worded request can change the effective permission decision. The observed classifier mismatch alone does not prove that protected records were returned.",
       "action": "Bind personas to authenticated entitlements, enforce per-resource and per-source permissions at retrieval, intersect user/assistant/tool authority, and apply the same policy to every query endpoint. Give Minerva a separate policy identity.",
       "acceptance": "Negative tests across users, personas, aliases, mixed-domain questions and /qa versus /assistant/chat demonstrate identical denials before restricted data is loaded.",
@@ -203,9 +213,19 @@
           "label": "P0 remediation and remaining acceptance, 8 September",
           "path": "docs/assessment/evidence/p0-remediation-2026-09-08.json",
           "line": null
+        },
+        {
+          "label": "Live arithmetic, immutable citation and authority checks",
+          "path": "docs/assessment/evidence/p0-targeted-live-0cbab3f.json",
+          "line": null
+        },
+        {
+          "label": "Final release, live calculation/citation and browser acceptance",
+          "path": "docs/assessment/evidence/p0-final-acceptance-2026-09-09.json",
+          "line": null
         }
       ],
-      "closure_status": "partial",
+      "closure_status": "closed",
       "baseline_observation": "The assistant checks the subject selected from the request persona, rather than intersecting it with an authenticated persona entitlement. A keyword classifier selects a single domain before broad context retrieval. The default CFO policy denies Show employee compensation as HR, but allows Show salaries and bonuses as finance. Board maps to assistant:hermes rather than a separate Minerva subject. The separate /qa path does not call _assistant_authority_refusal."
     },
     {
@@ -213,11 +233,11 @@
       "priority": "P0",
       "domain": "Access control",
       "title": "Shared multi-tenant run isolation is incomplete",
-      "status": "Revalidated 2026-09-08: partial; subsystem RLS and live semantic canaries pass, full product-wide tenant/BU isolation acceptance remains open.",
-      "observation": "Intent/Advisor records have tenant row-level security, cross-tenant store tests pass, live semantic canaries exclude a foreign tenant and wrong-tenant inference decryption is rejected. This does not yet demonstrate two tenants and two business units across every list, lookup, retrieval, search, export, question and latest-alias path in the product. The 2,535-test final service gate passes expanded two-tenant/two-BU ownership checks with overlapping BU names across run, snapshot, checkpoint, artifact, decisions, citation search, QA context and list access. Sixteen local latest/current owner/pointer combinations also pass; complete product-wide isolation remains unproven.",
+      "status": "Closed for enabled deployment paths, verified 2026-09-09",
+      "observation": "Real PostgreSQL and HTTP tests use two tenants with overlapping east/west BU names and guessed IDs. They cover snapshot fact links, direct queries, export purposes, foreign run pages and artifacts, QA and assistant chat. A hostile ranking stub returns all four tenant/BU revisions; the search API returns only the caller\u2019s authorized record. Provenance loading assertions reject foreign tenant/BU rows. Earlier run/list/checkpoint/decision/latest-pointer, RLS, semantic canary and audit-decryption proofs remain applicable. Synthesis and twin caches carry authority scope. Release fc53629 passed 2,626 service tests with zero skips and both hosted browser suites. Live /qa and /assistant/chat each denied a CFO HR request. The accepted production code paths are covered; no production promotion is claimed.",
       "impact": "The code does not substantiate the shared multi-tenant tier or per-BU confidentiality claim end to end. Separate deployment isolation can reduce this exposure for an initial pilot.",
       "action": "Add tenant and business-scope ownership to runs, jobs, artifacts, citations, caches and retrieval; enforce the authenticated scope in every lookup, not just in the agent layer.",
-      "acceptance": "Two tenants and two BUs sharing infrastructure cannot list, resolve, retrieve, search, export or ask about each other’s records, including guessed IDs and latest aliases.",
+      "acceptance": "Two tenants and two BUs sharing infrastructure cannot list, resolve, retrieve, search, export or ask about each other\u2019s records, including guessed IDs and latest aliases.",
       "suggested_owner": "Security + data architecture",
       "evidence": [
         {
@@ -244,9 +264,19 @@
           "label": "P0 remediation and remaining acceptance, 8 September",
           "path": "docs/assessment/evidence/p0-remediation-2026-09-08.json",
           "line": null
+        },
+        {
+          "label": "Live arithmetic, immutable citation and authority checks",
+          "path": "docs/assessment/evidence/p0-targeted-live-0cbab3f.json",
+          "line": null
+        },
+        {
+          "label": "Final release, live calculation/citation and browser acceptance",
+          "path": "docs/assessment/evidence/p0-final-acceptance-2026-09-09.json",
+          "line": null
         }
       ],
-      "closure_status": "partial",
+      "closure_status": "closed",
       "baseline_observation": "Agent-runtime records and canonical finance tables have tenant scoping, but core strategyos_runs has no tenant_id column; get_run_detail selects by run ID only. Latest-run/output selection also uses deployment-global state. A generic bu role is not equivalent to a specific BU entitlement."
     },
     {
@@ -258,7 +288,7 @@
       "observation": "Immutable database snapshots retain approved figures, answers and exact file bytes. The original closed meeting remained byte-identical after an upload, service restart and a newly approved/reprocessed company run. A second meeting closed through the UI and immediately switched to frozen routes.",
       "impact": "A closed meeting may describe a frozen record while later source/run changes alter what is displayed or what the assistant can use.",
       "action": "Persist a meeting snapshot containing the approved data, citations, report versions and content hashes. Resolve every closed-board read and question exclusively through that snapshot.",
-      "acceptance": "Close a meeting, change/reprocess current company data and restart services; the meeting’s figures, files and answers remain identical and inaccessible data stays unavailable.",
+      "acceptance": "Close a meeting, change/reprocess current company data and restart services; the meeting\u2019s figures, files and answers remain identical and inaccessible data stays unavailable.",
       "suggested_owner": "Board product owner + backend lead",
       "evidence": [
         {
@@ -311,8 +341,8 @@
       "priority": "P0",
       "domain": "Validation",
       "title": "Factual answer quality remains below the 45/50 release gate",
-      "status": "Revalidated 2026-09-08: open; the gate logic passes its tests, but the latest full independently graded release result is 24/50.",
-      "observation": "The fixed 50-question c72387d run scored 22/50. Targeted source, guard and deterministic-revenue retests bring the latest complete release grading to 24/50, below 45/50: 14 insufficient-evidence, 10 partial and 2 calculation gaps remain. The grading names each source response; safe refusals and routing matches are not correctness passes. No later full-corpus result closes the gate.",
+      "status": "Open: source permissions and missing inputs block factual acceptance, 2026-09-09",
+      "observation": "The fixed 50-question corpus across all 18 themes completed on 51b98e4: 50 HTTP 200 responses, median 23.19 seconds, maximum 43.16 seconds. There were 43 saved-source-policy refusals, three numerical answers missing immutable citations, three incorrect tabular routes and one refusal for missing consolidated COGS. Release fc53629 fixes discovered routing, lineage and comparison-contract defects; nine targeted cases passed, including expected refusals. The complete fixed corpus has not achieved the required correctness gate. This is not a 45/50 correctness pass. The source-owner external-model permission and missing authoritative business inputs remain outstanding; prior 24/50 grading belongs to an older release.",
       "impact": "A high answered count can be mistaken for the specified 45/50 correct, resolving-citation and zero-fabrication gate.",
       "action": "Add held-out reference answers, calculation tolerances, actual citation resolution, relevance grading, theme-stratified sampling and per-question adjudication. Bind reports to build, source pack and model versions.",
       "acceptance": "The latest approved release answers at least 45 of 50 questions sampled across all 18 themes correctly with resolving citations and no fabricated numbers; publish the failed and refused questions separately.",
@@ -336,6 +366,16 @@
         {
           "label": "P0 remediation and remaining acceptance, 8 September",
           "path": "docs/assessment/evidence/p0-remediation-2026-09-08.json",
+          "line": null
+        },
+        {
+          "label": "Current fixed-50 live responses and classifications",
+          "path": "docs/assessment/evidence/p0-live-factual-2026-09-09.json",
+          "line": null
+        },
+        {
+          "label": "Final targeted regressions; not a 45/50 factual score",
+          "path": "docs/assessment/evidence/p0-final-acceptance-2026-09-09.json",
           "line": null
         }
       ],
@@ -375,7 +415,7 @@
       "title": "A reusable strategy-to-KPI compiler is missing",
       "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
       "observation": "Structured strategy compilation, formula binding, invalid-input handling and recompile diffs are tested on two company configurations. Unstructured extraction and a completed client owner-review workflow remain unverified. Local increment 2026-09-07: a standalone read-only dimensional import/evaluation tool validates configurable tuples, reconciled additive targets, decimal amounts and source hashes, and exposes per-cell/offset drift. Imported approval metadata is not authorization-verified. This does not complete authenticated onboarding, persisted plan revisions, owner ratification or the UI.",
-      "impact": "Onboarding another client remains a custom data-and-code exercise instead of the product’s defining self-composition capability.",
+      "impact": "Onboarding another client remains a custom data-and-code exercise instead of the product\u2019s defining self-composition capability.",
       "action": "Build a versioned intent schema and human-reviewed compiler from strategy text to objectives, targets, measures, leading indicators, ownership, cadence and source bindings.",
       "acceptance": "Onboard a second anonymized company without code changes; prove target extraction, owner review, formula binding, recompile diffs and unsupported-input handling.",
       "suggested_owner": "Product architect + knowledge engineer",
@@ -397,7 +437,7 @@
         }
       ],
       "closure_status": "partial",
-      "baseline_observation": "The current executive enrichment reads named workbooks and fixed columns; it does not compile an arbitrary company’s approved strategy into the Growth/Margin/Capital/Resilience/Sustainability tree. The older finance-only plan-health boundary explicitly disclaims a full enterprise strategy compiler."
+      "baseline_observation": "The current executive enrichment reads named workbooks and fixed columns; it does not compile an arbitrary company\u2019s approved strategy into the Growth/Margin/Capital/Resilience/Sustainability tree. The older finance-only plan-health boundary explicitly disclaims a full enterprise strategy compiler."
     },
     {
       "id": "G13",
@@ -438,7 +478,7 @@
       "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
       "observation": "Actual ERP, treasury, banking and calendar connections are explicitly deferred by the user. The release uses a labelled synthetic source pack and does not claim external cadence or delivery.",
       "impact": "The continuous intelligence product currently depends on manually prepared extracts and reprocessing.",
-      "action": "Choose the first client’s actual ERP/AP/AR, treasury and calendar integrations; implement source contracts, incremental cursors, deduplication, retry/dead-letter handling and reconciliation.",
+      "action": "Choose the first client\u2019s actual ERP/AP/AR, treasury and calendar integrations; implement source contracts, incremental cursors, deduplication, retry/dead-letter handling and reconciliation.",
       "acceptance": "Repeated and out-of-order source deliveries are idempotent; transactions, nightly bank balances and calendar updates arrive at their declared cadence with visible freshness and failure state.",
       "suggested_owner": "Integration lead + client data owner",
       "evidence": [
@@ -480,7 +520,7 @@
         }
       ],
       "closure_status": "partial",
-      "baseline_observation": "Enrichment reads current workbook labels, fixed June checkpoints and a fixed June 1–7 virtual clock. Plan Health lacks the R4 13-week composite trajectory. Live assistant monitoring records have July 11 last-wake timestamps and cycle_count=1; this is stored run evidence, not proof that a scheduler is currently healthy."
+      "baseline_observation": "Enrichment reads current workbook labels, fixed June checkpoints and a fixed June 1\u20137 virtual clock. Plan Health lacks the R4 13-week composite trajectory. Live assistant monitoring records have July 11 last-wake timestamps and cycle_count=1; this is stored run evidence, not proof that a scheduler is currently healthy."
     },
     {
       "id": "G16",
@@ -489,7 +529,7 @@
       "title": "Cross-system entity resolution and consolidation need broader proof",
       "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
       "observation": "Consolidation controls and regression cases cover aliases, intercompany amounts and dated FX. A client multi-system corpus and owner reconciliation remain future acceptance evidence.",
-      "impact": "The finance POC’s successful planted patterns do not establish correct consolidated results for a new client’s messy multi-system records.",
+      "impact": "The finance POC\u2019s successful planted patterns do not establish correct consolidated results for a new client\u2019s messy multi-system records.",
       "action": "Add confidence-scored identity mappings, merge/split review, legal-entity-aware matching, intercompany reconciliation and effective-dated FX policy.",
       "acceptance": "A multi-system corpus covers aliases, shared bank accounts, disputed matches, intercompany sweeps and FX-rate dates; every aggregate reconciles without double counting.",
       "suggested_owner": "Finance data engineering + client finance reviewer",
@@ -553,7 +593,7 @@
         }
       ],
       "closure_status": "partial",
-      "baseline_observation": "compute_working_capital_drifts labels DSO/DPO but computes average settled invoice-to-collection/payment days in weekly invoice cohorts. It excludes unsettled invoices and averages the same trailing window being tested. The KPI specification defines balance/revenue or balance/COGS × period-days. Separate Oracle ratio calculations may exist; they do not remove this reporting mismatch."
+      "baseline_observation": "compute_working_capital_drifts labels DSO/DPO but computes average settled invoice-to-collection/payment days in weekly invoice cohorts. It excludes unsettled invoices and averages the same trailing window being tested. The KPI specification defines balance/revenue or balance/COGS \u00d7 period-days. Separate Oracle ratio calculations may exist; they do not remove this reporting mismatch."
     },
     {
       "id": "G19",
@@ -588,7 +628,7 @@
       "title": "Decision Velocity is not implemented",
       "status": "Remediation evidence, 2026-09-05; see validation.md and release receipt",
       "observation": "Durable decision timestamps and verified first-action velocity are implemented and tested. A source-linked metric in the existing UI remains unverified.",
-      "impact": "The headline business problem—decision latency—has no measured outcome in the product.",
+      "impact": "The headline business problem\u2014decision latency\u2014has no measured outcome in the product.",
       "action": "Instrument immutable lifecycle events and compute the two medians and queue ages per scope; exclude pending actions from completed-duration medians and show their age separately.",
       "acceptance": "A recorded decision and subsequent verified first action update the correct metric; overdue open items remain visible; source events drill through from the card.",
       "suggested_owner": "Product analytics + workflow owner",
@@ -605,7 +645,7 @@
         }
       ],
       "closure_status": "partial",
-      "baseline_observation": "Decision recording exists, but no linked surfaced_at → decided_at → first_action_at measurement and no median/trend/queue-aging Decision Velocity card was found."
+      "baseline_observation": "Decision recording exists, but no linked surfaced_at \u2192 decided_at \u2192 first_action_at measurement and no median/trend/queue-aging Decision Velocity card was found."
     },
     {
       "id": "G21",
@@ -688,7 +728,7 @@
         }
       ],
       "closure_status": "partial",
-      "baseline_observation": "vector_store declares hash_fallback, lexical_keyword and native_hybrid_supported=False. The current run’s Qdrant sample also reports hash_fallback. This is real persistent retrieval, but not demonstrated semantic similarity search."
+      "baseline_observation": "vector_store declares hash_fallback, lexical_keyword and native_hybrid_supported=False. The current run\u2019s Qdrant sample also reports hash_fallback. This is real persistent retrieval, but not demonstrated semantic similarity search."
     },
     {
       "id": "G24",
@@ -724,7 +764,7 @@
       "observation": "Unsupported personas remain explicitly disabled and an unassigned BU user is denied rather than receiving group data. A complete four-persona workflow is not delivered; no business assignment was guessed.",
       "impact": "The pilot can demonstrate the CEO lane, but should not promise equivalent decision workflows at all four altitudes.",
       "action": "Sequence one real CFO cockpit and one BU operating cockpit, with scope-aware KPIs, owned decisions and upward commentary; retain locks until each is accepted.",
-      "acceptance": "Persona changes alter data scope, responsibilities and workflow, not just labels; direct URLs cannot substitute another persona’s header or access rights.",
+      "acceptance": "Persona changes alter data scope, responsibilities and workflow, not just labels; direct URLs cannot substitute another persona\u2019s header or access rights.",
       "suggested_owner": "Product owner + identity/data teams",
       "evidence": [
         {
@@ -770,7 +810,7 @@
         }
       ],
       "closure_status": "partial",
-      "baseline_observation": "The code includes local-first run policy, external-mode approvals and proxy-OIDC deployment options. The required config-driven residency/model/egress marker was not found. A live run’s historical model-provider flag is not proof of current chat egress: the sampled assistant did use its LLM path."
+      "baseline_observation": "The code includes local-first run policy, external-mode approvals and proxy-OIDC deployment options. The required config-driven residency/model/egress marker was not found. A live run\u2019s historical model-provider flag is not proof of current chat egress: the sampled assistant did use its LLM path."
     },
     {
       "id": "G27",
@@ -809,10 +849,10 @@
       "domain": "Brand and UX",
       "title": "Rename token and remaining R4 display improvements are incomplete",
       "status": "Code review / requirement gap",
-      "observation": "Product-name strings remain distributed through templates and output copy; no single PRODUCT_NAME configuration was found. R4’s Plan Health trajectory and a reusable clickable FX reasoning chain are not established. Many later visual improvements are present, so the old blanket word-heavy finding should not be copied unchanged.",
+      "observation": "Product-name strings remain distributed through templates and output copy; no single PRODUCT_NAME configuration was found. R4\u2019s Plan Health trajectory and a reusable clickable FX reasoning chain are not established. Many later visual improvements are present, so the old blanket word-heavy finding should not be copied unchanged.",
       "impact": "Rebranding and new executive elements can reintroduce inconsistent names, internal vocabulary or untraceable displays.",
       "action": "Centralize product identity and design tokens, finish the trajectory and one reusable reasoning-chain component, and verify copy at rendered-payload boundaries rather than banning internal API names in source code.",
-      "acceptance": "One configuration change renames the product; the FX fact→objective→gap→confidence chain resolves in four taps; selected light/dark screenshots and collapsed-text rules are reviewed.",
+      "acceptance": "One configuration change renames the product; the FX fact\u2192objective\u2192gap\u2192confidence chain resolves in four taps; selected light/dark screenshots and collapsed-text rules are reviewed.",
       "suggested_owner": "Design system owner",
       "evidence": [
         {
@@ -883,7 +923,7 @@
         }
       ],
       "closure_status": "partial",
-      "baseline_observation": "Health/readiness checks, event trails, provider retries and concurrency tests exist. The review did not find a release acceptance report for the specified 20–50k-invoice envelope, end-to-end latency under load, source-freshness alerts, all-inference audit fields, per-tenant quotas or operating cost. Provider calls use a four-thread executor; bounded request timeouts alone do not prove bounded queued workload."
+      "baseline_observation": "Health/readiness checks, event trails, provider retries and concurrency tests exist. The review did not find a release acceptance report for the specified 20\u201350k-invoice envelope, end-to-end latency under load, source-freshness alerts, all-inference audit fields, per-tenant quotas or operating cost. Provider calls use a four-thread executor; bounded request timeouts alone do not prove bounded queued workload."
     },
     {
       "id": "G31",
@@ -940,7 +980,7 @@
         }
       ],
       "closure_status": "closed",
-      "baseline_observation": "Before this audit’s tests, the workspace current/latest pointer referenced a pytest temporary run from September 4 rather than a durable business run. The pointer writer writes directly to global output-root files. The first candidate suite run had one configuration-path assertion failure caused by this audit creating its isolated workspace too late; this is a harness setup issue, not an application defect. See the verification appendix for results and the corrected focused rerun."
+      "baseline_observation": "Before this audit\u2019s tests, the workspace current/latest pointer referenced a pytest temporary run from September 4 rather than a durable business run. The pointer writer writes directly to global output-root files. The first candidate suite run had one configuration-path assertion failure caused by this audit creating its isolated workspace too late; this is a harness setup issue, not an application defect. See the verification appendix for results and the corrected focused rerun."
     },
     {
       "id": "G33",
@@ -948,7 +988,7 @@
       "domain": "Commercial readiness",
       "title": "Commercial scope and first-client acceptance remain unsettled",
       "status": "Requirements/process gap",
-      "observation": "The original spec leaves marketplace self-deployment, native/marketplace split, final input formats, model tiers and supported volumes open. The implementation’s four specialist workers should not be presented as all proposed continuous domain agents or third-party marketplace products. No current signed first-client acceptance package was inspected.",
+      "observation": "The original spec leaves marketplace self-deployment, native/marketplace split, final input formats, model tiers and supported volumes open. The implementation\u2019s four specialist workers should not be presented as all proposed continuous domain agents or third-party marketplace products. No current signed first-client acceptance package was inspected.",
       "impact": "Sales language can outrun tested capability and make custom integration work look included in the subscription.",
       "action": "Publish a supported/preview/roadmap matrix, choose the first-client use case and isolation posture, assign data/stewardship responsibilities, and define measurable commercial acceptance and ongoing support.",
       "acceptance": "Proposal, demo, deployment and acceptance checklist use the same capability baseline; marketplace deployment and additional personas are sold only at their verified status.",

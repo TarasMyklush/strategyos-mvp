@@ -1,0 +1,2345 @@
+{
+  "application_revision": "51b98e423ca2bb14566888c1701050af1fa3a7b9",
+  "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+  "scope": "Fixed 50-question corpus, all 18 themes, live authenticated /qa requests; before final lineage and routing fixes.",
+  "requests": 50,
+  "http_200": 50,
+  "source_policy_refusals": 43,
+  "median_seconds": 23.19,
+  "maximum_seconds": 43.16,
+  "factual_acceptance": "not_passed",
+  "note": "Refusals and HTTP success are not factual passes. No current 45/50 score is asserted. Saved source consent remains unchanged.",
+  "responses": [
+    {
+      "id": "486",
+      "theme": "BU Deep-Dives (all 8 BUs)",
+      "question": "What are the top three cost drivers in Mizan E-Pharmacy, and which is above plan?",
+      "http": 200,
+      "duration_seconds": 23.05,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "mode": "deterministic",
+        "assistant_mode": "scenario",
+        "requested_mode": "auto",
+        "question": "What are the top three cost drivers in Mizan E-Pharmacy, and which is above plan?",
+        "trace_id": "e1d06b2a755a42f9a39b2f6a0d300935",
+        "scenario_id": "governed_bu_cost_ranking",
+        "scenario_label": "Business-unit cost components",
+        "matched": true,
+        "answer": "For current governed period, the largest supplied cost components in Mizan E-Pharmacy are: COGS: SAR 182.9M actual; SAR 174.2M fixed budget; SAR 8.7M above fixed budget. Logistics: SAR 42.2M actual; SAR 39.3M fixed budget; SAR 2.9M above fixed budget. Payroll: SAR 26.2M actual; SAR 25.3M fixed budget; SAR 900.0K above fixed budget.",
+        "calculations": [],
+        "kg_context": [],
+        "citations": [
+          {
+            "source_path": "",
+            "source_hash": null,
+            "locator": "Cost components / Mizan E-Pharmacy",
+            "excerpt": "COGS: actual SAR 182900000.00; fixed budget SAR 174200000.00"
+          },
+          {
+            "source_path": "",
+            "source_hash": null,
+            "locator": "Cost components / Mizan E-Pharmacy",
+            "excerpt": "Logistics: actual SAR 42200000.00; fixed budget SAR 39300000.00"
+          },
+          {
+            "source_path": "",
+            "source_hash": null,
+            "locator": "Cost components / Mizan E-Pharmacy",
+            "excerpt": "Payroll: actual SAR 26200000.00; fixed budget SAR 25300000.00"
+          }
+        ],
+        "assumptions": [
+          "Ranked by absolute actual cost. Source commentary may refer to a different flexible budget."
+        ],
+        "hallucination_risk": null,
+        "suggestions": [
+          "What's driving the margin variance?",
+          "Show me cash headroom vs the board floor",
+          "Which business unit needs attention?"
+        ],
+        "scenario_type": "deterministic",
+        "basis": "Deterministic ranking of all supplied component rows for this business unit; variance equals actual minus fixed budget.",
+        "persona": "ceo",
+        "answered_by": "scenario",
+        "why": "Deterministic ranking of all supplied component rows for this business unit; variance equals actual minus fixed budget.",
+        "audit_trail_id": "b6e44ded-59a7-404d-998e-37afb7128e0a",
+        "risk_metadata": {
+          "decision_mode": "deterministic",
+          "hallucination_risk": {
+            "level": "none",
+            "score": 0.0,
+            "factors": [
+              {
+                "name": "deterministic_path",
+                "detail": "Answer came from persona rules, deterministic QA, or explicit scenario calculations."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Replay the cited basis and calculations to verify the answer."
+            ],
+            "verification_path": "Deterministic ranking of all supplied component rows for this business unit; variance equals actual minus fixed budget."
+          },
+          "traceable": true
+        },
+        "assistant_route": "scenario_deterministic",
+        "orchestration_mode": "scenario"
+      },
+      "assessment": "numerical_answer_missing_immutable_citations_fixed_in_0cbab3f"
+    },
+    {
+      "id": "474",
+      "theme": "BU Deep-Dives (all 8 BUs)",
+      "question": "What are the top three cost drivers in Tamween Pharma Distribution, and which is above plan?",
+      "http": 200,
+      "duration_seconds": 22.548,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "mode": "deterministic",
+        "assistant_mode": "scenario",
+        "requested_mode": "auto",
+        "question": "What are the top three cost drivers in Tamween Pharma Distribution, and which is above plan?",
+        "trace_id": "27493b84dd8743ef806ffe8228267322",
+        "scenario_id": "governed_bu_cost_ranking",
+        "scenario_label": "Business-unit cost components",
+        "matched": true,
+        "answer": "For current governed period, the largest supplied cost components in Tamween Pharma Distribution are: COGS: SAR 996.8M actual; SAR 933.3M fixed budget; SAR 63.5M above fixed budget. Payroll: SAR 68.7M actual; SAR 66.6M fixed budget; SAR 2.1M above fixed budget. Logistics: SAR 40.9M actual; SAR 38.0M fixed budget; SAR 2.9M above fixed budget.",
+        "calculations": [],
+        "kg_context": [],
+        "citations": [
+          {
+            "source_path": "",
+            "source_hash": null,
+            "locator": "Cost components / Tamween Pharma Distribution",
+            "excerpt": "COGS: actual SAR 996800000.00; fixed budget SAR 933300000.00"
+          },
+          {
+            "source_path": "",
+            "source_hash": null,
+            "locator": "Cost components / Tamween Pharma Distribution",
+            "excerpt": "Payroll: actual SAR 68700000.00; fixed budget SAR 66600000.00"
+          },
+          {
+            "source_path": "",
+            "source_hash": null,
+            "locator": "Cost components / Tamween Pharma Distribution",
+            "excerpt": "Logistics: actual SAR 40900000.00; fixed budget SAR 38000000.00"
+          }
+        ],
+        "assumptions": [
+          "Ranked by absolute actual cost. Source commentary may refer to a different flexible budget."
+        ],
+        "hallucination_risk": null,
+        "suggestions": [
+          "What's driving the margin variance?",
+          "Show me cash headroom vs the board floor",
+          "Which business unit needs attention?"
+        ],
+        "scenario_type": "deterministic",
+        "basis": "Deterministic ranking of all supplied component rows for this business unit; variance equals actual minus fixed budget.",
+        "persona": "ceo",
+        "answered_by": "scenario",
+        "why": "Deterministic ranking of all supplied component rows for this business unit; variance equals actual minus fixed budget.",
+        "audit_trail_id": "f7f296b6-2962-4b65-aff7-1d6adff17d43",
+        "risk_metadata": {
+          "decision_mode": "deterministic",
+          "hallucination_risk": {
+            "level": "none",
+            "score": 0.0,
+            "factors": [
+              {
+                "name": "deterministic_path",
+                "detail": "Answer came from persona rules, deterministic QA, or explicit scenario calculations."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Replay the cited basis and calculations to verify the answer."
+            ],
+            "verification_path": "Deterministic ranking of all supplied component rows for this business unit; variance equals actual minus fixed budget."
+          },
+          "traceable": true
+        },
+        "assistant_route": "scenario_deterministic",
+        "orchestration_mode": "scenario"
+      },
+      "assessment": "numerical_answer_missing_immutable_citations_fixed_in_0cbab3f"
+    },
+    {
+      "id": "489",
+      "theme": "BU Deep-Dives (all 8 BUs)",
+      "question": "How is Mizan Digital Health performing against budget this half, and what explains the gap?",
+      "http": 200,
+      "duration_seconds": 27.473,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "mode": "deterministic",
+        "assistant_mode": "scenario",
+        "requested_mode": "auto",
+        "question": "How is Mizan Digital Health performing against budget this half, and what explains the gap?",
+        "trace_id": "64b9e01bbdde40e7af32c3413b77093a",
+        "scenario_id": "governed_bu_budget_bridge",
+        "scenario_label": "Finance - Business-unit Budget Bridge",
+        "matched": true,
+        "answer": "For current governed period, Mizan Digital Health revenue is SAR 176.0M versus SAR 171.0M plan. EBITDA is SAR 37.8M versus SAR 35.9M plan \u2014 SAR 1.9M favourable.\nThe largest supplied cost changes against fixed budget are:\n- Payroll: SAR 1.6M above fixed budget. Source explanation: Hiring BELOW revenue-linked plan \u2014 source of the margin beat.\n- IT & Digital: SAR 1.1M above fixed budget. Source explanation: Cloud with MAU growth (920k ahead of plan).\n- Marketing: SAR 400.0K above fixed budget. Source explanation: Payer/employer channel push.\nThe source's revenue-linked plan commentary uses a different comparator from the fixed-budget amounts above; no quantified flex-budget comparison is supplied.",
+        "calculations": [],
+        "kg_context": [],
+        "citations": [
+          {
+            "source_path": "dataset://02_ERP_Extracts/GL_Extract_H1_2026.csv",
+            "locator": "Business unit / Mizan Digital Health",
+            "excerpt": "",
+            "source_label": "GL Extract \u00b7 Finance ledger"
+          },
+          {
+            "source_path": "dataset://15_Budgets_Forecasts/BU_Group_Budget_2026.xlsx",
+            "locator": "Business unit / Mizan Digital Health",
+            "excerpt": "",
+            "source_label": "BU Group Budget 2026 \u00b7 Division budget"
+          },
+          {
+            "source_path": "dataset://15_Budgets_Forecasts/Division_Budget_2026.xlsx",
+            "locator": "Business unit / Mizan Digital Health",
+            "excerpt": "",
+            "source_label": "Division Budget 2026"
+          }
+        ],
+        "assumptions": [],
+        "hallucination_risk": null,
+        "suggestions": [
+          "What's driving the margin variance?",
+          "Show me cash headroom vs the board floor",
+          "Which business unit needs attention?"
+        ],
+        "scenario_type": "deterministic",
+        "basis": "Deterministic business-unit actual-versus-plan bridge from the approved group budget, with component explanations only where the cost-variance workbook supplies them.",
+        "persona": "ceo",
+        "answered_by": "scenario",
+        "why": "Deterministic business-unit actual-versus-plan bridge from the approved group budget, with component explanations only where the cost-variance workbook supplies them.",
+        "audit_trail_id": "c282b1bc-3b8b-438e-8166-10cbaa293c5a",
+        "risk_metadata": {
+          "decision_mode": "deterministic",
+          "hallucination_risk": {
+            "level": "none",
+            "score": 0.0,
+            "factors": [
+              {
+                "name": "deterministic_path",
+                "detail": "Answer came from persona rules, deterministic QA, or explicit scenario calculations."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Replay the cited basis and calculations to verify the answer."
+            ],
+            "verification_path": "Deterministic business-unit actual-versus-plan bridge from the approved group budget, with component explanations only where the cost-variance workbook supplies them."
+          },
+          "traceable": true
+        },
+        "assistant_route": "scenario_deterministic",
+        "orchestration_mode": "scenario"
+      },
+      "assessment": "numerical_answer_missing_immutable_citations_fixed_in_0cbab3f"
+    },
+    {
+      "id": "127",
+      "theme": "Budget, Forecast & Variance",
+      "question": "Whose forecasts are consistently best and worst in the group?",
+      "http": 200,
+      "duration_seconds": 29.307,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "Whose forecasts are consistently best and worst in the group?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "114",
+      "theme": "Budget, Forecast & Variance",
+      "question": "What should next year's budget assume about tariffs, wages and FX?",
+      "http": 200,
+      "duration_seconds": 23.786,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "What should next year's budget assume about tariffs, wages and FX?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "102",
+      "theme": "Budget, Forecast & Variance",
+      "question": "What changed between budget and the RF1 reforecast, and why?",
+      "http": 200,
+      "duration_seconds": 23.216,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "What changed between budget and the RF1 reforecast, and why?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "154",
+      "theme": "Cash, Liquidity & Working Capital",
+      "question": "What would insourcing logistics do to working capital, not just cost?",
+      "http": 200,
+      "duration_seconds": 23.403,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "What would insourcing logistics do to working capital, not just cost?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "152",
+      "theme": "Cash, Liquidity & Working Capital",
+      "question": "What is the cash impact of the inventory build for NUPCO call-offs?",
+      "http": 200,
+      "duration_seconds": 22.762,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "What is the cash impact of the inventory build for NUPCO call-offs?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "149",
+      "theme": "Cash, Liquidity & Working Capital",
+      "question": "Show me the aging of receivables by segment \u2014 where is risk building?",
+      "http": 200,
+      "duration_seconds": 22.955,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "Show me the aging of receivables by segment \u2014 where is risk building?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "311",
+      "theme": "Controls, Leakage & Audit",
+      "question": "What price variances exist against contracted prices, same SKU same period?",
+      "http": 200,
+      "duration_seconds": 22.778,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "What price variances exist against contracted prices, same SKU same period?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "305",
+      "theme": "Controls, Leakage & Audit",
+      "question": "Have we had duplicate payments before, and is the failure mode fixed?",
+      "http": 200,
+      "duration_seconds": 24.554,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "Have we had duplicate payments before, and is the failure mode fixed?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "313",
+      "theme": "Controls, Leakage & Audit",
+      "question": "What did the historic review find that the H1 audit missed?",
+      "http": 200,
+      "duration_seconds": 26.64,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "What did the historic review find that the H1 audit missed?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "188",
+      "theme": "Customers, Pricing & Contribution",
+      "question": "If we fired the bottom decile of customers, what would we lose and save?",
+      "http": 200,
+      "duration_seconds": 24.074,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "If we fired the bottom decile of customers, what would we lose and save?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "165",
+      "theme": "Customers, Pricing & Contribution",
+      "question": "Which prices could we raise with least volume risk?",
+      "http": 200,
+      "duration_seconds": 22.854,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "Which prices could we raise with least volume risk?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "163",
+      "theme": "Customers, Pricing & Contribution",
+      "question": "Which customers' terms are out of line with policy?",
+      "http": 200,
+      "duration_seconds": 22.862,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "Which customers' terms are out of line with policy?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "434",
+      "theme": "Data Quality & Governance",
+      "question": "How reliable is the data behind this report \u2014 what quality issues exist?",
+      "http": 200,
+      "duration_seconds": 22.441,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "mode": "deterministic",
+        "assistant_mode": "qa_engine",
+        "requested_mode": "auto",
+        "question": "How reliable is the data behind this report \u2014 what quality issues exist?",
+        "trace_id": "85872007fc6641bfa8ed52c19b24cac3",
+        "matched": true,
+        "answer": "Top 0 findings by recoverable: .",
+        "value": [],
+        "unit": "SAR",
+        "basis": "findings sorted by recoverable_sar, top 5.",
+        "citations": [],
+        "available": true,
+        "intent": "findings",
+        "answered_by": "tabular",
+        "persona": "ceo",
+        "why": "findings sorted by recoverable_sar, top 5.",
+        "suggestions": [
+          "What's driving the margin variance?",
+          "Show me cash headroom vs the board floor",
+          "Which business unit needs attention?"
+        ],
+        "audit_trail_id": "ac183e61-7182-44b5-8248-38a48a9ccf2d",
+        "hallucination_risk": {
+          "level": "none",
+          "score": 0.0,
+          "factors": [
+            {
+              "name": "deterministic_path",
+              "detail": "Answer came from persona rules, deterministic QA, or explicit scenario calculations."
+            }
+          ],
+          "traceable": true,
+          "traceability_gap": null,
+          "mitigations": [
+            "Replay the cited basis and calculations to verify the answer."
+          ],
+          "verification_path": "findings sorted by recoverable_sar, top 5."
+        },
+        "risk_metadata": {
+          "decision_mode": "deterministic",
+          "hallucination_risk": {
+            "level": "none",
+            "score": 0.0,
+            "factors": [
+              {
+                "name": "deterministic_path",
+                "detail": "Answer came from persona rules, deterministic QA, or explicit scenario calculations."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Replay the cited basis and calculations to verify the answer."
+            ],
+            "verification_path": "findings sorted by recoverable_sar, top 5."
+          },
+          "traceable": true
+        },
+        "assistant_route": "deterministic_qa",
+        "orchestration_mode": "qa_engine"
+      },
+      "assessment": "wrong_route_found_and_fixed_in_0cbab3f"
+    },
+    {
+      "id": "443",
+      "theme": "Data Quality & Governance",
+      "question": "Which numbers stored as text or wrong signs could distort calculations?",
+      "http": 200,
+      "duration_seconds": 23.374,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "Which numbers stored as text or wrong signs could distort calculations?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "437",
+      "theme": "Data Quality & Governance",
+      "question": "Which invoices don't reconcile between lines and headers?",
+      "http": 200,
+      "duration_seconds": 22.926,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "Which invoices don't reconcile between lines and headers?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "335",
+      "theme": "FX & Treasury",
+      "question": "What did unhedged EUR payments cost us this year?",
+      "http": 200,
+      "duration_seconds": 23.219,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "What did unhedged EUR payments cost us this year?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "334",
+      "theme": "FX & Treasury",
+      "question": "What is our FX exposure by currency, and how much is hedged?",
+      "http": 200,
+      "duration_seconds": 23.24,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "What is our FX exposure by currency, and how much is hedged?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "340",
+      "theme": "FX & Treasury",
+      "question": "Should we hedge fuel or electricity exposure, given the tariff steps?",
+      "http": 200,
+      "duration_seconds": 23.164,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "Should we hedge fuel or electricity exposure, given the tariff steps?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "432",
+      "theme": "M&A & Portfolio",
+      "question": "Who owns synergy delivery for each announced deal?",
+      "http": 200,
+      "duration_seconds": 22.769,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "Who owns synergy delivery for each announced deal?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "433",
+      "theme": "M&A & Portfolio",
+      "question": "What is our acquisition track record \u2014 announced versus delivered value?",
+      "http": 200,
+      "duration_seconds": 22.838,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "What is our acquisition track record \u2014 announced versus delivered value?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "419",
+      "theme": "M&A & Portfolio",
+      "question": "What is our walk-away price discipline, and who enforces it?",
+      "http": 200,
+      "duration_seconds": 23.974,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "What is our walk-away price discipline, and who enforces it?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "379",
+      "theme": "Market, Competition & External",
+      "question": "What are the top three external opportunities the data says we're not pursuing?",
+      "http": 200,
+      "duration_seconds": 25.138,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "What are the top three external opportunities the data says we're not pursuing?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "360",
+      "theme": "Market, Competition & External",
+      "question": "What did this week's market briefings say that changes any decision?",
+      "http": 200,
+      "duration_seconds": 22.765,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "What did this week's market briefings say that changes any decision?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "374",
+      "theme": "Market, Competition & External",
+      "question": "How do our payment terms compare to industry norms?",
+      "http": 200,
+      "duration_seconds": 23.449,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "How do our payment terms compare to industry norms?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "459",
+      "theme": "Meetings, Decisions & Personal Effectiveness",
+      "question": "Which commitments did I make last quarter that are unmet?",
+      "http": 200,
+      "duration_seconds": 26.835,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "Which commitments did I make last quarter that are unmet?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "467",
+      "theme": "Meetings, Decisions & Personal Effectiveness",
+      "question": "Give me the elevator version: how is the company doing this week, in four sentences?",
+      "http": 200,
+      "duration_seconds": 42.826,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "Give me the elevator version: how is the company doing this week, in four sentences?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "450",
+      "theme": "Meetings, Decisions & Personal Effectiveness",
+      "question": "What should I read before the cold-chain renegotiation session?",
+      "http": 200,
+      "duration_seconds": 25.251,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "What should I read before the cold-chain renegotiation session?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "70",
+      "theme": "Operating Costs & Efficiency",
+      "question": "Why is Qassim warehouse 35% more expensive to run than comparable sites?",
+      "http": 200,
+      "duration_seconds": 22.884,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "Why is Qassim warehouse 35% more expensive to run than comparable sites?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "89",
+      "theme": "Operating Costs & Efficiency",
+      "question": "What is the cost of quality \u2014 write-offs, returns, rejected batches \u2014 across BUs?",
+      "http": 200,
+      "duration_seconds": 22.786,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "What is the cost of quality \u2014 write-offs, returns, rejected batches \u2014 across BUs?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "67",
+      "theme": "Operating Costs & Efficiency",
+      "question": "Which cost elements are above plan in more than two BUs and could be consolidated at group level?",
+      "http": 200,
+      "duration_seconds": 22.975,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "Which cost elements are above plan in more than two BUs and could be consolidated at group level?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "272",
+      "theme": "People & Organisation",
+      "question": "What training investment would reduce our error and rework rates?",
+      "http": 200,
+      "duration_seconds": 22.713,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "What training investment would reduce our error and rework rates?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "270",
+      "theme": "People & Organisation",
+      "question": "What would a 3% wage settlement do to each BU's margin?",
+      "http": 200,
+      "duration_seconds": 22.631,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "What would a 3% wage settlement do to each BU's margin?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "258",
+      "theme": "People & Organisation",
+      "question": "What is revenue and EBITDA per employee by BU, trending?",
+      "http": 200,
+      "duration_seconds": 25.836,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "What is revenue and EBITDA per employee by BU, trending?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "37",
+      "theme": "Profitability & EBITDA",
+      "question": "How does each BU's margin compare to its listed peers?",
+      "http": 200,
+      "duration_seconds": 43.16,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "How does each BU's margin compare to its listed peers?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "47",
+      "theme": "Profitability & EBITDA",
+      "question": "How sensitive is group EBITDA to a 1% change in COGS?",
+      "http": 200,
+      "duration_seconds": 23.815,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "mode": "deterministic",
+        "assistant_mode": "scenario",
+        "requested_mode": "auto",
+        "question": "How sensitive is group EBITDA to a 1% change in COGS?",
+        "trace_id": "cf7f5694b7bb4a8182af8d67fbf5e9aa",
+        "scenario_id": "consolidated_cogs_sensitivity",
+        "scenario_label": "Consolidated COGS sensitivity",
+        "matched": true,
+        "answer": "This sensitivity needs one approved consolidated COGS fact and one EBITDA fact for the same subject, period and currency, plus a percentage change. BU rows and inferred residuals cannot replace that consolidated baseline.",
+        "calculations": [],
+        "kg_context": [],
+        "citations": [],
+        "assumptions": [],
+        "hallucination_risk": null,
+        "suggestions": [
+          "What's driving the margin variance?",
+          "Show me cash headroom vs the board floor",
+          "Which business unit needs attention?"
+        ],
+        "scenario_type": "missing_data",
+        "basis": "Compatible immutable consolidated inputs are required.",
+        "persona": "ceo",
+        "answered_by": "scenario",
+        "why": "Compatible immutable consolidated inputs are required.",
+        "audit_trail_id": "9155ae5e-755c-4f30-9bea-6ca6669f9849",
+        "risk_metadata": {
+          "decision_mode": "deterministic",
+          "hallucination_risk": {
+            "level": "none",
+            "score": 0.0,
+            "factors": [
+              {
+                "name": "deterministic_path",
+                "detail": "Answer came from persona rules, deterministic QA, or explicit scenario calculations."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Replay the cited basis and calculations to verify the answer."
+            ],
+            "verification_path": "Compatible immutable consolidated inputs are required."
+          },
+          "traceable": true
+        },
+        "assistant_route": "scenario_deterministic",
+        "orchestration_mode": "scenario"
+      },
+      "assessment": "missing_consolidated_source_inputs"
+    },
+    {
+      "id": "52",
+      "theme": "Profitability & EBITDA",
+      "question": "What is the fully-loaded profitability of our top 10 customers?",
+      "http": 200,
+      "duration_seconds": 22.348,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "mode": "deterministic",
+        "assistant_mode": "qa_engine",
+        "requested_mode": "auto",
+        "question": "What is the fully-loaded profitability of our top 10 customers?",
+        "trace_id": "1ac571b95fb44c9bb25e329ae75e42ad",
+        "matched": true,
+        "answer": "Top 10 vendors by spend: Saudi Pharma Suppliers Co (SAR 3,637,168.05); Al-Faisal Confectionery Co LLC (SAR 1,538,649.65); Sulaiman Enterprises Group (SAR 1,512,896.61); Gulf Cold-Chain Logistics Co (SAR 1,378,416.00); Nile Marketing LLC (SAR 1,362,592.58); Dammam Holdings LLC (SAR 1,351,046.70); Sahara Confectionery Group (SAR 1,349,819.29); Servier Pharmaceuticals SAS (SAR 1,321,670.22); Tihama Distribution Trading LLC (SAR 1,236,438.15); Bayt Enterprises Co LLC (SAR 1,224,316.13).",
+        "value": [
+          {
+            "name": "Saudi Pharma Suppliers Co",
+            "amount_sar": 3637168.05
+          },
+          {
+            "name": "Al-Faisal Confectionery Co LLC",
+            "amount_sar": 1538649.65
+          },
+          {
+            "name": "Sulaiman Enterprises Group",
+            "amount_sar": 1512896.61
+          },
+          {
+            "name": "Gulf Cold-Chain Logistics Co",
+            "amount_sar": 1378416.0
+          },
+          {
+            "name": "Nile Marketing LLC",
+            "amount_sar": 1362592.58
+          },
+          {
+            "name": "Dammam Holdings LLC",
+            "amount_sar": 1351046.7
+          },
+          {
+            "name": "Sahara Confectionery Group",
+            "amount_sar": 1349819.29
+          },
+          {
+            "name": "Servier Pharmaceuticals SAS",
+            "amount_sar": 1321670.22
+          },
+          {
+            "name": "Tihama Distribution Trading LLC",
+            "amount_sar": 1236438.15
+          },
+          {
+            "name": "Bayt Enterprises Co LLC",
+            "amount_sar": 1224316.13
+          }
+        ],
+        "unit": "SAR",
+        "basis": "Amount_SAR grouped by Vendor_Name, sorted descending, top 10.",
+        "citations": [
+          {
+            "source_path": "dataset://02_ERP_Extracts/AP_Invoices_H1_2026.xlsx",
+            "locator": "Vendor_Name / Amount_SAR",
+            "excerpt": "",
+            "source_label": "AP Invoices \u00b7 Finance ledger"
+          }
+        ],
+        "available": true,
+        "intent": "top_parties",
+        "answered_by": "tabular",
+        "persona": "ceo",
+        "why": "Amount_SAR grouped by Vendor_Name, sorted descending, top 10.",
+        "suggestions": [
+          "What's driving the margin variance?",
+          "Show me cash headroom vs the board floor",
+          "Which business unit needs attention?"
+        ],
+        "audit_trail_id": "cb6f8361-1cde-43dd-9fa4-b61617580353",
+        "hallucination_risk": {
+          "level": "none",
+          "score": 0.0,
+          "factors": [
+            {
+              "name": "deterministic_path",
+              "detail": "Answer came from persona rules, deterministic QA, or explicit scenario calculations."
+            }
+          ],
+          "traceable": true,
+          "traceability_gap": null,
+          "mitigations": [
+            "Replay the cited basis and calculations to verify the answer."
+          ],
+          "verification_path": "Amount_SAR grouped by Vendor_Name, sorted descending, top 10."
+        },
+        "risk_metadata": {
+          "decision_mode": "deterministic",
+          "hallucination_risk": {
+            "level": "none",
+            "score": 0.0,
+            "factors": [
+              {
+                "name": "deterministic_path",
+                "detail": "Answer came from persona rules, deterministic QA, or explicit scenario calculations."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Replay the cited basis and calculations to verify the answer."
+            ],
+            "verification_path": "Amount_SAR grouped by Vendor_Name, sorted descending, top 10."
+          },
+          "traceable": true
+        },
+        "assistant_route": "deterministic_qa",
+        "orchestration_mode": "qa_engine"
+      },
+      "assessment": "wrong_route_found_and_fixed_in_0cbab3f"
+    },
+    {
+      "id": "2",
+      "theme": "Revenue & Growth",
+      "question": "Break down this quarter's revenue by segment \u2014 which segments are growing and which are shrinking?",
+      "http": 200,
+      "duration_seconds": 22.777,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "Break down this quarter's revenue by segment \u2014 which segments are growing and which are shrinking?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "3",
+      "theme": "Revenue & Growth",
+      "question": "What were the key movers of revenue vs budget this half \u2014 up and down, ranked by impact?",
+      "http": 200,
+      "duration_seconds": 23.951,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "What were the key movers of revenue vs budget this half \u2014 up and down, ranked by impact?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "4",
+      "theme": "Revenue & Growth",
+      "question": "What contributed most to revenue growth over the last three years?",
+      "http": 200,
+      "duration_seconds": 22.496,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "What contributed most to revenue growth over the last three years?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "290",
+      "theme": "Risk & Early-Warning Signals",
+      "question": "What geopolitical or trade-flow changes would hurt our API supply?",
+      "http": 200,
+      "duration_seconds": 23.028,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "What geopolitical or trade-flow changes would hurt our API supply?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "286",
+      "theme": "Risk & Early-Warning Signals",
+      "question": "What regulatory deadlines in the next 12 months carry P&L consequences?",
+      "http": 200,
+      "duration_seconds": 25.818,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "What regulatory deadlines in the next 12 months carry P&L consequences?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "387",
+      "theme": "Strategy & Capital Allocation",
+      "question": "What progress has the Tamween integration made against the acquisition case?",
+      "http": 200,
+      "duration_seconds": 25.335,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "What progress has the Tamween integration made against the acquisition case?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "407",
+      "theme": "Strategy & Capital Allocation",
+      "question": "What did we learn from the Red Sea churn that changes strategy, not just pricing?",
+      "http": 200,
+      "duration_seconds": 22.938,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "What did we learn from the Red Sea churn that changes strategy, not just pricing?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "190",
+      "theme": "Suppliers, Procurement & Contracts",
+      "question": "Which supplier prices crept above inflation, and what is the re-tender value?",
+      "http": 200,
+      "duration_seconds": 24.246,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "Which supplier prices crept above inflation, and what is the re-tender value?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "194",
+      "theme": "Suppliers, Procurement & Contracts",
+      "question": "Which contracts auto-renew in the next six months, and with what escalators?",
+      "http": 200,
+      "duration_seconds": 24.052,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "Which contracts auto-renew in the next six months, and with what escalators?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "235",
+      "theme": "Supply Chain, Inventory & Operations",
+      "question": "What is the utilisation of the Dammam hub since commissioning?",
+      "http": 200,
+      "duration_seconds": 22.888,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "question": "What is the utilisation of the Dammam hub since commissioning?",
+        "requested_mode": "auto",
+        "persona": "ceo",
+        "policy_denied": true,
+        "matched": false,
+        "mode": "policy",
+        "assistant_mode": "policy",
+        "answer_origin": "policy",
+        "answered_by": "source_policy",
+        "answer_status": "permission_required",
+        "determinism_tier": "policy",
+        "answer": "These sources are not authorized for external AI processing. A data owner must grant that permission before I can send this evidence to a model provider. Local evidence remains available.",
+        "basis": "Source access policy \u2014 no evidence sent to an external model.",
+        "citations": [],
+        "suggestions": [],
+        "response_sections": {},
+        "executive_blocks": [],
+        "human_review_required": false,
+        "external_consultation": {
+          "requested": false,
+          "used": false
+        },
+        "llm_status": {
+          "enabled": false,
+          "provider": "codex_cli",
+          "model": "codex-subscription",
+          "reason": "Source policy denies external-model use."
+        }
+      },
+      "assessment": "source_policy_refusal"
+    },
+    {
+      "id": "225",
+      "theme": "Supply Chain, Inventory & Operations",
+      "question": "How well do goods receipts match POs and invoices \u2014 where are the exceptions?",
+      "http": 200,
+      "duration_seconds": 22.363,
+      "payload": {
+        "status": "ok",
+        "run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+        "run_mode": "full",
+        "mode": "deterministic",
+        "assistant_mode": "qa_engine",
+        "requested_mode": "auto",
+        "question": "How well do goods receipts match POs and invoices \u2014 where are the exceptions?",
+        "trace_id": "02e1c5f00b3a4771be1446607ad845d1",
+        "matched": true,
+        "answer": "Top 0 findings by recoverable: .",
+        "value": [],
+        "unit": "SAR",
+        "basis": "findings sorted by recoverable_sar, top 5.",
+        "citations": [],
+        "available": true,
+        "intent": "findings",
+        "answered_by": "tabular",
+        "persona": "ceo",
+        "why": "findings sorted by recoverable_sar, top 5.",
+        "suggestions": [
+          "What's driving the margin variance?",
+          "Show me cash headroom vs the board floor",
+          "Which business unit needs attention?"
+        ],
+        "audit_trail_id": "f7366dee-d1c6-4405-9ab9-2490f706977e",
+        "hallucination_risk": {
+          "level": "none",
+          "score": 0.0,
+          "factors": [
+            {
+              "name": "deterministic_path",
+              "detail": "Answer came from persona rules, deterministic QA, or explicit scenario calculations."
+            }
+          ],
+          "traceable": true,
+          "traceability_gap": null,
+          "mitigations": [
+            "Replay the cited basis and calculations to verify the answer."
+          ],
+          "verification_path": "findings sorted by recoverable_sar, top 5."
+        },
+        "risk_metadata": {
+          "decision_mode": "deterministic",
+          "hallucination_risk": {
+            "level": "none",
+            "score": 0.0,
+            "factors": [
+              {
+                "name": "deterministic_path",
+                "detail": "Answer came from persona rules, deterministic QA, or explicit scenario calculations."
+              }
+            ],
+            "traceable": true,
+            "traceability_gap": null,
+            "mitigations": [
+              "Replay the cited basis and calculations to verify the answer."
+            ],
+            "verification_path": "findings sorted by recoverable_sar, top 5."
+          },
+          "traceable": true
+        },
+        "assistant_route": "deterministic_qa",
+        "orchestration_mode": "qa_engine"
+      },
+      "assessment": "wrong_route_found_and_fixed_in_0cbab3f"
+    }
+  ]
+}

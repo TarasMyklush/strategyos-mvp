@@ -1,6 +1,6 @@
 {
-  "status": "implemented_subset_deployed_and_verified",
-  "application_revision": "9304d4838c004fb0b49cadd49b02595b06539969",
+  "status": "deployed_and_verified_safety_p0s_closed_factual_gate_open",
+  "application_revision": "fc53629c2fde3f1288471a19e8cbd93558670ae7",
   "changes": [
     {
       "gap": "G05",
@@ -33,6 +33,46 @@
     {
       "gap": "G07",
       "change": "Expanded real database ownership tests cover two tenants with overlapping BU names across run, snapshot, checkpoint, artifact, decisions, citation search, QA context and list access. Local latest/current pointer tests cover all sixteen owner/pointer combinations."
+    },
+    {
+      "gap": "G05",
+      "change": "Authenticated claim-backed model QA accepts only immutable fact-reference selections. Metric, subject, period, unit, scenario, lineage, captions and citations are rendered from authorized records; provider-authored causes or extra fields are rejected."
+    },
+    {
+      "gap": "G05",
+      "change": "Fact links resolve through a dedicated snapshot revision endpoint and recheck current source, tenant, BU, domain and lineage permissions."
+    },
+    {
+      "gap": "G06",
+      "change": "Assistant domain entitlements and explicit user restrictions are bound to requests and intersect PolicyContext. Root and dependency classifications filter SQL reads before values are loaded; direct user claim reads share the boundary."
+    },
+    {
+      "gap": "G06/G07",
+      "change": "BU roots and dependencies are filtered before provenance loading. Bulk legacy content is denied for explicitly restricted human readers; restricted assistants and twins rebuild content from authorized typed claims."
+    },
+    {
+      "gap": "G05/G06/G07",
+      "change": "Synthesis providers require source-level external-model consent. Synthesis and twin cache identities include tenant, user, role, BU, assistant domains and relevant source authority; restricted twin history cannot inherit broader legacy work."
+    },
+    {
+      "gap": "G10",
+      "change": "A deterministic consolidated COGS sensitivity calculation requires compatible immutable consolidated COGS and EBITDA revisions, with exact arithmetic and cited inputs. Missing consolidated inputs remain a refusal."
+    },
+    {
+      "gap": "G10",
+      "change": "A live fixed-corpus probe exposed per-claim provenance loading over 11,276 transaction claims and timed out at 120 seconds. The deployed code batches leaf provenance in transaction-local reads while preserving recursive validation for calculated claims."
+    },
+    {
+      "gap": "G05",
+      "change": "Deterministic finance projections retain actual/plan revision IDs. BU rankings and bridges expose typed calculation inputs and immutable resolver links; missing, stale, incompatible-period or currency inputs fail closed. Every authenticated scenario route rejects legacy unverified citations."
+    },
+    {
+      "gap": "G10",
+      "change": "Customer invoiced rankings select AR, profitability questions cannot receive supplier-spend rankings, diagnostics cannot receive Top 0 findings or invoice totals, and largest/smallest invoice questions calculate extrema."
+    },
+    {
+      "gap": "G05",
+      "change": "Shared finance presentation rejects currency/percentage relabelling, cross-period actual/plan rows and BU/group comparisons; monthly trends retain their own matched monthly periods. Governed revenue-target flows keep immutable source references."
     }
   ],
   "local_validation": {
@@ -56,25 +96,51 @@
     "claim_backed_citation_regressions": {
       "passed": 105,
       "failed": 0
+    },
+    "fresh_database_regressions": {
+      "passed": 26,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 5.46,
+      "scope": "Claim batching/reference equality, source revocation, invalidity, conflicts, priorities, recalculation, forecasts, period, tenant, BU and assistant scopes."
+    },
+    "hostile_search_projection": {
+      "passed": 1,
+      "failed": 0,
+      "scope": "Real PostgreSQL and HTTP: ranking returns all four tenant/BU revision IDs; each principal only receives its own authorized record."
+    },
+    "finance_lineage_http": {
+      "passed": 17,
+      "failed": 0,
+      "scope": "Typed projections, complete ranking universe, immutable calculation inputs, missing/stale/period/currency refusal, and both HTTP routes."
+    },
+    "shared_finance_contract": {
+      "passed": 82,
+      "failed": 0,
+      "live_approved_records_validated": 255,
+      "note": "Overlapping test runs are not additive."
     }
   },
   "deployment_runs": [
     34256230948,
-    34257660292
+    34257660292,
+    34263351034,
+    34266002200,
+    34269185229,
+    34271917548,
+    34274303295,
+    34276955437
   ],
   "unclosed_acceptance": {
-    "G05": "QA prose still uses numeric value/unit membership, not semantic metric/period/subject binding. Claim-backed QA intentionally has no raw evidence bundle; its citation verification needs an authorized immutable claim-reference contract distinct from file-backed citation resolution. Causal validation also remains open.",
-    "G06": "Source policies bind user roles, tenant and BU, but do not carry an explicit assistant-domain entitlement. Keyword refusal coverage is not equivalent to source-level user/assistant/tool authority intersection.",
-    "G07": "Expanded two-tenant/two-BU ownership and latest/current pointer proofs now pass, including overlapping BU names, citation search, artifact lookup and QA context guards. They do not yet form a complete product-wide matrix for semantic retrieval, every export and all legacy surfaces.",
-    "G10": "Latest independent assessment remains 24/50: 14 insufficient-evidence, 10 partial and 2 calculation-gap cases. No new full 50-question release result is claimed."
+    "G10": "No 45/50 factual acceptance: the fixed-50 run on 51b98e4 had 43 source-policy refusals, three bad routes, three deficient citations and one missing consolidated baseline. Final fc53629 fixes the observed routing/citation defects and passed nine targeted cases, including expected refusals. Saved source consent remains disabled; missing business inputs and a fresh fixed-corpus correctness review are outstanding."
   },
   "production_ready": false,
   "service_validation": {
-    "run_id": 34257660292,
-    "passed": 2535,
+    "run_id": 34276955437,
+    "passed": 2626,
     "skipped": 0,
     "warnings": 6,
-    "elapsed_seconds": 494.69
+    "seconds": 494.62
   },
   "first_deployed_increment": {
     "revision": "2cdc68a7b31fc46ede2e73e904aeab2410da5f78",
@@ -98,12 +164,12 @@
       "external_integrations_called": 0
     }
   },
-  "overall_p0_status": "incomplete",
+  "overall_p0_status": "G05_G06_G07_closed_G10_open",
   "deployment": {
-    "run_id": 34257660292,
-    "url": "https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34257660292",
+    "run_id": 34276955437,
+    "url": "https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34276955437",
     "target": "https://new.strategyos.live",
-    "application_revision": "9304d4838c004fb0b49cadd49b02595b06539969",
+    "application_revision": "fc53629c2fde3f1288471a19e8cbd93558670ae7",
     "conclusion": "success",
     "production_promoted": false
   },
@@ -368,5 +434,112 @@
         "external_integrations_called": 0
       }
     }
-  }
+  },
+  "superseded_candidate_service_validation": {
+    "revision": "72977d6",
+    "run_id": 34267749495,
+    "passed": 2584,
+    "skipped": 0,
+    "seconds": 537.31,
+    "deployment": "cancelled before rollout to include the live-discovered batching fix"
+  },
+  "latest_hosted_validation": {
+    "run_id": 34276955437,
+    "executive_steps": 9,
+    "evidence_links": 22,
+    "stories": 3,
+    "viewport_widths": [
+      1440,
+      390
+    ],
+    "intent_advisor_steps": 14,
+    "ui_mutations": 10,
+    "identities": 3,
+    "negative_self_approval_checks": 2,
+    "external_integrations_called": 0
+  },
+  "live_factual_evidence": "p0-live-factual-2026-09-09.json",
+  "source_permission_blocker": {
+    "source_key": "internal-finance-dataset",
+    "external_model_allowed": false,
+    "source_policy_changed": false,
+    "user_answer_pending": true
+  },
+  "additional_human_walkthrough": {
+    "cogs": {
+      "url": "https://new.strategyos.live/executive?persona=ceo&board=pre&driver=operating_cost&company=strategyos-branch&portfolio=finance-diagnostics",
+      "status": 200,
+      "duration_seconds": 28.866,
+      "answer": "This sensitivity needs one approved consolidated COGS fact and one EBITDA fact for the same subject, period and currency, plus a percentage change. BU rows and inferred residuals cannot replace that consolidated baseline.",
+      "scenario_id": "consolidated_cogs_sensitivity",
+      "scenario_type": "missing_data",
+      "visible_answer_verified": true,
+      "synthetic_preview_only": true
+    },
+    "cfo": {
+      "status": "intentionally_locked",
+      "observation": "Group CFO workspace shows Coming soon and does not expose a chat composer. Not counted as a completed CFO chat test."
+    }
+  },
+  "targeted_live_validation": {
+    "revision": "0cbab3f8a2b2becb2afa4b6598c8a555afd8e91e",
+    "questions": 7,
+    "citation_resolutions": 64,
+    "input_values_match_resolved_records": true,
+    "negative_authority_checks": 2,
+    "human_fact_link_opened": true,
+    "artifact": "p0-targeted-live-0cbab3f.json"
+  },
+  "cancelled_predeployment_increment": {
+    "revision": "34252ff",
+    "run_id": 34275727110,
+    "reason": "Cancelled during service testing before deployment to include shared display period/unit compatibility validation."
+  },
+  "final_live_validation": {
+    "revision": "fc53629c2fde3f1288471a19e8cbd93558670ae7",
+    "targeted_cases": 9,
+    "citation_resolutions": 73,
+    "negative_authority_requests": 2,
+    "human_browser_evidence_clicks": 2,
+    "artifact": "p0-final-acceptance-2026-09-09.json"
+  },
+  "release_attestation": {
+    "environment": "branch-preview",
+    "application_revision": "fc53629c2fde3f1288471a19e8cbd93558670ae7",
+    "manifest_application_matches": true,
+    "image_digest": "sha256:d9615872f7c2289ecbb04ac09015d91a610b614addbd946ec90aa70fd3a5c2d7",
+    "schema_sha256": "6d37fc517bc198d74308890e34c3b2c0552ac19b0ac7974818f6481115696060",
+    "selected_run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+    "manifest_run_matches": true,
+    "source_digest": "785c7aa41c846a28b381e7d3577f131f917ea945306aa514b0e2a1ae7679a1d7",
+    "source_file_count": 132,
+    "source_classification": "not_declared",
+    "source_period": null,
+    "source_search": {
+      "status": "ready",
+      "point_count": 37100,
+      "reused_points": 37100,
+      "embedding_cache_hits": 37100,
+      "embedding_cache_seeded": 0,
+      "embedded_points": 0,
+      "collection": "strategyos_multilingual_e5_761b726d_384_v1",
+      "model_revision": "761b726dd34fb83930e26aab4e9ac3899aa1fa78"
+    },
+    "data_region": "Not attested",
+    "model_provider": "codex_cli",
+    "model": "codex-subscription",
+    "model_processing": "External provider; residency not attested",
+    "run_policy": "external-approved",
+    "approved_external_modes": [
+      "object_storage_sync",
+      "model_provider_use"
+    ],
+    "external_business_connections": "deferred",
+    "fallback_provider": "none"
+  },
+  "closed_p0s_this_continuation": [
+    "G05",
+    "G06",
+    "G07"
+  ]
 }

@@ -1,6 +1,6 @@
 # Remaining factual evidence requirements
 
-The fixed sample currently has 14 insufficient-evidence answers. These are the recorded review findings, not newly verified business facts. Supplying data alone does not pass the gate: the same 50 questions must be rerun and independently graded against resolving references.
+The prior reviewed release had 14 insufficient-evidence answers. These are the recorded review findings, not newly verified business facts. Supplying data alone does not pass the gate: the same 50 questions must be rerun and independently graded against resolving references.
 
 | ID | Question | Recorded missing evidence |
 | --- | --- | --- |
@@ -19,4 +19,11 @@ The fixed sample currently has 14 insufficient-evidence answers. These are the r
 | 52 | What is the fully-loaded profitability of our top 10 customers? | Customer gross-margin estimates and rebates do not establish fully-loaded profitability; service, logistics, finance and overhead allocations are missing. |
 | 235 | What is the utilisation of the Dammam hub since commissioning? | Commissioning and facility size are documented, but no post-commissioning throughput or occupied-capacity series supports utilisation. |
 
-Latest assessment: 24 correct, 14 insufficient evidence, 10 partial answers and 2 calculation gaps. Required: at least 45 correct out of 50, all 18 themes, resolving citations and zero fabricated numbers. This is the prior independently reviewed release assessment; it is not a score for the newly deployed application.
+Prior assessment: 24 correct, 14 insufficient evidence, 10 partial answers and 2 calculation gaps. Required: at least 45 correct out of 50, all 18 themes, resolving citations and zero fabricated numbers. This is the prior independently reviewed release assessment; it is not a score for the newly deployed application.
+
+The 9 September continuation completed the same fixed 50-question corpus on
+`51b98e4`. Saved source permissions blocked external-model processing for 43
+questions. The current live evidence is [recorded separately](evidence/p0-live-factual-2026-09-09.json).
+Neither permission refusals nor supplying the missing files automatically passes
+the factual gate. Source-owner consent, source validation, and a new fixed-corpus
+review are still required. No current-release 24/50 or 45/50 score is asserted.

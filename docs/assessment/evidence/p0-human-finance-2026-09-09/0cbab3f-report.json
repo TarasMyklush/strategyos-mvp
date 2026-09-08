@@ -1,0 +1,12 @@
+{
+  "fact_link_clicked": "/api/claims/snapshots/8627f532-b199-4278-b8ff-89dac2d5f5a3/revisions/dd2b756b-457a-467c-b927-112b63b76032",
+  "immutable_fact_visible": true,
+  "url": "https://new.strategyos.live/executive?persona=ceo&board=pre&driver=operating_cost&company=strategyos-branch&portfolio=finance-diagnostics",
+  "status": 200,
+  "duration_seconds": 26.979,
+  "answer": "For current governed period, Mizan Digital Health revenue is SAR 176.0M versus SAR 171.0M plan. EBITDA is SAR 37.8M versus SAR 35.9M plan \u2014 SAR 1.9M favourable. The largest supplied cost changes against fixed budget are: - Payroll: SAR 1.6M above fixed budget. Source explanation: Hiring BELOW revenue-linked plan \u2014 source of the margin beat. - IT & Digital: SAR 1.1M above fixed budget. Source explanation: Cloud with MAU growth (920k ahead of plan). - Marketing: SAR 400.0K above fixed budget. Source explanation: Payer/employer channel push. The source's revenue-linked plan commentary uses a different comparator from the fixed-budget amounts above; no quantified flex-budget comparison is supplied.",
+  "scenario_id": "governed_bu_budget_bridge",
+  "scenario_type": "deterministic",
+  "visible_answer_verified": true,
+  "synthetic_preview_only": true
+}

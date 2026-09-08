@@ -1,30 +1,53 @@
 # Validation record
 
-## P0 remediation — 8 September 2026
+## P0 remediation — 9 September 2026
 
-Production readiness is **not established**. The current remediation and exact
-remaining acceptance criteria are tracked in
-[the P0 remediation receipt](evidence/p0-remediation-2026-09-08.json).
+**G05, G06 and G07 are closed for the enabled deployment paths. G10 remains open;
+production readiness is not established.** The final preview application is
+`fc53629c2fde3f1288471a19e8cbd93558670ae7`.
+[Deployment 34276955437](https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34276955437)
+passed with **2,626 service tests, zero skips** (six warnings). Both hosted Chromium
+suites passed: nine executive steps, 22 evidence links and three stories at
+1440/390px; fourteen Intent/Advisor steps, ten UI mutations, three identities and
+two rejected self-approval attempts. No external business integration was called.
 
-Implemented changes cover source-owned citation rendering and byte verification,
-source-derived executive figures, financial number parsing, claim-backed citation
-number checks, fail-closed authority storage and overlapping tenant/BU isolation
-regressions. The first deployed change set passed 2,513 service tests with zero
-skips, nine executive browser steps (including 22 evidence links), and fourteen
-Intent/Advisor mutation steps using separate operator, administrator and executive
-identities. The final combined revision `9304d4838c004fb0b49cadd49b02595b06539969`
-then passed its own complete gate: **2,535 tests, zero skips**, nine executive
-browser steps with 22 resolving evidence links, and fourteen Intent/Advisor
-mutation steps across three identities. Both scoped self-approval attempts were
-rejected. [Deployment 34257660292](https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34257660292)
-completed successfully on preview. Production was not promoted.
+Authenticated model QA accepts immutable fact selections; the server owns the
+rendered numbers, units, periods and source references. Deterministic finance
+calculations retain typed input revisions and reject unverified legacy citations.
+Shared presentation validation rejects mismatched units and reporting periods,
+including BU/group comparisons. Revenue-target calculations preserve their
+supported paths. The stricter validator accepted all 255 approved financial
+records fetched from the live snapshot API.
 
-The prior independent factual assessment remains 24/50. The same sample includes
-14 insufficient-evidence answers, ten partial answers and two calculation gaps;
-none is counted as a correct answer. The exact missing-evidence findings are
-listed in [the factual evidence requirements](p0-factual-evidence-required.md).
-Semantic claim binding, assistant-domain authorization at retrieval and complete
-cross-surface tenant/BU acceptance remain open engineering work.
+Request-bound human and assistant restrictions filter root and dependency domains
+and BUs before values are loaded. Tenant/run/snapshot/artifact boundaries, hostile
+search candidates, source revocation, cached work and authority outages are
+covered by HTTP and real PostgreSQL proofs. The final live test denied CFO HR
+requests on both `/qa` and `/assistant/chat`.
+
+The final nine targeted regressions passed, including expected refusals. All
+**73 immutable citation links** resolved and their values matched calculation
+inputs. Browser tests opened approved facts from both a BU budget answer and a
+revenue-target answer. [Final live and browser evidence](evidence/p0-final-acceptance-2026-09-09.json).
+The deployed image, approved run and sealed 132-file source snapshot also match
+the operational release receipt. These are test results, not nine factual passes.
+
+The complete fixed-50 run on `51b98e4` covered all 18 themes and returned 50 HTTP
+200 responses, median 23.19 seconds and maximum 43.16 seconds. It found 43 saved
+source-policy refusals, three incorrectly routed answers, three numerical answers
+with inadequate citations and one missing consolidated COGS baseline. The final
+release fixes the discovered software defects; [the full run remains recorded](evidence/p0-live-factual-2026-09-09.json)
+without reclassifying refusals as correct answers. The older 24/50 score belongs
+to a prior release; no current 45/50 score is asserted.
+
+Source `internal-finance-dataset` still explicitly denies external-model processing;
+that permission has not been changed. Missing business inputs are listed in
+[the factual evidence requirements](p0-factual-evidence-required.md). Source-owner
+consent, validated missing inputs and a new fixed-corpus correctness review are
+required before G10 can close. The CFO workspace is intentionally locked behind
+“Coming soon”; no CFO chat walkthrough is claimed. Abbreviated BU names can fall
+through to the permission-blocked model path; the deterministic browser test used
+the registered BU name. Production was not promoted.
 
 ## Hosted human Intent mutation lifecycle — 8 September 2026
 

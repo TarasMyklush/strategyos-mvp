@@ -1,0 +1,16 @@
+{
+  "candidate": "fc53629",
+  "source_run": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+  "approved_finance_records": 255,
+  "validated": true,
+  "components": [
+    "board_floor",
+    "ebitda_actual",
+    "ebitda_plan",
+    "operating_cost_actual",
+    "operating_cost_plan",
+    "revenue_actual",
+    "revenue_plan"
+  ],
+  "source": "Authenticated live snapshot API; no permissions changed."
+}
