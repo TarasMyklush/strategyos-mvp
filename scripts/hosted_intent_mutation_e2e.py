@@ -102,7 +102,8 @@ def main() -> int:
         page.locator("#vault-message").filter(has_text=text).wait_for(timeout=20_000)
 
     def choose_plan(page: Page, version: int) -> None:
-        page.locator("#plan-select option").filter(has_text=plan_id).first.wait_for(timeout=20_000)
+        page.locator("#plan-select option").filter(has_text=plan_id).first.wait_for(
+            state="attached", timeout=20_000)
         page.locator("#plan-select").select_option(f"{plan_id}:{version}")
         page.locator("#selected-plan:not([hidden])").wait_for(timeout=20_000)
         assert f"{plan_id} · Version {version}" == page.locator("#plan-title").inner_text()
@@ -237,7 +238,8 @@ def main() -> int:
             admin_page.goto(urljoin(base_url, "plan"), wait_until="domcontentloaded")
             admin_page.locator("#vault-content:not([hidden])").wait_for(timeout=20_000)
             admin_page.locator("#structure-setup summary").click()
-            admin_page.locator("#structure-select option").filter(has_text=structure_id).wait_for(timeout=20_000)
+            admin_page.locator("#structure-select option").filter(has_text=structure_id).wait_for(
+                state="attached", timeout=20_000)
             admin_page.locator("#structure-select").select_option(f"{structure_id}:1")
             admin_page.get_by_role("button", name="Open", exact=True).first.click()
             admin_page.locator("#structure-approve-form:not([hidden])").wait_for(timeout=20_000)
@@ -403,7 +405,8 @@ def main() -> int:
 
             executive_page.goto(urljoin(base_url, "plan"), wait_until="domcontentloaded")
             executive_page.locator("#vault-content:not([hidden])").wait_for(timeout=20_000)
-            executive_page.locator("#advisor-select option").filter(has_text=advisor_id).wait_for(timeout=20_000)
+            executive_page.locator("#advisor-select option").filter(has_text=advisor_id).wait_for(
+                state="attached", timeout=20_000)
             executive_page.locator("#advisor-select").select_option(f"{advisor_id}:1")
             executive_page.locator("#advisor-load-saved").click()
             executive_page.locator("#advisor-approve-form:not([hidden])").wait_for(timeout=20_000)
@@ -418,7 +421,8 @@ def main() -> int:
 
             operator_page.goto(urljoin(base_url, "plan"), wait_until="domcontentloaded")
             operator_page.locator("#vault-content:not([hidden])").wait_for(timeout=20_000)
-            operator_page.locator("#advisor-select option").filter(has_text=advisor_id).wait_for(timeout=20_000)
+            operator_page.locator("#advisor-select option").filter(has_text=advisor_id).wait_for(
+                state="attached", timeout=20_000)
             operator_page.locator("#advisor-select").select_option(f"{advisor_id}:1")
             operator_page.locator("#advisor-load-saved").click()
             operator_page.locator("#advisor-publish:not([hidden])").wait_for(timeout=20_000)
