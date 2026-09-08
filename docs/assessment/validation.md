@@ -1,5 +1,31 @@
 # Validation record
 
+## P0 remediation — 8 September 2026
+
+Production readiness is **not established**. The current remediation and exact
+remaining acceptance criteria are tracked in
+[the P0 remediation receipt](evidence/p0-remediation-2026-09-08.json).
+
+Implemented changes cover source-owned citation rendering and byte verification,
+source-derived executive figures, financial number parsing, claim-backed citation
+number checks, fail-closed authority storage and overlapping tenant/BU isolation
+regressions. The first deployed change set passed 2,513 service tests with zero
+skips, nine executive browser steps (including 22 evidence links), and fourteen
+Intent/Advisor mutation steps using separate operator, administrator and executive
+identities. The final combined revision `9304d4838c004fb0b49cadd49b02595b06539969`
+then passed its own complete gate: **2,535 tests, zero skips**, nine executive
+browser steps with 22 resolving evidence links, and fourteen Intent/Advisor
+mutation steps across three identities. Both scoped self-approval attempts were
+rejected. [Deployment 34257660292](https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34257660292)
+completed successfully on preview. Production was not promoted.
+
+The prior independent factual assessment remains 24/50. The same sample includes
+14 insufficient-evidence answers, ten partial answers and two calculation gaps;
+none is counted as a correct answer. The exact missing-evidence findings are
+listed in [the factual evidence requirements](p0-factual-evidence-required.md).
+Semantic claim binding, assistant-domain authorization at retrieval and complete
+cross-surface tenant/BU acceptance remain open engineering work.
+
 ## Hosted human Intent mutation lifecycle — 8 September 2026
 
 The current branch preview passed a complete Chromium workflow using separate

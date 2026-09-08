@@ -1,0 +1,372 @@
+{
+  "status": "implemented_subset_deployed_and_verified",
+  "application_revision": "9304d4838c004fb0b49cadd49b02595b06539969",
+  "changes": [
+    {
+      "gap": "G05",
+      "change": "Source-backed citation answers, viewers and audits render canonical source content, verify current source bytes, and discard provider excerpts and metadata."
+    },
+    {
+      "gap": "G05",
+      "change": "Executive key figures remain source-derived; the synthesis cache contract is invalidated."
+    },
+    {
+      "gap": "G05",
+      "change": "Shared numeric parsing preserves Unicode signs, accounting negatives, suffix currencies, scales and scientific notation; ambiguous grouping, compound units and unbounded exponents are rejected."
+    },
+    {
+      "gap": "G06/G07",
+      "change": "File-backed authority policy keys no longer collapse distinct tenants. Corrupt or ambiguous legacy saved policies fail closed, with HTTP 503 on query routes."
+    },
+    {
+      "gap": "G06",
+      "change": "128 HTTP negative cases exercise both query endpoints, four roles, two persona-selection locations and eight restricted/mixed-domain questions; source/answer loaders must not run."
+    },
+    {
+      "gap": "G05",
+      "change": "Claim-backed QA applies the numerical validator to provider-supplied citation excerpts as well as answer, basis and suggestions."
+    },
+    {
+      "gap": "G06",
+      "change": "A configured authority database outage or missing driver cannot switch either policy reads or writes to local-file permissions."
+    },
+    {
+      "gap": "G07",
+      "change": "Expanded real database ownership tests cover two tenants with overlapping BU names across run, snapshot, checkpoint, artifact, decisions, citation search, QA context and list access. Local latest/current pointer tests cover all sixteen owner/pointer combinations."
+    }
+  ],
+  "local_validation": {
+    "core_regressions": {
+      "passed": 322,
+      "failed": 0
+    },
+    "numeric_regressions": {
+      "passed": 106,
+      "failed": 0
+    },
+    "note": "Runs overlap; counts must not be added as distinct tests.",
+    "authority_outage_regressions": {
+      "passed": 160,
+      "failed": 0
+    },
+    "pointer_and_http_regressions": {
+      "passed": 134,
+      "failed": 0
+    },
+    "claim_backed_citation_regressions": {
+      "passed": 105,
+      "failed": 0
+    }
+  },
+  "deployment_runs": [
+    34256230948,
+    34257660292
+  ],
+  "unclosed_acceptance": {
+    "G05": "QA prose still uses numeric value/unit membership, not semantic metric/period/subject binding. Claim-backed QA intentionally has no raw evidence bundle; its citation verification needs an authorized immutable claim-reference contract distinct from file-backed citation resolution. Causal validation also remains open.",
+    "G06": "Source policies bind user roles, tenant and BU, but do not carry an explicit assistant-domain entitlement. Keyword refusal coverage is not equivalent to source-level user/assistant/tool authority intersection.",
+    "G07": "Expanded two-tenant/two-BU ownership and latest/current pointer proofs now pass, including overlapping BU names, citation search, artifact lookup and QA context guards. They do not yet form a complete product-wide matrix for semantic retrieval, every export and all legacy surfaces.",
+    "G10": "Latest independent assessment remains 24/50: 14 insufficient-evidence, 10 partial and 2 calculation-gap cases. No new full 50-question release result is claimed."
+  },
+  "production_ready": false,
+  "service_validation": {
+    "run_id": 34257660292,
+    "passed": 2535,
+    "skipped": 0,
+    "warnings": 6,
+    "elapsed_seconds": 494.69
+  },
+  "first_deployed_increment": {
+    "revision": "2cdc68a7b31fc46ede2e73e904aeab2410da5f78",
+    "run_id": 34256230948,
+    "service_tests": 2513,
+    "skipped": 0,
+    "executive_walkthrough": {
+      "passed_steps": 9,
+      "stories_opened": 3,
+      "evidence_links_verified": 22,
+      "viewport_widths": [
+        1440,
+        390
+      ]
+    },
+    "mutation_walkthrough": {
+      "passed_steps": 14,
+      "browser_personas": 3,
+      "ui_mutations": 10,
+      "negative_authority_checks": 2,
+      "external_integrations_called": 0
+    }
+  },
+  "overall_p0_status": "incomplete",
+  "deployment": {
+    "run_id": 34257660292,
+    "url": "https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34257660292",
+    "target": "https://new.strategyos.live",
+    "application_revision": "9304d4838c004fb0b49cadd49b02595b06539969",
+    "conclusion": "success",
+    "production_promoted": false
+  },
+  "hosted_validation": {
+    "executive": {
+      "subject": "https://new.strategyos.live/",
+      "persona": "executive.tester",
+      "started_at": "2026-09-08T17:50:41.820129+00:00",
+      "mode": "read-only Chromium walkthrough",
+      "steps": [
+        {
+          "name": "Protected /plan redirects to customer sign-in",
+          "status": "passed",
+          "evidence": {
+            "url": "https://new.strategyos.live/login"
+          }
+        },
+        {
+          "name": "Invalid password is rejected without leaving sign-in",
+          "status": "passed",
+          "evidence": {}
+        },
+        {
+          "name": "Authorized executive preview account signs in",
+          "status": "passed",
+          "evidence": {
+            "landing_url": "https://new.strategyos.live/executive"
+          }
+        },
+        {
+          "name": "Configured pack renders three read-only decision stories",
+          "status": "passed",
+          "evidence": {}
+        },
+        {
+          "name": "Story 1: Institutional client rescues regional misses",
+          "status": "passed",
+          "evidence": {
+            "rollup": [
+              "300",
+              "295",
+              "-5",
+              "on_plan",
+              "3 / 3"
+            ],
+            "cells": 3,
+            "evidence_links": 6,
+            "evidence_statuses": [
+              200,
+              200,
+              200,
+              200,
+              200,
+              200
+            ],
+            "bilingual_board_pages": 14
+          }
+        },
+        {
+          "name": "Story 2: Volume growth hides adverse commercial mix",
+          "status": "passed",
+          "evidence": {
+            "rollup": [
+              "300",
+              "333",
+              "33",
+              "ahead",
+              "2 / 2"
+            ],
+            "cells": 2,
+            "evidence_links": 12,
+            "evidence_statuses": [
+              200,
+              200,
+              200,
+              200,
+              200,
+              200,
+              200,
+              200,
+              200,
+              200,
+              200,
+              200
+            ],
+            "bilingual_board_pages": 19
+          }
+        },
+        {
+          "name": "Story 3: Regional miss links to a credit constraint",
+          "status": "passed",
+          "evidence": {
+            "rollup": [
+              "300",
+              "240",
+              "-60",
+              "behind",
+              "2 / 2"
+            ],
+            "cells": 2,
+            "evidence_links": 4,
+            "evidence_statuses": [
+              200,
+              200,
+              200,
+              200
+            ],
+            "bilingual_board_pages": 9
+          }
+        },
+        {
+          "name": "Catalog remains usable at a 390px mobile viewport",
+          "status": "passed",
+          "evidence": {}
+        },
+        {
+          "name": "Sign-out clears the session and protects direct /plan access",
+          "status": "passed",
+          "evidence": {}
+        }
+      ],
+      "status": "passed",
+      "finished_at": "2026-09-08T17:50:57.347724+00:00",
+      "summary": {
+        "passed_steps": 9,
+        "stories_opened": 3,
+        "evidence_links_verified": 22,
+        "viewport_widths": [
+          1440,
+          390
+        ]
+      }
+    },
+    "intent_mutations": {
+      "subject": "https://new.strategyos.live/",
+      "started_at": "2026-09-08T17:50:40.455579+00:00",
+      "mode": "hosted Chromium mutation lifecycle with synthetic append-only records",
+      "records": {
+        "source_key": "human-intent-20260908175040455556",
+        "structure_id": "human-structure-20260908175040455556",
+        "plan_id": "human-plan-20260908175040455556",
+        "actual_revision": "human-history-20260908175040455556",
+        "advisor_id": "human-advisor-20260908175040455556",
+        "source_pack_id": "5513d8f70a9b5016440e6a76bb7329e9112aaa71926d6ee9f268f8285ccca527",
+        "source_sha256": "7d7d9072a23ec77d784e2c2c182f632d8ee010a672dead776625c80a7dbd29a0"
+      },
+      "steps": [
+        {
+          "name": "Three independent hosted identities authenticate in one tenant",
+          "status": "passed",
+          "evidence": {
+            "roles": [
+              "operator",
+              "tenant_admin",
+              "executive"
+            ],
+            "tenant_id": "strategyos-branch"
+          }
+        },
+        {
+          "name": "Operator stages and registers a governed synthetic source through the UI",
+          "status": "passed",
+          "evidence": {
+            "source_pack_id": "5513d8f70a9b5016440e6a76bb7329e9112aaa71926d6ee9f268f8285ccca527",
+            "sha256": "7d7d9072a23ec77d784e2c2c182f632d8ee010a672dead776625c80a7dbd29a0"
+          }
+        },
+        {
+          "name": "Operator saves a complete source-bound organization structure through the UI",
+          "status": "passed",
+          "evidence": {
+            "digest": "c29565e5f3039231d4bd3a3f7735b6d468443521212ed4dcd072b28c717e62d8",
+            "dimensions": 3
+          }
+        },
+        {
+          "name": "A separate tenant administrator approves the authoritative structure through the UI",
+          "status": "passed",
+          "evidence": {}
+        },
+        {
+          "name": "Operator imports a source-bound plan proposal through the UI",
+          "status": "passed",
+          "evidence": {
+            "plan_digest": "6ec31f5fe7f565feda3000ca941fb361d2976141e2dafdf7c515ac59b5d1ec4f",
+            "governance_status": "proposed"
+          }
+        },
+        {
+          "name": "Tenant administrator grants plan-scoped ratification permission through the UI",
+          "status": "passed",
+          "evidence": {
+            "ratifier_subject": "https://new.strategyos.live/:executive.tester"
+          }
+        },
+        {
+          "name": "Importer ratification is denied",
+          "status": "passed",
+          "evidence": {
+            "http_status": 403
+          }
+        },
+        {
+          "name": "Independently authorized executive ratifies the reviewed plan through the UI",
+          "status": "passed",
+          "evidence": {
+            "approved_by": "https://new.strategyos.live/:executive.tester"
+          }
+        },
+        {
+          "name": "Operator imports completed historical actuals through the UI",
+          "status": "passed",
+          "evidence": {
+            "revision": "human-history-20260908175040455556"
+          }
+        },
+        {
+          "name": "Operator saves a complete source-bound bilingual advisor configuration through the UI",
+          "status": "passed",
+          "evidence": {
+            "config_digest": "4629fa4776892ac9f6cfab6fbfd519437e0357542f4325cf6a143cd9c2073ad2",
+            "allocation_count": 2
+          }
+        },
+        {
+          "name": "Advisor configuration creator approval is denied",
+          "status": "passed",
+          "evidence": {
+            "http_status": 403
+          }
+        },
+        {
+          "name": "A separate executive approves the advisor configuration through the UI",
+          "status": "passed",
+          "evidence": {}
+        },
+        {
+          "name": "Operator registers the bilingual board template and publishes the advisor plan proposal through the UI",
+          "status": "passed",
+          "evidence": {
+            "published_plan_version": 2,
+            "engine_version": "history-adjusted-allocation.v1"
+          }
+        },
+        {
+          "name": "Executive ratifies the advisor-generated plan version through the UI",
+          "status": "passed",
+          "evidence": {
+            "version": 2,
+            "governance_status": "ratified",
+            "decomposed_parent_total": "100.00"
+          }
+        }
+      ],
+      "status": "passed",
+      "finished_at": "2026-09-08T17:51:30.112089+00:00",
+      "summary": {
+        "passed_steps": 14,
+        "browser_personas": 3,
+        "ui_mutations": 10,
+        "negative_authority_checks": 2,
+        "external_integrations_called": 0
+      }
+    }
+  }
+}

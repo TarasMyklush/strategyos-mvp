@@ -133,7 +133,7 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 <a id="g05"></a>
 ## G05 · P0 · Fabricated-number protection is not product-wide
 
-**Current position:** The current executive-synthesis path rejects changed or additional provider numbers and only accepts prose identical to the governed deterministic fallback. The answer acceptance scorer rejects extra fabricated quantities. These focused controls pass, but every model-generated assistant, chart, caption and export field is not yet represented as a typed approved fact/calculation reference, and causal validation remains separate and incomplete.
+**Current position:** The current executive-synthesis path rejects changed or additional provider numbers and only accepts prose identical to the governed deterministic fallback. The answer acceptance scorer rejects extra fabricated quantities. These focused controls pass, but every model-generated assistant, chart, caption and export field is not yet represented as a typed approved fact/calculation reference, and causal validation remains separate and incomplete. Further remediation replaces provider citation excerpts with source-owned content, checks current artifact hashes, fixes financial notation parsing and keeps executive key figures source-derived. Semantic metric/period/subject binding and immutable claim-backed QA citations remain open.
 
 **Impact:** An evidence badge can accompany an unsupported quantitative claim, violating the defining deterministic-number contract.
 
@@ -145,12 +145,12 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Evidence classification:** Revalidated 2026-09-08: partial; focused guards pass, product-wide quantitative and causal claim binding remains unproven.
 
-**Evidence:** [Synthesis acceptance](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/executive_synthesis.py#L204>); [Probe results](<evidence/audit-probe-results.json>); [P0 reassessment, 8 September 2026](<evidence/p0-reassessment-2026-09-08.json>).
+**Evidence:** [Synthesis acceptance](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/executive_synthesis.py#L204>); [Probe results](<evidence/audit-probe-results.json>); [P0 reassessment, 8 September 2026](<evidence/p0-reassessment-2026-09-08.json>); [P0 remediation and remaining acceptance, 8 September](<evidence/p0-remediation-2026-09-08.json>).
 
 <a id="g06"></a>
 ## G06 · P0 · Authority enforcement is weaker than its published contract
 
-**Current position:** Shared authorization guards run before scoped loaders and propagate through provider executor threads. Service-backed negative tests pass. Hosted Chromium acceptance used separate operator, tenant-admin and executive identities and rejected importer plan ratification and advisor-creator approval. The required negative matrix across every persona, alias, mixed-domain phrasing and both /qa and /assistant/chat has not been completed.
+**Current position:** Shared authorization guards run before scoped loaders and propagate through provider executor threads. Service-backed negative tests pass. Hosted Chromium acceptance used separate operator, tenant-admin and executive identities and rejected importer plan ratification and advisor-creator approval. The required negative matrix across every persona, alias, mixed-domain phrasing and both /qa and /assistant/chat has not been completed. The new 128-case real HTTP matrix covers both endpoints, four roles, two persona-selection locations and eight restricted/mixed-domain prompts. Persisted policy corruption and tenant filename collisions fail closed. Explicit assistant-domain binding at the source policy layer remains absent.
 
 **Impact:** A caller-controlled persona, alternate endpoint, or differently worded request can change the effective permission decision. The observed classifier mismatch alone does not prove that protected records were returned.
 
@@ -162,12 +162,12 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Evidence classification:** Revalidated 2026-09-08: partial; service guards and the hosted Intent role workflow pass, the complete product-wide negative matrix remains open.
 
-**Evidence:** [Authority classifier](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/authority_matrix.py#L218>); [Assistant boundary](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/api.py#L16612>); [Published contract](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/docs/authority-matrix-mvp.md#L17>); [Probe results](<evidence/audit-probe-results.json>); [P0 reassessment, 8 September 2026](<evidence/p0-reassessment-2026-09-08.json>); [Hosted human Intent mutation acceptance](<evidence/p1-human-intent-mutation-e2e-2026-09-08.json>).
+**Evidence:** [Authority classifier](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/authority_matrix.py#L218>); [Assistant boundary](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/api.py#L16612>); [Published contract](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/docs/authority-matrix-mvp.md#L17>); [Probe results](<evidence/audit-probe-results.json>); [P0 reassessment, 8 September 2026](<evidence/p0-reassessment-2026-09-08.json>); [Hosted human Intent mutation acceptance](<evidence/p1-human-intent-mutation-e2e-2026-09-08.json>); [P0 remediation and remaining acceptance, 8 September](<evidence/p0-remediation-2026-09-08.json>).
 
 <a id="g07"></a>
 ## G07 · P0 · Shared multi-tenant run isolation is incomplete
 
-**Current position:** Intent/Advisor records have tenant row-level security, cross-tenant store tests pass, live semantic canaries exclude a foreign tenant and wrong-tenant inference decryption is rejected. This does not yet demonstrate two tenants and two business units across every list, lookup, retrieval, search, export, question and latest-alias path in the product.
+**Current position:** Intent/Advisor records have tenant row-level security, cross-tenant store tests pass, live semantic canaries exclude a foreign tenant and wrong-tenant inference decryption is rejected. This does not yet demonstrate two tenants and two business units across every list, lookup, retrieval, search, export, question and latest-alias path in the product. The 2,535-test final service gate passes expanded two-tenant/two-BU ownership checks with overlapping BU names across run, snapshot, checkpoint, artifact, decisions, citation search, QA context and list access. Sixteen local latest/current owner/pointer combinations also pass; complete product-wide isolation remains unproven.
 
 **Impact:** The code does not substantiate the shared multi-tenant tier or per-BU confidentiality claim end to end. Separate deployment isolation can reduce this exposure for an initial pilot.
 
@@ -179,7 +179,7 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Evidence classification:** Revalidated 2026-09-08: partial; subsystem RLS and live semantic canaries pass, full product-wide tenant/BU isolation acceptance remains open.
 
-**Evidence:** [Run schema](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/deploy/postgres/schema.sql#L20>); [Run lookup](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/state_store.py#L372>); [Pointer selection](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/run_registry.py#L84>); [P0 reassessment, 8 September 2026](<evidence/p0-reassessment-2026-09-08.json>).
+**Evidence:** [Run schema](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/deploy/postgres/schema.sql#L20>); [Run lookup](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/state_store.py#L372>); [Pointer selection](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/run_registry.py#L84>); [P0 reassessment, 8 September 2026](<evidence/p0-reassessment-2026-09-08.json>); [P0 remediation and remaining acceptance, 8 September](<evidence/p0-remediation-2026-09-08.json>).
 
 <a id="g08"></a>
 ## G08 · P0 · Frozen board memory is not demonstrated as an immutable snapshot
@@ -230,7 +230,7 @@ The [canonical specification](../requirements.md) resolves earlier requirement c
 
 **Evidence classification:** Revalidated 2026-09-08: open; the gate logic passes its tests, but the latest full independently graded release result is 24/50.
 
-**Evidence:** [Corpus scorer](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/qa_regression_corpus.py#L57>); [Probe results](<evidence/audit-probe-results.json>); [P0 reassessment, 8 September 2026](<evidence/p0-reassessment-2026-09-08.json>).
+**Evidence:** [Corpus scorer](<https://github.com/TarasMyklush/strategyos-mvp/blob/c03e95816dedf6dedf05778cb725d42a84c29de2/strategyos_mvp/qa_regression_corpus.py#L57>); [Probe results](<evidence/audit-probe-results.json>); [P0 reassessment, 8 September 2026](<evidence/p0-reassessment-2026-09-08.json>); [P0 remediation and remaining acceptance, 8 September](<evidence/p0-remediation-2026-09-08.json>).
 
 <a id="g11"></a>
 ## G11 · P1 · Portable datasets fixed; external-service acceptance remains open

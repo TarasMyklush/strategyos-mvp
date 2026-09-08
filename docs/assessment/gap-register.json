@@ -127,7 +127,7 @@
       "domain": "AI assurance",
       "title": "Fabricated-number protection is not product-wide",
       "status": "Revalidated 2026-09-08: partial; focused guards pass, product-wide quantitative and causal claim binding remains unproven.",
-      "observation": "The current executive-synthesis path rejects changed or additional provider numbers and only accepts prose identical to the governed deterministic fallback. The answer acceptance scorer rejects extra fabricated quantities. These focused controls pass, but every model-generated assistant, chart, caption and export field is not yet represented as a typed approved fact/calculation reference, and causal validation remains separate and incomplete.",
+      "observation": "The current executive-synthesis path rejects changed or additional provider numbers and only accepts prose identical to the governed deterministic fallback. The answer acceptance scorer rejects extra fabricated quantities. These focused controls pass, but every model-generated assistant, chart, caption and export field is not yet represented as a typed approved fact/calculation reference, and causal validation remains separate and incomplete. Further remediation replaces provider citation excerpts with source-owned content, checks current artifact hashes, fixes financial notation parsing and keeps executive key figures source-derived. Semantic metric/period/subject binding and immutable claim-backed QA citations remain open.",
       "impact": "An evidence badge can accompany an unsupported quantitative claim, violating the defining deterministic-number contract.",
       "action": "Represent each quantitative claim as a typed reference to an approved fact or calculation. Reject unbound numbers in every model-generated field, including summaries, charts and captions; validate causal claims separately.",
       "acceptance": "Adversarial provider responses retaining valid numbers while adding, changing or attaching false units, amounts or causes are rejected. All displayed numerical cells resolve to an approved calculation.",
@@ -147,6 +147,11 @@
           "label": "P0 reassessment, 8 September 2026",
           "path": "docs/assessment/evidence/p0-reassessment-2026-09-08.json",
           "line": null
+        },
+        {
+          "label": "P0 remediation and remaining acceptance, 8 September",
+          "path": "docs/assessment/evidence/p0-remediation-2026-09-08.json",
+          "line": null
         }
       ],
       "closure_status": "partial",
@@ -158,7 +163,7 @@
       "domain": "Access control",
       "title": "Authority enforcement is weaker than its published contract",
       "status": "Revalidated 2026-09-08: partial; service guards and the hosted Intent role workflow pass, the complete product-wide negative matrix remains open.",
-      "observation": "Shared authorization guards run before scoped loaders and propagate through provider executor threads. Service-backed negative tests pass. Hosted Chromium acceptance used separate operator, tenant-admin and executive identities and rejected importer plan ratification and advisor-creator approval. The required negative matrix across every persona, alias, mixed-domain phrasing and both /qa and /assistant/chat has not been completed.",
+      "observation": "Shared authorization guards run before scoped loaders and propagate through provider executor threads. Service-backed negative tests pass. Hosted Chromium acceptance used separate operator, tenant-admin and executive identities and rejected importer plan ratification and advisor-creator approval. The required negative matrix across every persona, alias, mixed-domain phrasing and both /qa and /assistant/chat has not been completed. The new 128-case real HTTP matrix covers both endpoints, four roles, two persona-selection locations and eight restricted/mixed-domain prompts. Persisted policy corruption and tenant filename collisions fail closed. Explicit assistant-domain binding at the source policy layer remains absent.",
       "impact": "A caller-controlled persona, alternate endpoint, or differently worded request can change the effective permission decision. The observed classifier mismatch alone does not prove that protected records were returned.",
       "action": "Bind personas to authenticated entitlements, enforce per-resource and per-source permissions at retrieval, intersect user/assistant/tool authority, and apply the same policy to every query endpoint. Give Minerva a separate policy identity.",
       "acceptance": "Negative tests across users, personas, aliases, mixed-domain questions and /qa versus /assistant/chat demonstrate identical denials before restricted data is loaded.",
@@ -193,6 +198,11 @@
           "label": "Hosted human Intent mutation acceptance",
           "path": "docs/assessment/evidence/p1-human-intent-mutation-e2e-2026-09-08.json",
           "line": null
+        },
+        {
+          "label": "P0 remediation and remaining acceptance, 8 September",
+          "path": "docs/assessment/evidence/p0-remediation-2026-09-08.json",
+          "line": null
         }
       ],
       "closure_status": "partial",
@@ -204,7 +214,7 @@
       "domain": "Access control",
       "title": "Shared multi-tenant run isolation is incomplete",
       "status": "Revalidated 2026-09-08: partial; subsystem RLS and live semantic canaries pass, full product-wide tenant/BU isolation acceptance remains open.",
-      "observation": "Intent/Advisor records have tenant row-level security, cross-tenant store tests pass, live semantic canaries exclude a foreign tenant and wrong-tenant inference decryption is rejected. This does not yet demonstrate two tenants and two business units across every list, lookup, retrieval, search, export, question and latest-alias path in the product.",
+      "observation": "Intent/Advisor records have tenant row-level security, cross-tenant store tests pass, live semantic canaries exclude a foreign tenant and wrong-tenant inference decryption is rejected. This does not yet demonstrate two tenants and two business units across every list, lookup, retrieval, search, export, question and latest-alias path in the product. The 2,535-test final service gate passes expanded two-tenant/two-BU ownership checks with overlapping BU names across run, snapshot, checkpoint, artifact, decisions, citation search, QA context and list access. Sixteen local latest/current owner/pointer combinations also pass; complete product-wide isolation remains unproven.",
       "impact": "The code does not substantiate the shared multi-tenant tier or per-BU confidentiality claim end to end. Separate deployment isolation can reduce this exposure for an initial pilot.",
       "action": "Add tenant and business-scope ownership to runs, jobs, artifacts, citations, caches and retrieval; enforce the authenticated scope in every lookup, not just in the agent layer.",
       "acceptance": "Two tenants and two BUs sharing infrastructure cannot list, resolve, retrieve, search, export or ask about each other’s records, including guessed IDs and latest aliases.",
@@ -228,6 +238,11 @@
         {
           "label": "P0 reassessment, 8 September 2026",
           "path": "docs/assessment/evidence/p0-reassessment-2026-09-08.json",
+          "line": null
+        },
+        {
+          "label": "P0 remediation and remaining acceptance, 8 September",
+          "path": "docs/assessment/evidence/p0-remediation-2026-09-08.json",
           "line": null
         }
       ],
@@ -316,6 +331,11 @@
         {
           "label": "P0 reassessment, 8 September 2026",
           "path": "docs/assessment/evidence/p0-reassessment-2026-09-08.json",
+          "line": null
+        },
+        {
+          "label": "P0 remediation and remaining acceptance, 8 September",
+          "path": "docs/assessment/evidence/p0-remediation-2026-09-08.json",
           "line": null
         }
       ],
