@@ -19,6 +19,7 @@ def render() -> None:
         f"Assessment date: {data['assessment_date']}. Reviewed baseline: `{data['baseline']}`.", "",
         "The preview now runs the enriched approved synthetic dataset with durable review state, scoped local semantic retrieval, immutable board records and encrypted inference audit. The register below separates verified corrections from incomplete acceptance. It does not claim a complete enterprise product or a passed factual assistant gate.", "",
         f"The register contains **{len(gaps)} gaps: {counts['P0']} P0, {counts['P1']} P1 and {counts['P2']} P2**. {partial} have partial remediation and {closed} are closed. These are risk priorities, not a completion percentage.", "",
+        f"Revalidated {data.get('revalidated_at', data['assessment_date'])}: {data.get('revalidation_note', 'No later reassessment recorded.')}", "",
         "## Current scope", "",
         data.get("remediation_scope", "See canonical requirements."), "",
         data.get("ui_constraint", "Preserve the existing interface."), "",

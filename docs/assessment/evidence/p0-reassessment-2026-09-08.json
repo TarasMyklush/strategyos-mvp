@@ -1,0 +1,52 @@
+{
+  "assessment_date": "2026-09-08",
+  "deployed_application_revision": "705a01b720d175e3ddb86404e16c7fd11b02dd1c",
+  "full_service_gate": {
+    "workflow": "https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34246692025",
+    "passed": 2381,
+    "skipped": 0,
+    "warnings": 6,
+    "status": "passed"
+  },
+  "focused_reassessment": {
+    "command": "python scripts/test.py -q tests/test_executive_synthesis.py tests/test_qa_acceptance.py tests/test_qa_regression_corpus.py tests/test_authority_matrix.py tests/test_remediation_boundaries.py",
+    "passed": 27,
+    "status": "passed"
+  },
+  "hosted_browser_mutation_acceptance": {
+    "workflow": "https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34254282659",
+    "passed_steps": 14,
+    "browser_personas": 3,
+    "ui_mutations": 10,
+    "negative_authority_checks": 2,
+    "external_integrations_called": 0,
+    "status": "passed"
+  },
+  "p0_verdicts": [
+    {
+      "id": "G05",
+      "status": "partial",
+      "verified": "The current executive-synthesis guard rejects changed or additional provider numbers and falls back to deterministic governed text; the acceptance scorer also rejects a correct number accompanied by a fabricated number.",
+      "remaining": "The acceptance criterion covers every model-generated field and typed binding of every displayed number, plus separate causal validation. Current evidence does not prove that product-wide contract across all assistant, chart, caption and export surfaces."
+    },
+    {
+      "id": "G06",
+      "status": "partial",
+      "verified": "Service-level authority tests pass. The hosted Intent lifecycle used separate operator, tenant-admin and executive identities, rejected importer plan ratification and rejected advisor-creator approval.",
+      "remaining": "The acceptance criterion still requires one complete negative matrix across users, personas, aliases, mixed-domain questions and both /qa and /assistant/chat before restricted data is loaded. That product-wide matrix has not been completed."
+    },
+    {
+      "id": "G07",
+      "status": "partial",
+      "verified": "Intent/Advisor tables have tenant row-level security; cross-tenant store tests and the live semantic tenant canary pass; wrong-tenant inference decryption is rejected.",
+      "remaining": "The acceptance criterion requires two tenants and two business units sharing infrastructure to be unable to list, resolve, retrieve, search, export or ask about each other's records across every product surface, including guessed IDs and latest aliases. No current product-wide matrix demonstrates all of those paths."
+    },
+    {
+      "id": "G10",
+      "status": "open",
+      "verified": "The release gate implementation requires 50 distinct questions across 18 themes, at least 45 correct answers, resolving citations and zero fabricated numbers.",
+      "remaining": "The latest independently graded full 50-question release evidence scores 24/50: 14 insufficient-evidence, 10 partial and 2 calculation gaps. No later full-corpus result demonstrates the required 45/50, so factual answer quality remains a release blocker."
+    }
+  ],
+  "conclusion": "Four of eight P0 gaps remain unclosed: G05, G06 and G07 are partial; G10 is open. The hosted Intent mutation result adds strong current evidence for that subsystem but does not close product-wide AI assurance, authority or tenant-isolation criteria."
+}

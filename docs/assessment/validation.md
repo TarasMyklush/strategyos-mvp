@@ -1,5 +1,32 @@
 # Validation record
 
+## Hosted human Intent mutation lifecycle — 8 September 2026
+
+The current branch preview passed a complete Chromium workflow using separate
+operator, tenant-administrator and executive sessions. The test made ten
+synthetic UI mutations and recorded fourteen passing steps without calling an
+external integration:
+
+- stage and register governed source evidence;
+- create a three-dimension organization structure and approve it independently;
+- import a source- and structure-bound plan proposal;
+- grant plan-scoped ratification permission and ratify as a separate executive;
+- import a completed historical actual snapshot;
+- save and independently approve a bilingual Strategic Advisor configuration;
+- register its board template, publish its derived plan proposal and ratify that
+  generated version; and
+- reject importer plan ratification and advisor-creator approval with HTTP 403.
+
+The workflow is now part of every branch-preview browser gate and runs alongside
+the read-only executive story walkthrough. Evidence: [hosted workflow](https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34254282659)
+and [mutation report](evidence/p1-human-intent-mutation-e2e-2026-09-08.json).
+
+This closes the earlier browser-coverage gap for the current Intent/Advisor
+mutation lifecycle. It does not close the broader P0 criteria for product-wide
+fabricated-number protection, authority enforcement, full multi-tenant isolation
+or the 45/50 factual-answer gate. Their current verdicts are recorded in the
+[P0 reassessment](evidence/p0-reassessment-2026-09-08.json).
+
 ## Closed P0 direction increments — 7–8 September 2026
 
 Both P0s from the 7 September direction are deployed at

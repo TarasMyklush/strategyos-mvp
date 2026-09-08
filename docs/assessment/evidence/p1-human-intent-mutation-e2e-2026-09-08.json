@@ -1,0 +1,131 @@
+{
+  "subject": "https://new.strategyos.live/",
+  "started_at": "2026-09-08T16:58:55.419285+00:00",
+  "mode": "hosted Chromium mutation lifecycle with synthetic append-only records",
+  "records": {
+    "source_key": "human-intent-20260908165855419257",
+    "structure_id": "human-structure-20260908165855419257",
+    "plan_id": "human-plan-20260908165855419257",
+    "actual_revision": "human-history-20260908165855419257",
+    "advisor_id": "human-advisor-20260908165855419257",
+    "source_pack_id": "4b2b25464a89852c0c924e9dec520bb193a2c3a78e69fcac9106ba7389b8f192",
+    "source_sha256": "7d7d9072a23ec77d784e2c2c182f632d8ee010a672dead776625c80a7dbd29a0"
+  },
+  "steps": [
+    {
+      "name": "Three independent hosted identities authenticate in one tenant",
+      "status": "passed",
+      "evidence": {
+        "roles": [
+          "operator",
+          "tenant_admin",
+          "executive"
+        ],
+        "tenant_id": "strategyos-branch"
+      }
+    },
+    {
+      "name": "Operator stages and registers a governed synthetic source through the UI",
+      "status": "passed",
+      "evidence": {
+        "source_pack_id": "4b2b25464a89852c0c924e9dec520bb193a2c3a78e69fcac9106ba7389b8f192",
+        "sha256": "7d7d9072a23ec77d784e2c2c182f632d8ee010a672dead776625c80a7dbd29a0"
+      }
+    },
+    {
+      "name": "Operator saves a complete source-bound organization structure through the UI",
+      "status": "passed",
+      "evidence": {
+        "digest": "c24e1c0c07a234fd787bef4049626caf54134cbcc0c236843d6ccdbb24149a89",
+        "dimensions": 3
+      }
+    },
+    {
+      "name": "A separate tenant administrator approves the authoritative structure through the UI",
+      "status": "passed",
+      "evidence": {}
+    },
+    {
+      "name": "Operator imports a source-bound plan proposal through the UI",
+      "status": "passed",
+      "evidence": {
+        "plan_digest": "3c955ccdb2274de435f535d2422afb7ad2f9417023474d5f299018b5e9613acc",
+        "governance_status": "proposed"
+      }
+    },
+    {
+      "name": "Tenant administrator grants plan-scoped ratification permission through the UI",
+      "status": "passed",
+      "evidence": {
+        "ratifier_subject": "https://new.strategyos.live/:executive.tester"
+      }
+    },
+    {
+      "name": "Importer ratification is denied",
+      "status": "passed",
+      "evidence": {
+        "http_status": 403
+      }
+    },
+    {
+      "name": "Independently authorized executive ratifies the reviewed plan through the UI",
+      "status": "passed",
+      "evidence": {
+        "approved_by": "https://new.strategyos.live/:executive.tester"
+      }
+    },
+    {
+      "name": "Operator imports completed historical actuals through the UI",
+      "status": "passed",
+      "evidence": {
+        "revision": "human-history-20260908165855419257"
+      }
+    },
+    {
+      "name": "Operator saves a complete source-bound bilingual advisor configuration through the UI",
+      "status": "passed",
+      "evidence": {
+        "config_digest": "12a836ab8e8993a839ddcb58ac27a3af77448d917f3961f55cb07cb4c3374e40",
+        "allocation_count": 2
+      }
+    },
+    {
+      "name": "Advisor configuration creator approval is denied",
+      "status": "passed",
+      "evidence": {
+        "http_status": 403
+      }
+    },
+    {
+      "name": "A separate executive approves the advisor configuration through the UI",
+      "status": "passed",
+      "evidence": {}
+    },
+    {
+      "name": "Operator registers the bilingual board template and publishes the advisor plan proposal through the UI",
+      "status": "passed",
+      "evidence": {
+        "published_plan_version": 2,
+        "engine_version": "history-adjusted-allocation.v1"
+      }
+    },
+    {
+      "name": "Executive ratifies the advisor-generated plan version through the UI",
+      "status": "passed",
+      "evidence": {
+        "version": 2,
+        "governance_status": "ratified",
+        "decomposed_parent_total": "100.00"
+      }
+    }
+  ],
+  "status": "passed",
+  "finished_at": "2026-09-08T16:59:49.458522+00:00",
+  "summary": {
+    "passed_steps": 14,
+    "browser_personas": 3,
+    "ui_mutations": 10,
+    "negative_authority_checks": 2,
+    "external_integrations_called": 0
+  }
+}
