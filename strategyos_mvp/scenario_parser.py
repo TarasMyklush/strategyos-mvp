@@ -231,7 +231,7 @@ def _risk_high(basis: str, gap: str) -> HallucinationRisk:
 
 
 _SCENARIO_INTENT_RE = re.compile(
-    r"\b(if|assume|assuming|scenario|simulate|model|project|increase|decrease|"
+    r"\b(if|assume|assuming|scenario|simulate|model|project|increase|decrease|sensitive|sensitivity|"
     r"recover|realize|collect|hedge|change by|reach|target|achieve|what needs to change|what would happen|what happens|"
     r"make it|make revenue|get it|get revenue|bring it|bring revenue|close the gap|"
     r"impact of|falls?|rises?|flat by|by end of year|eoy)\b",
@@ -3365,6 +3365,10 @@ def parse_scenario(prompt: str, context: dict[str, Any]) -> ScenarioResult:
     public_packet = _public_packet(context)
     norm = _normalize(prompt)
     prompt_numbers = _parse_numeric_tokens(prompt)
+    from .cogs_sensitivity import calculate as cogs_sensitivity
+    sensitivity = cogs_sensitivity(prompt, context)
+    if sensitivity is not None:
+        return _hydrate_scenario_result(sensitivity)
 
     # Authenticated chat does not carry the anonymous/public packet marker. It
     # still must use the same source-finance contract as the CEO card instead

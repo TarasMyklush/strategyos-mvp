@@ -108,3 +108,19 @@ def test_persona_context_is_merged_before_authority_and_answer_routing():
     assert request_persona(request)=='cfo'
     with bind_assistant(request,{},default_authority_matrix()):
         assert current_scope.get().subject=='assistant:atlas'
+
+
+def test_human_domain_scope_blocks_bulk_without_opening_database():
+    from strategyos_mvp.assistant_scope import human_domains
+    from strategyos_mvp.access_scope import source_index_allowed
+    token=human_domains.set(frozenset({'finance'}))
+    try:
+        context=PolicyContext('tenant','limited',frozenset({'executive'}),'executive_briefing')
+        assert context.allowed_domains==frozenset({'finance'})
+        repo=ClaimRepository(lambda:pytest.fail('Bulk access reached the database'))
+        assert not repo.run_source_access('run',context=context)['allowed']
+        assert not source_index_allowed('run','tenant')
+        with bind_assistant(SimpleNamespace(persona='ceo'),{'subject':'limited'},default_authority_matrix()):
+            assert current_scope.get().domains==frozenset({'finance'})
+    finally:
+        human_domains.reset(token)

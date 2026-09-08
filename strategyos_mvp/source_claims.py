@@ -422,12 +422,15 @@ class PolicyContext:
     allowed_domains: frozenset[str] | None = None
 
     def __post_init__(self) -> None:
-        from .assistant_scope import current_scope
+        from .assistant_scope import current_scope, human_domains
         from .authority_matrix import DOMAINS
         scope = current_scope.get()
         domains = self.allowed_domains
         if domains is not None and not set(domains).issubset(DOMAINS):
             raise ValueError("Unknown authority domain.")
+        human = human_domains.get()
+        if human is not None:
+            domains = human if domains is None else human.intersection(domains)
         if scope is not None:
             domains = scope.domains if domains is None else scope.domains.intersection(domains)
         object.__setattr__(self, "allowed_domains", domains)

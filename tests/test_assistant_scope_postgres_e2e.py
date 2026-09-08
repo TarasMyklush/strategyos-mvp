@@ -65,3 +65,46 @@ def test_assistant_domain_filters_snapshot_before_source_loading_and_checks_line
     # already displayed in an earlier answer.
     repo.register_source(source,policy=policy,recorded_by='qa',rationale='Revoke executive source access')
     assert repo.snapshot(snapshot,context=reader,revision_id=finance)['records']==[]
+
+
+def test_explicit_human_domains_apply_to_direct_http_claim_reads(ledger, monkeypatch):
+    from fastapi.testclient import TestClient
+    from strategyos_mvp import api, auth, claim_api
+    from strategyos_mvp.assistant_scope import human_domains
+    repo, context, occurrence, source, policy = setup_intake(ledger)
+    repo.register_source(source, policy=replace(policy, allowed_roles=frozenset({'operator','executive'}),
+        allowed_purposes=frozenset({'operations','executive_briefing'})), recorded_by='qa', rationale='Synthetic proof')
+    base=ClaimDraft(tenant_id=context.tenant_id,assertion_namespace='human-proof',subject_type='enterprise',
+        subject_key='group',metric_key='finance.revenue',claim_kind='actual',production_method='imported',
+        value_numeric=120,unit='SAR',currency='SAR',source_occurrence_keys=(occurrence,))
+    finance=repo.record_claim(base,traceability='present',context=context)['claim_revision_id']
+    hr=repo.record_claim(replace(base,metric_key='hr.salary',value_numeric=999),traceability='present',context=context)['claim_revision_id']
+    principal={'subject':'limited','tenant_id':context.tenant_id,'role':'executive','authenticated':True}
+    matrix=default_authority_matrix()
+    matrix['subjects'].append({'id':'user:limited','rights':{'finance':'view'}})
+    monkeypatch.setattr(api,'get_authority_matrix',lambda _:matrix)
+    monkeypatch.setattr(auth,'authenticate_optional_request',lambda **kwargs:principal)
+    monkeypatch.setattr(claim_api,'ClaimRepository',lambda:repo)
+    overrides=dict(api.app.dependency_overrides)
+    api.app.dependency_overrides[auth.authenticate_request]=lambda:principal
+    original=repo._source_details
+    def checked(cur,revision,**kwargs):
+        assert str(revision)!=hr, 'Denied HR values reached source materialization'
+        return original(cur,revision,**kwargs)
+    monkeypatch.setattr(repo,'_source_details',checked)
+    try:
+        client=TestClient(api.app)
+        assert client.get('/api/claims',params={'metric_key':'hr.salary'}).json()['records']==[]
+        allowed=client.get('/api/claims',params={'metric_key':'finance.revenue'})
+        assert allowed.status_code==200,allowed.text
+        assert {r['claim_revision_id'] for r in allowed.json()['records']}=={finance}
+        denied=client.get('/api/claims/runs/arbitrary/reconciliation')
+        assert denied.status_code==403,denied.text
+        assert human_domains.get() is None
+        monkeypatch.setattr(repo,'_source_details',original)
+        principal['subject']='unrestricted'
+        allowed=client.get('/api/claims',params={'metric_key':'hr.salary'})
+        assert {r['claim_revision_id'] for r in allowed.json()['records']}=={hr}
+    finally:
+        api.app.dependency_overrides.clear()
+        api.app.dependency_overrides.update(overrides)

@@ -16,6 +16,18 @@ class AssistantScope:
     domains: frozenset[str]
 
 
+human_domains: ContextVar[frozenset[str] | None] = ContextVar('human_authority_domains', default=None)
+
+
+def human_read_domains(principal: Mapping, matrix: Mapping) -> frozenset[str] | None:
+    subject = 'user:' + str(principal.get('subject') or '')
+    row = next((row for row in matrix.get('subjects', []) if row.get('id') == subject), None)
+    if row is None:
+        return None
+    return frozenset(domain for domain in DOMAINS
+        if RIGHT_RANK.get(row.get('rights', {}).get(domain), 0) >= RIGHT_RANK['view'])
+
+
 current_scope: ContextVar[AssistantScope | None] = ContextVar('assistant_authority_scope', default=None)
 
 
@@ -77,6 +89,9 @@ def bind_assistant(request, principal: Mapping, matrix: Mapping):
     domains = frozenset(domain for domain in DOMAINS
         if RIGHT_RANK.get(assistant.get(domain), 0) >= RIGHT_RANK['view']
         and (human is None or RIGHT_RANK.get(human.get('rights', {}).get(domain), 0) >= RIGHT_RANK['view']))
+    human = human_domains.get()
+    if human is not None:
+        domains = domains.intersection(human)
     token = current_scope.set(AssistantScope(subject, domains))
     try:
         yield

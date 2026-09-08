@@ -699,6 +699,13 @@ class ClaimRepository:
         denied rather than guessing which parts of the prose are restricted.
         Granular callers should use query()/snapshot() instead.
         """
+        from .assistant_scope import human_domains, current_scope
+        from .authority_matrix import DOMAINS
+        # A bounded assistant rebuilds its response from filtered typed claims.
+        # Direct bulk readers cannot classify legacy prose or file contents.
+        human = human_domains.get()
+        if human is not None and human != frozenset(DOMAINS) and current_scope.get() is None:
+            return {"allowed": False, "reasons": ["bulk_domain_scope_requires_claim_view"]}
         connection = self._require_connection()
         with connection as conn:
             self._ensure_schema(conn)

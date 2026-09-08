@@ -1,0 +1,72 @@
+{
+  "dataset": "data/demo/01_Synthetic_Dataset",
+  "classification": "synthetic demo source pack",
+  "question_id": "225",
+  "status": "structured_line_evidence_incomplete",
+  "sources": [
+    {
+      "path": "02_ERP_Extracts/AP_Invoices_H1_2026.xlsx",
+      "sha256": "eaa7410a8041c7b9160d9db0f84498d50bcfb57950b88a722c10e12bfd1c3e05",
+      "columns": [
+        "Invoice_ID",
+        "Vendor_ID",
+        "Vendor_Name",
+        "Invoice_Date",
+        "Due_Date",
+        "Payment_Date",
+        "Amount_SAR",
+        "Amount_Original_Currency",
+        "Currency",
+        "Status",
+        "PO_Reference",
+        "Approver_Email",
+        "Memo"
+      ],
+      "data_rows": 1397
+    },
+    {
+      "path": "02_ERP_Extracts/GRN_Log_H1_2026.csv",
+      "sha256": "2ef9b94b42fedb72cc61a4aaad82e465f9e4ca1281d1644805791a7bfc9a7b4e",
+      "columns": [
+        "GRN_ID",
+        "PO_ID",
+        "Vendor_ID",
+        "Vendor_Name",
+        "SKU",
+        "PO_Qty",
+        "Received_Qty",
+        "Receipt_Date",
+        "Match_Status"
+      ],
+      "data_rows": 502
+    },
+    {
+      "path": "05_Purchase_Orders/PO_Log_H1_2026.csv",
+      "sha256": "a8d1e35a415674799460264f4558bc12fb515e18f31ef2069935ab8df1824174",
+      "columns": [
+        "PO_ID",
+        "Vendor_ID",
+        "Vendor_Name",
+        "PO_Date",
+        "Delivery_Date",
+        "SKU",
+        "Quantity",
+        "Unit_Price",
+        "Currency",
+        "Total",
+        "Status",
+        "Approver"
+      ],
+      "data_rows": 600
+    }
+  ],
+  "invoice_artifact_count": 21,
+  "finding": "AP headers provide invoice amount and PO reference, but no invoice-line quantity, SKU or unit price. GRN records provide PO and receipt quantities but no invoice-line identity. Matching AP totals to PO totals cannot establish invoiced quantity or agreed unit-price compliance without assumptions.",
+  "required_inputs": [
+    "Approved invoice-line quantity and unit price, linked to PO line, SKU and vendor",
+    "Approved tax/currency basis and reconciliation tolerance",
+    "Complete source coverage declaration for the reconciliation period"
+  ],
+  "historical_grade_unchanged": true,
+  "factual_release_gate_passed": false
+}

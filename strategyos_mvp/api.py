@@ -409,12 +409,21 @@ async def bind_authorized_data_scope(request: Request, call_next: Any) -> Any:
                                  # principals or requests.
                                  "_request_cache": {}})
     twin_token = bound_surface.set(None)
+    from .assistant_scope import human_domains, human_read_domains
+    human_token = human_domains.set(None)
     try:
+        if principal.get("authenticated") and not principal.get("auth_disabled"):
+            try:
+                matrix = await asyncio.to_thread(get_authority_matrix, _principal_tenant_id(principal))
+            except AuthorityPolicyUnavailable:
+                return JSONResponse(status_code=503, content={"detail": "Authority policy is unavailable. Access remains closed until the saved policy is restored."})
+            human_domains.set(human_read_domains(principal, matrix))
         response = await call_next(request)
         if principal.get("authenticated"):
             response.headers["Cache-Control"] = "private, no-store"
         return response
     finally:
+        human_domains.reset(human_token)
         bound_surface.reset(twin_token)
         principal_scope.reset(token)
 
