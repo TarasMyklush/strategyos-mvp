@@ -59,6 +59,8 @@ def claim_backed_bundle(records: Iterable[Mapping[str, Any]]) -> DataBundle:
     This is deliberately not an ingestion fallback. It cannot open a dataset
     path and receives only records already filtered by the claim policy engine.
     """
+    from copy import deepcopy
+    records = tuple(deepcopy(dict(record)) for record in records)
     rows: dict[str, list[dict[str, Any]]] = {role: [] for role in _TRANSACTION_ROLE.values()}
     trial_balance: list[dict[str, Any]] = []
     cash_forecast: dict[str, list[dict[str, Any]]] = {}
@@ -110,6 +112,7 @@ def claim_backed_bundle(records: Iterable[Mapping[str, Any]]) -> DataBundle:
         available_roles.append("cash_forecast")
     return DataBundle(
         dataset_root=Path("governed-claim-ledger"),
+        authorized_claim_records=records,
         evidence=None,  # type: ignore[arg-type] -- raw artifacts are intentionally unavailable here.
         ap=frames["ap_ledger"],
         ar=frames["ar_ledger"],

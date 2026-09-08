@@ -1,5 +1,6 @@
 from dataclasses import replace
 from datetime import UTC,datetime
+from uuid import uuid4
 
 import pytest
 
@@ -14,7 +15,7 @@ def test_database_rejects_cross_tenant_links_and_wrong_snapshot_families(ledger)
     import psycopg
     repo,context,occurrence,source,policy=setup_intake(ledger)
     with psycopg.connect(ledger[1]) as conn:
-        foreign=str(conn.execute("insert into strategyos_tenants(slug,display_name) values ('foreign-constraint-proof','Synthetic foreign tenant') returning id").fetchone()[0])
+        foreign=str(conn.execute("insert into strategyos_tenants(slug,display_name) values (%s,'Synthetic foreign tenant') returning id",('foreign-constraint-'+uuid4().hex,)).fetchone()[0])
     other_context=replace(context,tenant_id=foreign)
     repo.register_source(replace(source,tenant_id=foreign),policy=policy,
         recorded_by='qa',rationale='Synthetic foreign fixture')

@@ -12114,6 +12114,16 @@ def _assistant_response_payload(
             "external_consultation": {"requested": bool((assistant_context or {}).get("allow_external_advisory")), "used": False},
             "llm_status": base_result.get("llm_status") or llm_status,
         }
+    from .fact_rendering import CONTRACT as FACT_CONTRACT
+    if (base_result or {}).get("fact_contract") == FACT_CONTRACT:
+        # The renderer owns all factual presentation fields. Orchestration may
+        # select a route but cannot rewrite the approved fact into another claim.
+        return {**base_result, "status":"ok", "run_id":context["run_id"],
+                "run_mode":context["run_mode"],"question":question,"persona":persona,
+                "requested_mode":requested_mode,"mode":response_mode,
+                "assistant_mode":"governed_fact","answered_by":"governed_fact_selection",
+                "determinism_tier":"governed_fact" if base_result.get("matched") else "needs_evidence",
+                "response_sections":{},"executive_blocks":[]}
     trace = dict(getattr(orchestrated, "trace", {}) or {})
     if assistant_context:
         trace["entrypoint_context"] = dict(assistant_context)

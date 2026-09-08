@@ -80,6 +80,7 @@ class DataBundle:
     quality_issues: list[DataQualityIssue] = field(default_factory=list)
     tenant_context: Any = None
     ingestion_job: Any = None
+    authorized_claim_records: tuple[dict[str, Any], ...] | None = None
 
 
 _ROLE_ATTRIBUTES: dict[str, str] = role_attribute_names()

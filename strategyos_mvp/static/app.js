@@ -2495,6 +2495,7 @@
           ${escapeHtml(source + locator)}
         </button>
         ${excerpt}
+        ${/^\/api\/claims\/snapshots\/[^/]+\/revisions\/[^/]+$/.test(String(citation.href || "")) ? `<a href="${escapeHtml(citation.href)}" target="_blank" rel="noopener">Open approved fact</a>` : ""}
       </span>`;
   }
 

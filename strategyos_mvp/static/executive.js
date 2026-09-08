@@ -7159,7 +7159,9 @@
           : '<p>' + bodyHtml + '</p>';
         var citationMarkup = role === 'assistant' && safeArray(payload.citations).length
           ? '<details class="assistant-citation-list"><summary>Evidence · ' + escapeHtml(String(safeArray(payload.citations).length)) + ' source' + (safeArray(payload.citations).length === 1 ? '' : 's') + '</summary><div>' + safeArray(payload.citations).map(function (citation) {
-              return '<article><strong>' + escapeHtml(evidenceReferenceLabel(citation)) + '</strong>' + (citation.excerpt ? '<span>' + escapeHtml(wordSlice(citation.excerpt, 120)) + '</span>' : '') + '</article>';
+              var factLink = /^\/api\/claims\/snapshots\/[^/]+\/revisions\/[^/]+$/.test(String(citation.href || ''))
+                ? '<a href="' + escapeHtml(citation.href) + '" target="_blank" rel="noopener">Open approved fact</a>' : '';
+              return '<article><strong>' + escapeHtml(evidenceReferenceLabel(citation)) + '</strong>' + (citation.excerpt ? '<span>' + escapeHtml(wordSlice(citation.excerpt, 120)) + '</span>' : '') + factLink + '</article>';
             }).join('') + '</div></details>'
           : '';
         var evidenceRefsMarkup = role === 'assistant' && safeArray(message.evidence_refs).length

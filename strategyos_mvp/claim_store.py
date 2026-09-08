@@ -990,6 +990,7 @@ class ClaimRepository:
         *,
         context: PolicyContext,
         metric_keys: Iterable[str] | None = None,
+        revision_id: str | None = None,
         limit: int | None = None,
         offset: int = 0,
     ) -> dict[str, Any]:
@@ -1032,6 +1033,7 @@ class ClaimRepository:
                     join strategyos_claim_revisions r on r.id = sc.claim_revision_id
                     join strategyos_claim_families f on f.id = sc.claim_family_id
                     where sc.snapshot_id = %s
+                      and (%s::text is null or r.id::text = %s)
                       and {domain_clause}
                       and (
                           cardinality(%s::text[]) = 0
@@ -1042,6 +1044,7 @@ class ClaimRepository:
                     """,
                     (
                         snapshot["id"],
+                        revision_id, revision_id,
                         *domain_read_parameters(context.allowed_domains),
                         selected_metric_keys,
                         selected_metric_keys,

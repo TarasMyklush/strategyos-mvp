@@ -38,6 +38,14 @@ def test_assistant_domain_filters_snapshot_before_source_loading_and_checks_line
         assert {r['claim_revision_id'] for r in result['records']}=={finance}
         denied=repo.query(ClaimQuery(context.tenant_id,'hr.salary','executive_briefing',datetime.now(UTC),frozenset({'actual'})),context=reader)
         assert denied==[]
+        assert repo.snapshot(snapshot,context=reader,revision_id=hr)['records']==[]
+        selected=repo.snapshot(snapshot,context=reader,revision_id=finance)['records']
+        assert len(selected)==1 and selected[0]['claim_revision_id']==finance
     monkeypatch.setattr(repo,'_source_details',original)
     reader=replace(context,roles=frozenset({'executive'}),purpose='executive_briefing')
     assert {r['claim_revision_id'] for r in repo.snapshot(snapshot,context=reader)['records']}=={finance,hr,derived}
+
+    # Citation resolution must recheck the current policy, even for a revision
+    # already displayed in an earlier answer.
+    repo.register_source(source,policy=policy,recorded_by='qa',rationale='Revoke executive source access')
+    assert repo.snapshot(snapshot,context=reader,revision_id=finance)['records']==[]

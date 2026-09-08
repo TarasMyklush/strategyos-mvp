@@ -388,3 +388,27 @@ def query_run_reconciliation(
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
+
+
+@router.get("/snapshots/{run_id}/revisions/{revision_id}")
+def resolve_snapshot_fact(
+    run_id: str,
+    revision_id: str,
+    principal: dict[str, Any] = require_role(
+        "executive", "analyst", "auditor", "reviewer", "operator", "tenant_admin", "system", "bu"
+    ),
+) -> dict[str, Any]:
+    """Resolve a displayed fact with current tenant, BU, source and lineage policy."""
+    context = _policy_context(principal, UsePurpose.EXECUTIVE_BRIEFING)
+    try:
+        snapshot = ClaimRepository().snapshot(f"run:{run_id}",context=context,
+            revision_id=revision_id,limit=1)
+        records = snapshot.get("records") or []
+        if not records:
+            raise HTTPException(404,"This fact is not available in the authorized snapshot.")
+        return {"status":"ok","snapshot_key":snapshot["snapshot_key"],
+                "analysis_as_of":snapshot["analysis_as_of"],"record":records[0]}
+    except KeyError:
+        raise HTTPException(404,"This fact is not available in the authorized snapshot.") from None
+    except (ValueError, RuntimeError):
+        raise HTTPException(503,"The fact cannot currently be verified.") from None
