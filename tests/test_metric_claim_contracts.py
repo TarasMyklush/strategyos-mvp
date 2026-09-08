@@ -80,3 +80,26 @@ def test_explicit_unit_only_and_impact_headers_do_not_type_exchange_rates():
     assert not claims_supported('SAR 2120M','Year: 2024; impact: 2120')
     assert not claims_supported('USD 2120M','SAR M impact: 2120')
     assert not claims_supported('SAR 4.2M','SAR M per EUR: 4.2')
+
+
+@pytest.mark.parametrize("candidate,approved", [
+    ("−120", "120"), ("120 USD", "120 SAR"), ("1e6", "1"),
+    ("(SAR 120)", "SAR 120"), ("SAR 120%", "SAR 120"),
+    ("SAR 120 USD", "SAR 120"), ("SAR −120", "SAR 120"),
+])
+def test_financial_notation_cannot_change_sign_unit_or_magnitude(candidate, approved):
+    assert not claims_supported(candidate, approved)
+
+
+@pytest.mark.parametrize("candidate,approved", [
+    ("−120", "-120"), ("120 USD", "USD 120"), ("1e6", "1000000"),
+    ("(SAR 120)", "SAR -120"), ("SAR 1\u202f200", "SAR 1200"),
+    ("120 million USD", "USD 120M"),
+])
+def test_equivalent_financial_notation_retains_typed_value(candidate, approved):
+    assert claims_supported(candidate, approved)
+
+
+@pytest.mark.parametrize("candidate", ["1,2", "SAR 120 million%", "1e9999999999999999999999"])
+def test_ambiguous_or_unbounded_numeric_notation_is_rejected(candidate):
+    assert not claims_supported(candidate, "12; SAR 120M; 1")

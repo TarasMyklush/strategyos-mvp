@@ -2,14 +2,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import re
+import unicodedata
 from typing import Any, Iterable
 
 REFERENCE = re.compile(r"\b(?:EV|SIG|INIT|KPI|RD|INV|PO|HD|CT)-[A-Za-z0-9-]+\b", re.I)
+CURRENCIES = "SAR|USD|EUR|GBP|AED|CHF|JPY|CNY|INR|KWD|QAR|BHD|OMR|CAD|AUD|SGD|HKD"
 QUANTITY = re.compile(
-    r"(?<![\w])(?:(SAR|USD|EUR|GBP|AED|CHF|JPY|CNY|INR|KWD|QAR|BHD|OMR|CAD|AUD|SGD|HKD)\s*)?([-+]?\d[\d,]*(?:\.\d+)?)"
-    r"\s*(billion|million|thousand|trillion|[KMB](?![a-z])|%|bps|basis points?|percentage points?|pts?|days?|weeks?|months?|years?|x\b)?",
+    rf"(?<![\w])(?:({CURRENCIES})\s*)?([-+]?\d[\d,]*(?:\.\d+)?(?:[eE][-+]?\d+)?)"
+    rf"\s*(billion|million|thousand|trillion|[KMB](?![a-z])|%|bps|basis points?|percentage points?|pts?|days?|weeks?|months?|years?|x\b)?"
+    rf"(?:\s*({CURRENCIES})(?![a-z]))?",
     re.I,
 )
 SCALES = {"k": Decimal(1000), "thousand": Decimal(1000), "m": Decimal(1000000),
@@ -44,21 +47,54 @@ def text_fields(value: Any) -> Iterable[str]:
         yield str(value)
 
 
+def _normalized_quantity_text(text: str) -> str:
+    # Financial exports use nonbreaking grouping spaces and mathematical minus.
+    text = re.sub(r"(?<=\d)[\u00a0\u202f](?=\d{3}(?:\D|$))", "", text)
+    return unicodedata.normalize("NFKC", text).replace("−", "-")
+
+
+def _quantity_matches(text: str):
+    text = REFERENCE.sub("", _normalized_quantity_text(text))
+    for match in QUANTITY.finditer(text):
+        prefix, amount, suffix, postfix = match.groups()
+        integer = re.split(r"[.eE]", amount.lstrip("+-"))[0]
+        if len(amount) > 100 or ("," in integer and not re.fullmatch(r"\d{1,3}(?:,\d{3})+", integer)):
+            yield QuantityClaim(Decimal(0), "invalid:notation"), "", amount, None
+            continue
+        try:
+            number = Decimal(amount.replace(",", ""))
+        except InvalidOperation:
+            yield QuantityClaim(Decimal(0), "invalid:notation"), "", amount, None
+            continue
+        if abs(number.as_tuple().exponent) > 1000:
+            yield QuantityClaim(Decimal(0), "invalid:exponent"), "", amount, None
+            continue
+        # Parenthesized amounts are accounting negatives, never positive facts.
+        if text[:match.start()].rstrip().endswith("(") and text[match.end():].lstrip().startswith(")"):
+            number = -abs(number)
+        suffix = (suffix or "").casefold().strip()
+        currency = (prefix or postfix or "").upper()
+        if prefix and postfix and prefix.upper() != postfix.upper():
+            currency = f"invalid:{prefix.upper()}/{postfix.upper()}"
+        scale = SCALES.get(suffix)
+        if scale is not None:
+            number *= scale
+            unit = currency
+        else:
+            unit = f"{currency}:{suffix}" if currency and suffix else currency or suffix
+            if not currency and suffix in {"pt", "pts", "percentage point", "percentage points"}:
+                unit = "percentage_points"
+            elif not currency and suffix in {"bps", "basis point", "basis points"}:
+                unit = "basis_points"
+        if re.match(r"\s*(?:%|bps\b)", text[match.end():]):
+            unit = "invalid:compound-unit"
+        yield QuantityClaim(number, unit), currency, amount, scale
+
+
 def quantities(text: str) -> set[QuantityClaim]:
-    claims = set()
+    text = _normalized_quantity_text(text)
     text = re.sub(r"(?m)^\s*\d+[.)]\s+", "", text)
-    for currency, amount, suffix in QUANTITY.findall(REFERENCE.sub("", text)):
-        number = Decimal(amount.replace(",", ""))
-        suffix = suffix.casefold().strip()
-        if suffix in SCALES:
-            number *= SCALES[suffix]
-            suffix = ""
-        unit = currency.upper() or suffix
-        if suffix in {"pt", "pts", "percentage point", "percentage points"}:
-            unit = "percentage_points"
-        elif suffix in {"bps", "basis point", "basis points"}:
-            unit = "basis_points"
-        claims.add(QuantityClaim(number, unit))
+    claims = {claim for claim, _, _, _ in _quantity_matches(text)}
     # Indexed workbook rows retain their column headings. A header such as
     # 'Budget (SAR M): 758' explicitly supplies both currency and scale.
     for currency, scale, amount in TABLE_AMOUNT.findall(text) + TABLE_UNIT_HEADING.findall(text):
@@ -76,12 +112,14 @@ def unsupported_quantities(candidate: Any, approved: Any) -> set[QuantityClaim]:
     for text in text_fields(candidate):
         requested = quantities(text)
         rounded = set()
-        for currency, amount, suffix in QUANTITY.findall(REFERENCE.sub('', text)):
-            scale = SCALES.get(suffix.casefold().strip())
+        for claim, currency, amount, scale in _quantity_matches(text):
             if not currency or scale is None:
                 continue
             decimal = Decimal(amount.replace(',', ''))
-            value = decimal * scale
+            value = claim.value
+            # Bound exponent work before computing display precision.
+            if abs(decimal.as_tuple().exponent) > 30:
+                continue
             quantum = Decimal(10) ** decimal.as_tuple().exponent * scale
             for fact in allowed:
                 if fact.unit != currency.upper() or not fact.value:
@@ -92,6 +130,7 @@ def unsupported_quantities(candidate: Any, approved: Any) -> set[QuantityClaim]:
                 if value == expected and abs(value - fact.value) / abs(fact.value) <= Decimal('.005'):
                     rounded.add(QuantityClaim(value, currency.upper()))
         missing.update(requested - allowed - rounded)
+        missing.update(claim for claim in requested if claim.unit.startswith("invalid:"))
     return missing
 
 
