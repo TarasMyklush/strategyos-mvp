@@ -606,3 +606,9 @@ jobs:
           TARGET_DIR="${TARGET_DIR}" \
           SSH_OPTS="${SSH_OPTS}" \
           bash deploy/scripts/quiesce_preview.sh
+
+  hosted-human-e2e:
+    name: Walk the deployed executive story
+    needs: deploy
+    uses: ./.github/workflows/strategyos-hosted-human-e2e.yml
+    secrets: inherit

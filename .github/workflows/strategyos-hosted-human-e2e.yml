@@ -1,6 +1,7 @@
 name: StrategyOS Hosted Human E2E
 
 on:
+  workflow_call:
   workflow_dispatch:
 
 permissions:
