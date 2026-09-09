@@ -274,6 +274,54 @@ def test_reconciled_group_bridge_uses_its_declared_formula_without_false_cogs_ga
     assert "includes cost of goods sold" in operating_cost["formula"]
 
 
+def test_cash_contract_uses_declared_billions_and_labels_floor_and_headroom():
+    finance = {
+        "authoritative": True,
+        "derived_from": "deterministic_source_finance_kpi_engine",
+        "reporting_period_key": "H1 2026",
+        "reporting_currency": "SAR",
+        "components": {
+            "cash_balance": "1410000000",
+            "board_floor": "1200000000",
+        },
+        "actual_complete": {"cash_vs_floor": True},
+        "evidence": {
+            "cash_vs_floor": {
+                "files": ["15_Budgets_Forecasts/BU_Group_Budget_2026.xlsx"],
+                "summary": "Current group cash and approved floor.",
+            }
+        },
+        "trend": {
+            "cash_vs_floor": {
+                "labels": ["2025-Q4", "2026-Q1", "2026-Q2"],
+                "actual": ["1320000000", "1370000000", "1410000000"],
+                "plan": ["1300000000", "1340000000", "1380000000"],
+                "floor": ["1200000000", "1200000000", "1200000000"],
+                "has_plan_series": True,
+                "unit": "sar",
+            }
+        },
+    }
+    cards = build_executive_presentation(
+        build_executive_read_model(
+            {"run_id": "cash-contract", "finance_kpi": finance},
+            [],
+            {},
+            {"report_count": 0},
+            {},
+        )
+    )["driver_grid"]
+    cash = next(card for card in cards if card["key"] == "cash_vs_floor")
+
+    assert cash["metric"] == "SAR 1.41B"
+    assert cash["comparison"] == "SAR 0.21B above floor"
+    assert cash["executive_brief"]["calculation"]["steps"] == [
+        {"label": "Reported cash position", "value": "SAR 1.41B"},
+        {"label": "Approved board cash floor", "value": "SAR 1.20B"},
+        {"label": "Headroom above floor", "value": "SAR 0.21B"},
+    ]
+
+
 def test_partial_reconciliation_never_renders_as_evidence_verified():
     finance = finance_payload_from_claim_snapshot(
         {

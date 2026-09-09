@@ -98,6 +98,7 @@ jobs:
 
   intent-mutations:
     name: Intent lifecycle Chromium walkthrough
+    needs: source-finance
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment: hetzner-branch

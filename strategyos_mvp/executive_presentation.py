@@ -36,6 +36,15 @@ def _format_sar(value: Any) -> str:
     return f"SAR {round(number):,}"
 
 
+def _format_sar_billions(value: Any) -> str:
+    """Render the group-liquidity contract in its declared SAR billions unit."""
+    try:
+        number = float(value or 0.0)
+    except (TypeError, ValueError):
+        return "--"
+    return f"SAR {number / 1_000_000_000:.2f}B"
+
+
 def _as_money(value: Any) -> float | None:
     """A money figure the run actually carries, or nothing."""
     if value in (None, ""):
@@ -579,7 +588,7 @@ def _executive_kpi_signal(
         favourable = gap_amount >= 0
         posture = "Above floor" if favourable else "Below floor"
         tone = "positive" if favourable else "critical"
-        variance_label = f"{_format_sar(abs(gap_amount))} {'above' if favourable else 'below'} floor"
+        variance_label = f"{_format_sar_billions(abs(gap_amount))} {'above' if favourable else 'below'} floor"
         recommendation = (
             _accountability_recommendation(
                 action_type="assign_liquidity_remediation",
@@ -588,7 +597,7 @@ def _executive_kpi_signal(
                 owner=None,
                 calendar_items=calendar_items,
                 requested_deliverable="Dated liquidity-remediation plan",
-                success_measure=f"Restore and protect liquidity above the governed floor by {_format_sar(abs(gap_amount))}",
+                success_measure=f"Restore and protect liquidity above the governed floor by {_format_sar_billions(abs(gap_amount))}",
                 source_signal_ids=("cash_vs_floor", *[str(item) for item in evidence_files if str(item)]),
             )
             if not favourable
@@ -795,7 +804,19 @@ def _executive_kpi_brief(
         driver_rows = _contributor_rows(evidence_details, "operating_cost")
         decision_question = "Does the cost position require intervention, and which owner has the largest controllable gap?"
     elif key == "cash_vs_floor":
-        calculation_steps = [{"label": "Reported cash position", "value": metric}]
+        floor = _number_or_none(components.get("board_floor"))
+        headroom = actual - floor if floor is not None else None
+        calculation_steps = [
+            {"label": "Reported cash position", "value": metric},
+            {
+                "label": "Approved board cash floor",
+                "value": _format_sar_billions(floor) if floor is not None else "Not supplied",
+            },
+            {
+                "label": "Headroom above floor" if headroom is not None and headroom >= 0 else "Shortfall to floor",
+                "value": _format_sar_billions(abs(headroom)) if headroom is not None else "Not calculated",
+            },
+        ]
         reported_accounts = list(evidence_details.get("reported_accounts") or [])
         cash_total = sum((_number_or_none(row.get("balance_sar")) or 0) for row in reported_accounts if isinstance(row, Mapping))
         driver_rows = [
@@ -1073,7 +1094,11 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
                 missing_inputs.append("Cost of goods sold bridge input")
         else:
             pct = (actual / comparator) * 100 if comparator not in {None, 0} else None
-            metric = _format_sar(actual)
+            metric = (
+                _format_sar_billions(actual)
+                if spec["key"] == "cash_vs_floor" and comparator is not None
+                else _format_sar(actual)
+            )
             if comparator is None:
                 comparison = "Board floor comparison unavailable" if spec["key"] == "cash_vs_floor" else "Plan comparison unavailable"
                 missing_inputs = [
@@ -1084,7 +1109,7 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
             else:
                 delta = actual - comparator
                 if spec["key"] == "cash_vs_floor":
-                    comparison = f"{_format_sar(delta)} {'above' if delta >= 0 else 'below'} floor"
+                    comparison = f"{_format_sar_billions(abs(delta))} {'above' if delta >= 0 else 'below'} floor"
                 else:
                     comparison = f"{pct:.1f}% of plan"
                 missing_inputs = []
