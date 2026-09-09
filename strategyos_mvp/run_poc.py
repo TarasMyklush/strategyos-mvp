@@ -371,6 +371,7 @@ def _execute_strategyos_workflow(
             "run_resolution": source_pack_payload.get("run_resolution"),
             "file_accounting": source_pack_payload.get("file_accounting"),
             "control_plane_registry": source_pack_payload.get("control_plane_registry"),
+            "normalization_version": source_pack_payload.get("normalization_version"),
             "source_quality": source_pack_payload.get("source_quality"),
             "acceptance_readiness": source_pack_payload.get("acceptance_readiness"),
         }

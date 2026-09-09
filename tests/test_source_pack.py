@@ -30,6 +30,22 @@ def _apply_env(env_updates: dict[str, str | None]):
     return original
 
 
+def test_normalized_xlsx_is_byte_stable_for_release_attestation(tmp_path):
+    from zipfile import ZipFile
+
+    frame = pd.DataFrame({"Invoice_ID": ["INV-1"], "Amount": [125]})
+    first = tmp_path / "first.xlsx"
+    second = tmp_path / "second.xlsx"
+
+    source_pack_module._write_structured_frame(frame, first)
+    source_pack_module._write_structured_frame(frame, second)
+
+    assert first.read_bytes() == second.read_bytes()
+    with ZipFile(first) as workbook:
+        properties = workbook.read("docProps/core.xml").decode("utf-8")
+    assert properties.count("2000-01-01T00:00:00Z") == 2
+
+
 def _restore_env(original: dict[str, str | None]):
     for key, value in original.items():
         if value is None:

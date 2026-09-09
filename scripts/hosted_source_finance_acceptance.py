@@ -29,6 +29,7 @@ EXPECTED_CASH = Decimal("1410000000")
 EXPECTED_FLOOR = Decimal("1200000000")
 EXPECTED_HEADROOM = Decimal("210000000")
 EXPECTED_PROVIDER = "Group Treasury (system feed)"
+EXPECTED_NORMALIZATION_VERSION = "2"
 EXPECTED_TREND = [
     Decimal("1320000000"),
     Decimal("1370000000"),
@@ -98,6 +99,7 @@ def _finance(record: dict) -> dict:
 
 
 def _cash_contract(record: dict, *, source_pack_id: str) -> dict:
+    summary = _summary(record)
     finance = _finance(record)
     components = finance.get("components") if isinstance(finance.get("components"), dict) else {}
     actual_complete = finance.get("actual_complete") if isinstance(finance.get("actual_complete"), dict) else {}
@@ -109,6 +111,9 @@ def _cash_contract(record: dict, *, source_pack_id: str) -> dict:
     headroom = cash - floor if cash is not None and floor is not None else None
     return {
         "matches_source": _source_pack_id(record) == source_pack_id,
+        "normalization_version": str(
+            ((summary.get("source_pack") or {}).get("normalization_version") or "")
+        ),
         "cash": cash,
         "floor": floor,
         "headroom": headroom,
@@ -123,6 +128,7 @@ def _cash_contract(record: dict, *, source_pack_id: str) -> dict:
 def _assert_cash_contract(record: dict, *, source_pack_id: str) -> dict:
     contract = _cash_contract(record, source_pack_id=source_pack_id)
     assert contract["matches_source"] is True, contract
+    assert contract["normalization_version"] == EXPECTED_NORMALIZATION_VERSION, contract
     assert contract["cash"] == EXPECTED_CASH, contract
     assert contract["floor"] == EXPECTED_FLOOR, contract
     assert contract["headroom"] == EXPECTED_HEADROOM, contract

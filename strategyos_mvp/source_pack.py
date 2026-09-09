@@ -81,6 +81,7 @@ IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tif", ".tiff"}
 ARCHIVE_EXTENSIONS = {".zip"}
 IGNORED_NAMES = {".DS_Store"}
 OVERRIDE_FILENAME = "mapping_overrides.json"
+SOURCE_PACK_NORMALIZATION_VERSION = "2"
 
 ROLE_LABELS = role_labels()
 ROLE_TARGET_PATHS = role_target_paths()
@@ -1174,6 +1175,15 @@ def _load_structured_frame(path: Path) -> pd.DataFrame:
 def _write_structured_frame(frame: pd.DataFrame, destination: Path) -> None:
     if destination.suffix.lower() == ".csv":
         frame.to_csv(destination, index=False)
+    elif destination.suffix.lower() == ".xlsx":
+        # The governed source manifest hashes normalized bytes.  XlsxWriter's
+        # default package metadata contains the current time, which made an
+        # unchanged validation rewrite identical workbooks with new hashes and
+        # invalidate an already approved checkpoint.  Pin the package clock so
+        # normalization is byte-for-byte reproducible.
+        with pd.ExcelWriter(destination, engine="xlsxwriter") as writer:
+            writer.book.set_properties({"created": datetime(2000, 1, 1)})
+            frame.to_excel(writer, index=False)
     else:
         frame.to_excel(destination, index=False)
 
@@ -1605,6 +1615,7 @@ def _payload_for(
         "classification_summary": _classification_summary(manifest),
         "file_accounting": file_accounting,
         "control_plane_registry": _control_plane_registry(manifest),
+        "normalization_version": SOURCE_PACK_NORMALIZATION_VERSION,
         "source_quality": source_quality,
         "acceptance_readiness": acceptance_readiness,
         "task_readiness": build_task_readiness(manifest, raw_root=raw_root),
