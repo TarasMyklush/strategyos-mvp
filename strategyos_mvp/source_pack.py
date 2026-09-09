@@ -60,7 +60,9 @@ SUPPORTED_EXTENSIONS = {
     ".csv",
     ".json",
     ".md",
+    ".docx",
     ".pdf",
+    ".pptx",
     ".png",
     ".jpg",
     ".jpeg",
@@ -70,9 +72,11 @@ SUPPORTED_EXTENSIONS = {
     ".tsv",
     ".xls",
     ".xlsx",
+    ".yaml",
+    ".yml",
 }
 TABULAR_EXTENSIONS = {".csv", ".json", ".tsv", ".xls", ".xlsx"}
-DOCUMENT_EXTENSIONS = {".md", ".pdf", ".txt"}
+DOCUMENT_EXTENSIONS = {".docx", ".md", ".pdf", ".pptx", ".txt", ".yaml", ".yml"}
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tif", ".tiff"}
 ARCHIVE_EXTENSIONS = {".zip"}
 IGNORED_NAMES = {".DS_Store"}
@@ -215,10 +219,16 @@ def _file_type_hint(path: Path) -> str:
             return "tsv"
         return "json"
     if suffix in DOCUMENT_EXTENSIONS:
+        if suffix == ".docx":
+            return "word_document"
         if suffix == ".pdf":
             return "pdf"
+        if suffix == ".pptx":
+            return "presentation"
         if suffix == ".md":
             return "markdown"
+        if suffix in {".yaml", ".yml"}:
+            return "yaml"
         return "text"
     if suffix in IMAGE_EXTENSIONS:
         return "image"
@@ -227,11 +237,11 @@ def _file_type_hint(path: Path) -> str:
 
 def _extraction_status(path: Path) -> str:
     hint = _file_type_hint(path)
-    if hint in {"pdf", "image"}:
+    if hint in {"pdf", "image", "word_document", "presentation"}:
         return "pending"
     # Plain text and Markdown require no OCR/extraction tranche. Classification
     # reads their raw content directly, so reporting them as pending is false.
-    if hint in {"text", "markdown"}:
+    if hint in {"text", "markdown", "yaml"}:
         return "ok"
     if hint == "unsupported":
         return "unsupported"
@@ -471,8 +481,11 @@ def _build_structured_classification(
 def _extract_text_sample(path: Path, *, max_chars: int = 8000) -> tuple[str, str | None]:
     suffix = path.suffix.lower()
     try:
-        if suffix in {".txt", ".md"}:
+        if suffix in {".txt", ".md", ".yaml", ".yml"}:
             return path.read_text(encoding="utf-8", errors="ignore")[:max_chars], None
+        if suffix in {".docx", ".pptx"}:
+            from .office_text import extract_office_text
+            return "\n".join(text for _locator, text in extract_office_text(path))[:max_chars], None
         if suffix == ".pdf":
             reader = PdfReader(str(path))
             pages: list[str] = []
@@ -653,6 +666,36 @@ def _extract_image_text_records(path: Path, *, max_chars: int = 8000) -> dict[st
     return _summarize_text_extraction([record], max_chars=max_chars)
 
 
+def _extract_office_text_records(path: Path, *, max_chars: int = 8000) -> dict[str, Any]:
+    from .office_text import extract_office_text
+
+    try:
+        extracted = extract_office_text(path)
+    except ValueError as exc:
+        return _summarize_text_extraction(
+            [{
+                "page": 1,
+                "status": "failed",
+                "engine": "ooxml",
+                "extracted_text": "",
+                "failure_reason": str(exc),
+            }],
+            max_chars=max_chars,
+        )
+    records = [
+        {
+            "page": number,
+            "locator": locator,
+            "status": "ok",
+            "engine": "ooxml",
+            "extracted_text": text[:max_chars],
+            "failure_reason": None,
+        }
+        for number, (locator, text) in enumerate(extracted, start=1)
+    ]
+    return _summarize_text_extraction(records, max_chars=max_chars)
+
+
 def _attach_text_extraction(manifest: list[dict[str, Any]], raw_root: Path) -> None:
     for item in manifest:
         if not item.get("supported"):
@@ -664,6 +707,8 @@ def _attach_text_extraction(manifest: list[dict[str, Any]], raw_root: Path) -> N
             extraction = _extract_pdf_text_records(path)
         elif hint == "image":
             extraction = _extract_image_text_records(path)
+        elif hint in {"word_document", "presentation"}:
+            extraction = _extract_office_text_records(path)
         if extraction is None:
             continue
         extraction = _guard_text_extraction_payload(
@@ -803,7 +848,7 @@ def _classify_document_source(path: Path, item: dict[str, Any]) -> dict[str, Any
     text_extraction = item.get("text_extraction") or {}
     text = raw_document_text(text_extraction)
     error = None
-    if not text and path.suffix.lower() in {".txt", ".md"}:
+    if not text and path.suffix.lower() in {".txt", ".md", ".yaml", ".yml"}:
         text, error = _extract_text_sample(path)
     if error:
         return _classified_entry(
@@ -914,7 +959,7 @@ def _classify_manifest(manifest: list[dict[str, Any]], raw_root: Path, *, source
             continue
         if hint in {"spreadsheet", "csv", "tsv", "json"}:
             classification = _classify_structured_source(path)
-        elif hint in {"pdf", "text", "markdown", "image"}:
+        elif hint in {"pdf", "text", "markdown", "yaml", "word_document", "presentation", "image"}:
             classification = _classify_document_source(path, item)
         else:
             classification = _classified_entry(

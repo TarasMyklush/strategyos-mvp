@@ -183,25 +183,17 @@ def source_records(evidence):
             for page, text in enumerate(evidence.pdf_text[relative], start=1):
                 for chunk in vector_store._chunk_text(text):
                     yield relative, entry['sha256'], f'PDF page {page}', chunk
-        elif path.suffix.lower() in {'.txt', '.md'}:
+        elif path.suffix.lower() in {'.txt', '.md', '.yaml', '.yml'}:
             text = path.read_text(encoding='utf-8-sig')
             if len(text) > 2_000_000:
                 raise ValueError(f'{relative}: text exceeds reviewed indexing capacity.')
             for number, chunk in enumerate(vector_store._chunk_text(text), start=1):
                 yield relative, entry['sha256'], f'Text chunk {number}', chunk
-        elif path.suffix.lower() == '.docx':
-            from zipfile import ZipFile
-            from xml.etree import ElementTree
-            with ZipFile(path) as archive:
-                info = archive.getinfo('word/document.xml')
-                if info.file_size > 2_000_000:
-                    raise ValueError(f'{relative}: document exceeds reviewed indexing capacity.')
-                document = ElementTree.fromstring(archive.read(info))
-            namespace = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
-            for number, paragraph in enumerate(document.iter(namespace + 'p'), start=1):
-                text = ''.join(node.text or '' for node in paragraph.iter(namespace + 't'))
+        elif path.suffix.lower() in {'.docx', '.pptx'}:
+            from .office_text import extract_office_text
+            for locator, text in extract_office_text(path):
                 for chunk in vector_store._chunk_text(text):
-                    yield relative, entry['sha256'], f'Document paragraph {number}', chunk
+                    yield relative, entry['sha256'], locator, chunk
         elif path.suffix.lower() == '.xlsx':
             from openpyxl import load_workbook
             book = load_workbook(path, read_only=True, data_only=True)

@@ -141,14 +141,49 @@ def test_cache_bootstrap_adopts_only_matching_tenant_source_vectors(monkeypatch)
 def test_source_index_includes_text_briefings_and_office_paragraphs(tmp_path):
     from zipfile import ZipFile
     (tmp_path/'brief.txt').write_text('Inventory build requires working capital. اختبار')
+    (tmp_path/'dimensions.yaml').write_text('dimensions:\n  - region\n  - product\n')
     with ZipFile(tmp_path/'charter.docx','w') as archive:
         archive.writestr('word/document.xml','<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Owner: review committee</w:t></w:r></w:p></w:body></w:document>')
+    with ZipFile(tmp_path/'board.pptx','w') as archive:
+        archive.writestr('ppt/slides/slide2.xml','<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:t>Second slide</a:t></p:sld>')
+        archive.writestr('ppt/slides/slide1.xml','<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:t>Board headline</a:t></p:sld>')
     manifest={path.name:{'sha256':hashlib.sha256(path.read_bytes()).hexdigest()} for path in tmp_path.iterdir()}
     evidence=SimpleNamespace(dataset_root=tmp_path,manifest=manifest,pdf_text={})
     rows=list(source_search.source_records(evidence))
-    assert {row[0] for row in rows}=={'brief.txt','charter.docx'}
-    assert rows[0][2]=='Text chunk 1' and 'اختبار' in rows[0][3]
-    assert rows[1][2:] == ('Document paragraph 1','Owner: review committee')
+    by_source = {}
+    for row in rows:
+        by_source.setdefault(row[0], []).append(row[2:])
+    assert set(by_source)=={'brief.txt','charter.docx','board.pptx'}
+    assert by_source['brief.txt'][0][0]=='Text chunk 1' and 'اختبار' in by_source['brief.txt'][0][1]
+    assert by_source['charter.docx'] == [('Document paragraph 1','Owner: review committee')]
+    assert by_source['board.pptx'] == [
+        ('Presentation slide 1', 'Board headline'),
+        ('Presentation slide 2', 'Second slide'),
+    ]
+
+
+def test_office_extraction_rejects_unsafe_archive_paths(tmp_path):
+    from zipfile import ZipFile
+    from strategyos_mvp.office_text import extract_office_text
+
+    path = tmp_path / 'unsafe.docx'
+    with ZipFile(path, 'w') as archive:
+        archive.writestr('../word/document.xml', '<document/>')
+    with pytest.raises(ValueError, match='unsafe archive path'):
+        extract_office_text(path)
+
+
+def test_office_extraction_rejects_duplicate_parts(tmp_path):
+    from zipfile import ZipFile
+    from strategyos_mvp.office_text import extract_office_text
+
+    path = tmp_path / 'duplicate.docx'
+    with pytest.warns(UserWarning, match='Duplicate name'):
+        with ZipFile(path, 'w') as archive:
+            archive.writestr('word/document.xml', '<document/>')
+            archive.writestr('word/document.xml', '<document/>')
+    with pytest.raises(ValueError, match='duplicate archive entries'):
+        extract_office_text(path)
 
 
 def test_source_citations_resolve_streamed_rows_and_exact_text_locations(tmp_path):

@@ -24,6 +24,46 @@ from .source_claims import (
 )
 
 
+def _authoritative_revision_sql(alias: str) -> str:
+    """SQL predicate for revisions allowed to participate in current truth.
+
+    Revisions written by a governed run remain review candidates until that run
+    completes and satisfies its approval requirement. Direct ledger revisions
+    and ingestion batches without a run retain their existing behavior.
+    """
+
+    if alias not in {"r", "r2", "rev", "newer"}:
+        raise ValueError("Unsupported claim-revision SQL alias.")
+    return f"""
+        (
+            not exists (
+                select 1 from strategyos_ingestion_batch_claims visibility_ibc
+                where visibility_ibc.claim_revision_id = {alias}.id
+            )
+            or exists (
+                select 1
+                from strategyos_ingestion_batch_claims visibility_ibc
+                join strategyos_ingestion_batches visibility_batch
+                  on visibility_batch.id = visibility_ibc.ingestion_batch_id
+                 and visibility_batch.tenant_id = visibility_ibc.tenant_id
+                left join strategyos_runs visibility_run
+                  on visibility_run.id = visibility_batch.run_id
+                where visibility_ibc.claim_revision_id = {alias}.id
+                  and (
+                    visibility_batch.run_id is null
+                    or (
+                        visibility_run.status in ('completed', 'succeeded')
+                        and (
+                            not visibility_run.requires_human_review
+                            or visibility_run.approved_at is not null
+                        )
+                    )
+                  )
+            )
+        )
+    """
+
+
 ConnectionFactory = Callable[[], tuple[Any | None, dict[str, Any] | None]]
 
 
@@ -712,7 +752,7 @@ class ClaimRepository:
             with conn.cursor() as cur:
                 tenant_id = self._tenant_uuid(cur, context.tenant_id)
                 cur.execute(
-                    """
+                    f"""
                     with recursive run_roots(id) as (
                         select sc.claim_revision_id
                         from strategyos_analysis_snapshots s
@@ -772,6 +812,7 @@ class ClaimRepository:
                                  on newer.claim_family_id=old.claim_family_id
                                 and newer.revision_number>old.revision_number
                                where newer.recorded_at<=now()
+                                 and {_authoritative_revision_sql('newer')}
                            ) as revised_inputs
                     from run_sources r
                     join strategyos_source_systems ss on ss.id = r.source_system_id
@@ -877,6 +918,7 @@ class ClaimRepository:
                           select max(r2.revision_number)
                           from strategyos_claim_revisions r2
                           where r2.claim_family_id = r.claim_family_id and r2.recorded_at <= %s
+                            and {_authoritative_revision_sql('r2')}
                       )
                     order by f.period_end desc nulls last, r.recorded_at desc
                     """,
@@ -958,11 +1000,12 @@ class ClaimRepository:
                 context = replace(context,tenant_id=str(self._tenant_uuid(cur,context.tenant_id)))
                 cur.execute('select clock_timestamp()')
                 at = cur.fetchone()[0]
-                cur.execute('''select r.*,f.family_key,f.assertion_namespace,f.subject_type,
+                cur.execute(f'''select r.*,f.family_key,f.assertion_namespace,f.subject_type,
                     f.subject_key,f.metric_key,f.business_unit,f.dimensions,f.period_start,
                     f.period_end,f.scenario_key from strategyos_claim_families f
                     join lateral (select rev.* from strategyos_claim_revisions rev
-                        where rev.claim_family_id=f.id order by revision_number desc limit 1) r on true
+                        where rev.claim_family_id=f.id and {_authoritative_revision_sql('rev')}
+                        order by revision_number desc limit 1) r on true
                     where f.tenant_id=%s and f.id>%s::uuid and r.production_method='calculated'
                     order by f.id limit %s''',(context.tenant_id,cursor,limit+1))
                 rows = [_record(cur,row) for row in cur.fetchall()]
@@ -1592,7 +1635,7 @@ class ClaimRepository:
         A rejected later revision does not authorize falling back to an older one.
         Only a boolean is exposed: inaccessible replacement values never leak.
         """
-        cur.execute("""with recursive lineage(id) as (
+        cur.execute(f"""with recursive lineage(id) as (
             select %s::uuid
             union
             select d.input_claim_revision_id from strategyos_claim_dependencies d
@@ -1603,6 +1646,7 @@ class ClaimRepository:
             join strategyos_claim_revisions newer on newer.claim_family_id=r.claim_family_id
                 and newer.revision_number>r.revision_number
             where newer.recorded_at<=%s
+              and {_authoritative_revision_sql('newer')}
         )""", (revision_id, as_of_at))
         return bool(cur.fetchone()[0])
 

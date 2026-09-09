@@ -31,13 +31,13 @@ def policy(item):
 
 
 def load_leaf_batch(cur, rows, *, tenant_id, as_of_at):
-    from .claim_store import _record
+    from .claim_store import _authoritative_revision_sql, _record
     ids=[str(row['id']) for row in rows if str(row.get('claim_kind'))!='unknown']
     if not ids:
         return {}
-    cur.execute('''select r.id, not exists (select 1 from strategyos_claim_revisions newer
+    cur.execute(f'''select r.id, not exists (select 1 from strategyos_claim_revisions newer
         where newer.claim_family_id=r.claim_family_id and newer.revision_number>r.revision_number
-        and newer.recorded_at<=%s) as current
+        and newer.recorded_at<=%s and {_authoritative_revision_sql('newer')}) as current
         from strategyos_claim_revisions r where r.id=any(%s::uuid[]) and r.tenant_id=%s
         and not exists (select 1 from strategyos_claim_dependencies d where d.derived_claim_revision_id=r.id)''',
         (datetime.now(UTC),ids,tenant_id))

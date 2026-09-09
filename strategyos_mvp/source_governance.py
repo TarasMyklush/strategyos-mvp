@@ -46,6 +46,10 @@ _NON_DETECTOR_DIRS = {
     RESTRICTED_CONTEXT_DIR,
     QUARANTINED_CONTEXT_DIR,
 }
+_CONTROL_PLANE_CONFIG_NAMES = (
+    "board_pack_template",
+    "plan_decomposition_structure",
+)
 
 
 def _parts(relative_path: str) -> tuple[str, ...]:
@@ -65,6 +69,14 @@ def initial_source_disposition(relative_path: str, *, supported: bool = True) ->
     parts = _parts(relative_path)
     name = parts[-1] if parts else ""
     if any(part in _CONTROL_PLANE_PARTS for part in parts):
+        return CONTROL_PLANE
+    # Declarative pack configuration controls product behavior and must never
+    # become evidence merely because its prose resembles a contract, plan, or
+    # board document. YAML is reserved for configuration in source packs; the
+    # named JSON contracts are the corresponding structured control files.
+    if name.endswith((".yaml", ".yml")) or any(
+        marker in name for marker in _CONTROL_PLANE_CONFIG_NAMES
+    ):
         return CONTROL_PLANE
     if name.startswith("readme") or any('question_bank' in part or 'answer_key' in part for part in parts):
         return EVALUATOR_ONLY

@@ -438,6 +438,42 @@ def test_source_pack_text_extraction_failures_are_recorded_without_blocking_inta
         _restore_env(original)
 
 
+def test_source_pack_governs_word_powerpoint_and_yaml_as_text_sources(tmp_path):
+    from zipfile import ZipFile
+
+    raw_root = tmp_path / "raw"
+    raw_root.mkdir()
+    with ZipFile(raw_root / "Invoice_Decision.docx", "w") as archive:
+        archive.writestr(
+            "word/document.xml",
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Invoice Number INV-77 Bill To Tamween Amount Due</w:t></w:r></w:p></w:body></w:document>',
+        )
+    with ZipFile(raw_root / "Board_Update.pptx", "w") as archive:
+        archive.writestr(
+            "ppt/slides/slide1.xml",
+            '<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:t>Board update with governed evidence</a:t></p:sld>',
+        )
+    (raw_root / "Dimension_Config.yaml").write_text("dimensions:\n  region: enabled\n")
+    (raw_root / "Plan_Decomposition_Structure_v1.json").write_text('{"dimensions":["region"]}')
+    (raw_root / "Board_Pack_Template_v1.json").write_text('{"sections":["headline"]}')
+
+    manifest = source_pack_module._build_manifest(raw_root, source_pack_id="office-yaml-test")
+    source_pack_module._classify_manifest(manifest, raw_root, source_pack_id="office-yaml-test")
+    by_name = {item["relative_path"]: item for item in manifest}
+
+    assert all(item["supported"] for item in manifest)
+    assert by_name["Invoice_Decision.docx"]["file_type_hint"] == "word_document"
+    assert by_name["Invoice_Decision.docx"]["extraction_status"] == "ok"
+    assert by_name["Invoice_Decision.docx"]["classification"]["role"] == "invoice_document"
+    assert by_name["Board_Update.pptx"]["file_type_hint"] == "presentation"
+    assert by_name["Board_Update.pptx"]["extraction_status"] == "ok"
+    assert by_name["Dimension_Config.yaml"]["file_type_hint"] == "yaml"
+    assert by_name["Dimension_Config.yaml"]["source_disposition"] == "control_plane"
+    assert by_name["Dimension_Config.yaml"]["classification"]["status"] == "excluded"
+    assert by_name["Plan_Decomposition_Structure_v1.json"]["source_disposition"] == "control_plane"
+    assert by_name["Board_Pack_Template_v1.json"]["source_disposition"] == "control_plane"
+
+
 def test_source_pack_prompt_injection_payload_is_wrapped_as_untrusted_evidence(tmp_path, monkeypatch):
     workspace_root = tmp_path / "workspace"
     output_root = workspace_root / "outputs"
