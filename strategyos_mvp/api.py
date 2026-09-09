@@ -11651,7 +11651,7 @@ def _resolve_qa_context(run_id: str | None) -> dict[str, Any]:
 
 
 def _hydrate_governed_qa_context(
-    context: dict[str, Any], *, principal: Mapping[str, Any]
+    context: dict[str, Any], *, principal: Mapping[str, Any], question: str | None = None
 ) -> dict[str, Any]:
     """Attach only policy-filtered snapshot records to deterministic/model QA."""
     summary = context.get("summary") if isinstance(context.get("summary"), Mapping) else {}
@@ -11679,7 +11679,11 @@ def _hydrate_governed_qa_context(
         ),
     )
     try:
-        snapshot = ClaimRepository().snapshot(f"run:{run_id}", context=policy_context)
+        snapshot = ClaimRepository().snapshot(
+            f"run:{run_id}",
+            context=policy_context,
+            metric_keys=_assistant_claim_metric_keys(question) if question is not None else None,
+        )
     except (KeyError, RuntimeError):
         raise HTTPException(
             status_code=503,
@@ -11703,6 +11707,33 @@ def _hydrate_governed_qa_context(
     context["governed_claim_denied_count"] = int(snapshot.get("denied_count") or 0)
     context["data_boundary"] = "authorized_claim_snapshot"
     return context
+
+
+def _assistant_claim_metric_keys(question: str) -> frozenset[str]:
+    """Select the governed claim families needed for an assistant question.
+
+    Raw transaction claims can outnumber dimensional executive facts by tens of
+    thousands. Loading all of them before routing every greeting or KPI question
+    blocks the API and adds no evidence. Keep the complete executive, trial
+    balance, and cash forecast scope; add transactions for explicit transaction
+    or counterparty questions.
+    """
+    metric_keys = {
+        *FINANCE_HEADLINE_METRIC_KEYS,
+        *FINANCE_PRESENTATION_METRIC_KEYS,
+        "finance.trial_balance.net",
+        "finance.cash_forecast.balance",
+    }
+    normalized = " ".join(str(question or "").casefold().split())
+    if re.search(
+        r"\b(invoice|invoices|payable|payables|receivable|receivables|payment|payments|"
+        r"vendor|vendors|supplier|suppliers|customer|customers|client|clients|"
+        r"transaction|transactions|purchase order|purchase orders|duplicate|duplicates|"
+        r"ap ledger|ar ledger|po number|po id)\b",
+        normalized,
+    ):
+        metric_keys.add("finance.transaction.amount")
+    return frozenset(metric_keys)
 
 
 def _resolve_public_assistant_context(
@@ -15443,7 +15474,7 @@ async def _assistant_chat_response(
             principal=principal_context,
         )
         context["authenticated_role"] = str(principal_context.get("role") or "")
-        context = _hydrate_governed_qa_context(context, principal=principal_context)
+        context = _hydrate_governed_qa_context(context, principal=principal_context, question=question)
     llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
 
     if _question_has_semantic_kpi_mismatch(question) or _question_has_semantic_self_reference(question):
@@ -16487,7 +16518,7 @@ def _data_qa_scoped(request: QaRequest, _: dict[str, Any]) -> dict[str, Any]:
         context["summary"] = _summary_with_governed_claim_snapshot(
             context["summary"], principal=_,
         )
-        context = _hydrate_governed_qa_context(context, principal=_)
+        context = _hydrate_governed_qa_context(context, principal=_, question=question)
     orchestrator = get_orchestrator()
 
     def _risk_payload(response_mode: str, basis: str, matched: bool, status_payload: dict[str, Any] | None = None) -> dict[str, Any]:

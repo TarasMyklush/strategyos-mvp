@@ -5996,3 +5996,15 @@ def test_provider_thread_pool_preserves_each_requests_authorized_scope(monkeypat
         assert result==[{'tenant_id':'tenant-a','subject':'tenant-a-user'},{'tenant_id':'tenant-b','subject':'tenant-b-user'}]
         assert principal_scope.get() is None
     asyncio.run(check())
+
+
+def test_assistant_claim_hydration_excludes_unrelated_raw_transactions():
+    executive = api_module._assistant_claim_metric_keys("Explain the main operating cost concern")
+    transaction = api_module._assistant_claim_metric_keys("Which vendor invoices are duplicate payments?")
+
+    assert "ceo.operating_cost" in executive
+    assert "ceo.presentation.cost_component" in executive
+    assert "finance.trial_balance.net" in executive
+    assert "finance.cash_forecast.balance" in executive
+    assert "finance.transaction.amount" not in executive
+    assert "finance.transaction.amount" in transaction

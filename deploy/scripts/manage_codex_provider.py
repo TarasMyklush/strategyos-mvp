@@ -10,6 +10,7 @@ import secrets
 import shutil
 import subprocess
 from pathlib import Path
+from urllib.parse import urlsplit
 
 TARGETS = {
     "preview": (Path("/opt/strategyos-branch"), "strategyos-branch"),
@@ -29,6 +30,37 @@ def save_private(path, content):
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(descriptor, "w") as stream:
         stream.write(content)
+
+
+def runtime_env_args(root, target):
+    """Return the database-role environment used by the selected deployment.
+
+    Preview releases generate separate request, worker, and projector database
+    credentials during migration. Any later Compose recreation must load that
+    same file or the branch override deliberately resolves to an unusable
+    `unconfigured` identity.
+    """
+    if target != "preview":
+        return []
+    path = root / "runtime-database/runtime.env"
+    if not path.is_file():
+        raise SystemExit("Preview runtime database credentials are missing; run the governed deployment first")
+    entries = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line and not line.startswith("#") and "=" in line:
+            key, value = line.split("=", 1)
+            entries[key] = value
+    expected = {
+        "STRATEGYOS_RUNTIME_DATABASE_URL": "strategyos_preview_runtime",
+        "STRATEGYOS_WORKER_DATABASE_URL": "strategyos_preview_worker",
+        "STRATEGYOS_PROJECTOR_DATABASE_URL": "strategyos_preview_projector",
+    }
+    for key, username in expected.items():
+        value = entries.get(key, "")
+        parsed = urlsplit(value)
+        if parsed.username != username or not parsed.password or parsed.hostname != "postgres":
+            raise SystemExit(f"Preview runtime database credentials are invalid for {key}")
+    return ["--env-file", str(path)]
 
 
 def main():
@@ -57,6 +89,7 @@ def main():
     for file in config_files:
         compose += ["-f", file]
     compose += ["--env-file", str(ROOT / "app/deploy/.env"), "--env-file", str(ROOT / "app/deploy/.env.secrets")]
+    compose += runtime_env_args(ROOT, args.target)
     baseline = compose + ["-f", str(PROVIDER / "activation-images.json")]
     marker = PROVIDER / "enabled"
     if args.mode == "rollback":

@@ -32,14 +32,18 @@ answer = llm_qa._call_openai_compatible_chat(
 )
 assert json.loads(answer)["answer"].lower() == "ok"
 print(json.dumps({"transport": "hermes", "provider": status["provider"], "model_selection": status["model"], "passed": True}), flush=True)
-specialist = _call_litellm_reasoning(
-    config=config, stage="perception", input_context={
-        "role": "cfo", "evidence_refs": [],
-        "instruction": "No business evidence is provided. Return an empty items array; do not invent an issue.",
-    },
-)
-assert isinstance(json.loads(specialist), dict)
-print(json.dumps({"transport": "specialist", "structured_response": True}), flush=True)
+try:
+    _call_litellm_reasoning(
+        config=config, stage="perception", input_context={
+            "role": "cfo", "evidence_refs": [],
+            "instruction": "No business evidence is provided. Return an empty items array; do not invent an issue.",
+        },
+    )
+except RuntimeError as error:
+    assert "Source permission required" in str(error), str(error)
+else:
+    raise AssertionError("Specialist reasoning bypassed source authority")
+print(json.dumps({"transport": "specialist", "unpermissioned_source_rejected": True}), flush=True)
 
 if "--http" in sys.argv:
     credentials = urlencode({

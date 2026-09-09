@@ -4,6 +4,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+import pytest
+
 
 SCRIPT = Path(__file__).resolve().parents[1] / "deploy/scripts/manage_codex_provider.py"
 
@@ -26,3 +28,34 @@ def test_invalid_target_fails_before_host_access():
 
 def test_preview_remains_default():
     assert 'choices=tuple(TARGETS), default="preview"' in SCRIPT.read_text()
+
+
+def test_preview_provider_reuses_governed_runtime_database_credentials(tmp_path):
+    spec = importlib.util.spec_from_file_location("codex_deployment_runtime", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    runtime = tmp_path / "runtime-database/runtime.env"
+    runtime.parent.mkdir()
+    runtime.write_text(
+        "STRATEGYOS_RUNTIME_DATABASE_URL=postgresql://strategyos_preview_runtime:request@postgres/strategyos\n"
+        "STRATEGYOS_WORKER_DATABASE_URL=postgresql://strategyos_preview_worker:worker@postgres/strategyos\n"
+        "STRATEGYOS_PROJECTOR_DATABASE_URL=postgresql://strategyos_preview_projector:projector@postgres/strategyos\n"
+    )
+
+    assert module.runtime_env_args(tmp_path, "preview") == ["--env-file", str(runtime)]
+    assert module.runtime_env_args(tmp_path, "production") == []
+
+
+def test_preview_provider_rejects_missing_or_unscoped_runtime_database_credentials(tmp_path):
+    spec = importlib.util.spec_from_file_location("codex_deployment_invalid_runtime", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    with pytest.raises(SystemExit, match="credentials are missing"):
+        module.runtime_env_args(tmp_path, "preview")
+
+    runtime = tmp_path / "runtime-database/runtime.env"
+    runtime.parent.mkdir()
+    runtime.write_text("STRATEGYOS_RUNTIME_DATABASE_URL=postgresql://unconfigured@postgres/strategyos\n")
+    with pytest.raises(SystemExit, match="credentials are invalid"):
+        module.runtime_env_args(tmp_path, "preview")
