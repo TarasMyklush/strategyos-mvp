@@ -39,12 +39,17 @@ def test_ambiguous_finance_is_retained_as_unknown_without_derived_actual(monkeyp
             "source_semantics_version": "2",
             "components": {"revenue_actual": None, "ebitda_actual": "20", "revenue_plan": "95"},
             "ambiguous_components": {"revenue_actual": {"value": "100", "reason": "Actual/Est is ambiguous"}},
+            "kpi_source_contracts": {
+                "revenue": {"provider": "Group FP&A (system feed)", "source_type": "system-of-record"},
+            },
         },
     )
     assert result == {"claims": 3, "exceptions": 0}
     revenue = next(item for item in written if item["metric_key"] == "ceo.revenue" and item["value_numeric"] == 100)
     assert revenue["claim_kind"] == ClaimKind.UNKNOWN
     assert revenue["metadata"]["quarantine_reasons"] == ["Actual/Est is ambiguous"]
+    assert revenue["dimensions"]["source_contract_provider"] == "Group FP&A (system feed)"
+    assert revenue["dimensions"]["source_contract_type"] == "system-of-record"
     assert not any(item["metric_key"] == "ceo.ebitda_margin" for item in written)
 
 

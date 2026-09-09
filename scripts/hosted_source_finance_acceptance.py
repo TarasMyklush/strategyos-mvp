@@ -28,6 +28,7 @@ PLAN_ID = "pd-tw-2026-v1-plan"
 EXPECTED_CASH = Decimal("1410000000")
 EXPECTED_FLOOR = Decimal("1200000000")
 EXPECTED_HEADROOM = Decimal("210000000")
+EXPECTED_PROVIDER = "Group Treasury (system feed)"
 EXPECTED_TREND = [
     Decimal("1320000000"),
     Decimal("1370000000"),
@@ -114,7 +115,7 @@ def _cash_contract(record: dict, *, source_pack_id: str) -> dict:
         "trend": actuals,
         "complete": actual_complete.get("cash_vs_floor") is True,
         "provider": str(
-            ((finance.get("source_contracts") or {}).get("cash_vs_floor") or {}).get("provider") or ""
+            ((finance.get("kpi_source_contracts") or {}).get("cash_vs_floor") or {}).get("provider") or ""
         ),
     }
 
@@ -127,6 +128,7 @@ def _assert_cash_contract(record: dict, *, source_pack_id: str) -> dict:
     assert contract["headroom"] == EXPECTED_HEADROOM, contract
     assert contract["trend"] == EXPECTED_TREND, contract
     assert contract["complete"] is True, contract
+    assert contract["provider"] == EXPECTED_PROVIDER, contract
     return contract
 
 
@@ -239,6 +241,7 @@ def main() -> int:
                 "cash_sar": str(contract["cash"]),
                 "floor_sar": str(contract["floor"]),
                 "headroom_sar": str(contract["headroom"]),
+                "provider": contract["provider"],
             })
 
             reviewer.call("POST", f"/reviewer/runs/{quote(run_id)}/claim")
@@ -261,6 +264,7 @@ def main() -> int:
             "floor_sar": str(final_contract["floor"]),
             "headroom_sar": str(final_contract["headroom"]),
             "quarterly_actuals_sar": [str(value) for value in final_contract["trend"]],
+            "provider": final_contract["provider"],
         })
 
         report["status"] = "passed"

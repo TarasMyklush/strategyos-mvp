@@ -322,6 +322,43 @@ def test_cash_contract_uses_declared_billions_and_labels_floor_and_headroom():
     ]
 
 
+def test_governed_cash_claims_restore_the_named_source_contract():
+    cash = _claim("cash_balance", "1410000000")
+    floor = _claim("board_floor", "1200000000", kind="plan")
+    floor["metric_key"] = "ceo.cash_floor"
+    for record in (cash, floor):
+        record["dimensions"].update(
+            {
+                "source_contract_provider": "Group Treasury (system feed)",
+                "source_contract_type": "system-of-record",
+                "source_contract_cadence": "daily",
+                "source_contract_status": "fresh",
+                "source_contract_registry_id": "SRCREG-MZ-001",
+                "source_contract_registry_version": "1.1",
+                "source_contract_freshness_threshold_days": 3,
+            }
+        )
+
+    finance = finance_payload_from_claim_snapshot({}, {"records": [cash, floor]})
+    contract = finance["kpi_source_contracts"]["cash_vs_floor"]
+    assert contract == {
+        "provider": "Group Treasury (system feed)",
+        "source_type": "system-of-record",
+        "cadence": "daily",
+        "status": "fresh",
+        "registry_id": "SRCREG-MZ-001",
+        "registry_version": "1.1",
+        "freshness_threshold_days": 3,
+    }
+    cards = build_executive_presentation(
+        build_executive_read_model(
+            {"run_id": "cash-provider", "finance_kpi": finance}, [], {}, {"report_count": 0}, {}
+        )
+    )["driver_grid"]
+    card = next(item for item in cards if item["key"] == "cash_vs_floor")
+    assert card["accountable_provider"] == "Group Treasury (system feed)"
+
+
 def test_partial_reconciliation_never_renders_as_evidence_verified():
     finance = finance_payload_from_claim_snapshot(
         {

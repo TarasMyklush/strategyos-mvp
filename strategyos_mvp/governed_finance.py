@@ -45,6 +45,12 @@ EVIDENCE_COMPONENTS: dict[str, tuple[str, ...]] = {
     "cash_vs_floor": ("cash_balance", "board_floor"),
 }
 
+COMPONENT_DRIVER_KEYS = {
+    component_key: driver_key
+    for driver_key, component_keys in EVIDENCE_COMPONENTS.items()
+    for component_key in component_keys
+}
+
 
 COMPONENT_CONTRACTS = {
     "revenue_actual": ("ceo.revenue", "actual"),
@@ -368,6 +374,7 @@ def finance_payload_from_claim_snapshot(
     if currency != "SAR":
         raise ValueError("This finance presentation supports SAR only; inspect other currencies in the claim workspace.")
     seen_components: set[str] = set()
+    governed_source_contracts: dict[str, dict[str, Any]] = {}
     for raw_record in list(snapshot.get("records") or []):
         if not isinstance(raw_record, Mapping):
             continue
@@ -382,6 +389,22 @@ def finance_payload_from_claim_snapshot(
             if component_key in seen_components:
                 raise ValueError("Multiple claims compete for a financial headline; explicit resolution is required.")
             seen_components.add(component_key)
+            driver_key = COMPONENT_DRIVER_KEYS.get(component_key)
+            provider = str(dimensions.get("source_contract_provider") or "").strip()
+            if driver_key and provider:
+                candidate = {
+                    "provider": provider,
+                    "source_type": str(dimensions.get("source_contract_type") or ""),
+                    "cadence": str(dimensions.get("source_contract_cadence") or ""),
+                    "status": str(dimensions.get("source_contract_status") or ""),
+                    "registry_id": str(dimensions.get("source_contract_registry_id") or ""),
+                    "registry_version": str(dimensions.get("source_contract_registry_version") or ""),
+                    "freshness_threshold_days": dimensions.get("source_contract_freshness_threshold_days"),
+                }
+                current = governed_source_contracts.get(driver_key)
+                if current and current != candidate:
+                    raise ValueError("Governed finance claims disagree on their accountable source contract.")
+                governed_source_contracts[driver_key] = candidate
         if component_key in COMPONENT_KEYS:
             normalized = _normalized_value(record)
             if normalized is not None:
@@ -523,6 +546,8 @@ def finance_payload_from_claim_snapshot(
         },
         "canonical_claim_status": "ready" if component_claims else "no_headline_claims",
     }
+    if governed_source_contracts:
+        result["kpi_source_contracts"] = governed_source_contracts
     if reconciliation:
         result["claim_reconciliation"] = dict(reconciliation)
     return result

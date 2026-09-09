@@ -3248,6 +3248,11 @@ def persist_finance_kpi_claims(
     if not isinstance(components, dict):
         return {"claims": 0, "exceptions": 0}
     evidence = finance_payload.get("evidence") if isinstance(finance_payload.get("evidence"), dict) else {}
+    source_contracts = (
+        finance_payload.get("kpi_source_contracts")
+        if isinstance(finance_payload.get("kpi_source_contracts"), dict)
+        else {}
+    )
     period_start, period_end = _finance_period(finance_payload.get("reporting_period_key"))
     as_of_at = _aware_datetime(recorded_at)
     claims = 0
@@ -3265,6 +3270,11 @@ def persist_finance_kpi_claims(
         value = components.get(component_key)
         ambiguity = ambiguous_components.get(component_key)
         evidence_payload = evidence.get(evidence_key) if isinstance(evidence.get(evidence_key), dict) else {}
+        source_contract = (
+            source_contracts.get(evidence_key)
+            if isinstance(source_contracts.get(evidence_key), dict)
+            else {}
+        )
         details = evidence_payload.get("details") or {}
         if (claim_kind == ClaimKind.ACTUAL and not ambiguity
                 and finance_payload.get("source_semantics_version") != "2"
@@ -3321,7 +3331,16 @@ def persist_finance_kpi_claims(
             period_start=period_start,
             period_end=period_end,
             as_of_at=as_of_at,
-            dimensions={"component_key": component_key},
+            dimensions={
+                "component_key": component_key,
+                "source_contract_provider": str(source_contract.get("provider") or ""),
+                "source_contract_type": str(source_contract.get("source_type") or ""),
+                "source_contract_cadence": str(source_contract.get("cadence") or ""),
+                "source_contract_status": str(source_contract.get("status") or ""),
+                "source_contract_registry_id": str(source_contract.get("registry_id") or ""),
+                "source_contract_registry_version": str(source_contract.get("registry_version") or ""),
+                "source_contract_freshness_threshold_days": source_contract.get("freshness_threshold_days"),
+            },
             metadata={
                 "legacy_projection": "run_summary.finance_kpi.components",
                 "run_id": str(run_id),
