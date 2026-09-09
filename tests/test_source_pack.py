@@ -545,6 +545,11 @@ def test_source_pack_governs_word_powerpoint_and_yaml_as_text_sources(tmp_path):
     assert by_name["Dimension_Config.yaml"]["classification"]["status"] == "excluded"
     assert by_name["Plan_Decomposition_Structure_v1.json"]["source_disposition"] == "control_plane"
     assert by_name["Board_Pack_Template_v1.json"]["source_disposition"] == "control_plane"
+    registry = source_pack_module._control_plane_registry(manifest)
+    kinds = {item["relative_path"]: item["kind"] for item in registry["entries"]}
+    assert kinds["Dimension_Config.yaml"] == "dimension_configuration"
+    assert kinds["Plan_Decomposition_Structure_v1.json"] == "plan_decomposition"
+    assert kinds["Board_Pack_Template_v1.json"] == "board_template"
 
 
 def test_source_pack_prompt_injection_payload_is_wrapped_as_untrusted_evidence(tmp_path, monkeypatch):

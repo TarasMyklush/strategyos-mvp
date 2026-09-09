@@ -621,6 +621,27 @@ def test_catalog_permissions_pagination_and_source_revocation(setup):
     assert catalog['plans'] == catalog['actuals'] == []
 
 
+def test_quality_assurance_plans_require_explicit_catalog_marker(setup):
+    s = setup
+    qa = deepcopy(s['p'])
+    qa['plan_id'] = 'qa-plan-visible-only-to-test'
+    qa['catalog_visibility'] = 'quality_assurance'
+    store.import_plan(s['operator'], Plan.model_validate(qa), s['pack'])
+
+    assert store.catalog(s['operator'])['plans'] == []
+    visible = store.catalog(s['operator'], qa_plan_id=qa['plan_id'])['plans']
+    assert [(item['plan_id'], item['version']) for item in visible] == [(qa['plan_id'], 1)]
+
+
+def test_legacy_hosted_test_plans_are_not_customer_catalog_records(setup):
+    s = setup
+    qa = deepcopy(s['p'])
+    qa['plan_id'] = 'human-plan-20260909123456'
+    store.import_plan(s['operator'], Plan.model_validate(qa), s['pack'])
+
+    assert store.catalog(s['operator'])['plans'] == []
+
+
 def test_reviewer_can_open_proposal_evidence_before_ratification(setup):
     s = setup
     import_pair(s)

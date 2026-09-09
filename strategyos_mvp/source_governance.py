@@ -49,6 +49,13 @@ _NON_DETECTOR_DIRS = {
 _CONTROL_PLANE_CONFIG_NAMES = (
     "board_pack_template",
     "plan_decomposition_structure",
+    "dimension_config",
+    "sku_master_cube",
+    "client_master_cube",
+)
+_CURRENT_STRUCTURED_NAMES = (
+    "plan_data_",
+    "sales_cube_monthly",
 )
 
 
@@ -112,6 +119,9 @@ def final_source_disposition(item: dict[str, Any]) -> str:
         RESTRICTED_CONTEXT,
     }:
         return initial
+    name = PurePosixPath(str(item.get("relative_path") or "")).name.lower()
+    if any(marker in name for marker in _CURRENT_STRUCTURED_NAMES):
+        return CURRENT_EVIDENCE
 
     classification = item.get("classification") or {}
     status = str(classification.get("status") or "unclassified")

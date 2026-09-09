@@ -76,7 +76,7 @@
   function options() {
     var previous = $('plan-select').value, actual = $('actual-select').value, history = $('history-actual').value;
     $('plan-select').replaceChildren(new Option('Choose a version', ''));
-    state.plans.forEach(function (p) { $('plan-select').add(new Option(p.plan_id + ' · v' + p.version + ' · ' + label(p.governance_status), p.plan_id + ':' + p.version)); });
+    state.plans.forEach(function (p) { $('plan-select').add(new Option((p.display_name || p.plan_id) + ' · v' + p.version + ' · ' + label(p.governance_status), p.plan_id + ':' + p.version)); });
     $('plan-select').value = previous;
     $('actual-select').replaceChildren(new Option('Choose actuals', ''));
     state.actuals.forEach(function (a) { $('actual-select').add(new Option(a.revision + ' · ' + a.period.start + ' to ' + a.period.end, a.revision)); });
@@ -105,13 +105,13 @@
     state.record = await request('/plans/' + encodeURIComponent(choice.plan_id) + '/versions/' + choice.version);
     window.dispatchEvent(new CustomEvent('kyvern-plan', { detail: state.record }));
     var record = state.record, plan = record.payload;
-    $('plan-title').textContent = record.plan_id + ' · Version ' + record.version;
+    $('plan-title').textContent = (plan.display_name || record.plan_id) + ' · Version ' + record.version;
     var structureText = record.structure.status === 'legacy_unbound' ? 'Legacy plan · no structure binding' :
       'Structure ' + record.structure.config_id + ' v' + record.structure.version + ' · ' + label(record.structure.status) + ' · ' + record.structure.business_unit;
     $('plan-metadata').replaceChildren(node('p', label(record.governance_status)), node('p', plan.period.start + ' to ' + plan.period.end), node('p', structureText), node('p', 'Imported by ' + record.imported_by));
     $('approval-note').textContent = record.ratification ? 'Ratified by ' + record.ratification.approved_by + ' on ' + record.ratification.approved_at.slice(0, 10) + '. ' + record.ratification.note : 'This is a proposal. A separately authorized reviewer must ratify it before drift can be calculated.';
     table('plan-cells', ['Cell / dimensions', 'Metric', 'Owner', 'Target', 'Tolerance', 'Evidence'], plan.cells.map(function (c) {
-      return [c.id + ' · ' + dimensions(c.dimensions), c.metric, c.owner, c.target + ' ' + plan.metrics[c.metric].unit, c.tolerance,
+      return [dimensions(c.dimensions), c.metric, c.owner, c.target + ' ' + plan.metrics[c.metric].unit, c.tolerance,
               link(c.source.locator, planPath() + '/evidence?cell_id=' + encodeURIComponent(c.id))];
     }));
     if (plan.derivation) {

@@ -220,6 +220,16 @@ plan-specific ratifier permissions. The retired `/api/plan/latest` route redirec
 to the authenticated catalog. No current-run pointer, graph projection, board
 snapshot or external mailbox is changed by this workflow.
 
+For a registered plan package, use **Prepare governed plan** in the Intent Vault or
+`POST /api/intent/dimensional/source-packs/{source_pack_id}/plan-package/import`
+with `{"cell_tolerance_sar":"0"}` or another explicitly approved decimal tolerance.
+The first call stages the source-defined organization structure and returns
+`awaiting_structure_approval`. After a separate tenant administrator approves that
+structure in the existing console, repeat the same call to import the full plan and
+the comparable actual snapshot as immutable proposals. The response records source
+row counts, source total, approved objective, rounding adjustment and actual-cell
+coverage. Plan ratification remains a separate executive/reviewer action.
+
 Run the isolated service proof (requires local `initdb` and `pg_ctl`):
 
 ```sh

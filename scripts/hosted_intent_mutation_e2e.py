@@ -78,6 +78,7 @@ def main() -> int:
             viewport={"width": 1440, "height": 1000},
             locale="en-GB",
             timezone_id="Asia/Dubai",
+            extra_http_headers={"X-StrategyOS-QA-Plan": plan_id},
         )
         page = context.new_page()
         pages.append(page)
@@ -258,6 +259,7 @@ def main() -> int:
                 "period": {"start": "2025-06-01", "end": "2025-06-30"},
                 "effective_from": "2025-01-01", "effective_to": "2025-12-31", "status": "proposed",
                 "business_unit": "group",
+                "catalog_visibility": "quality_assurance",
                 "structure": {"config_id": structure_id, "version": 1, "digest": structure["digest"]},
                 "dimensions": {"product": ["item-a", "item-b"], "region": ["all-regions", "north", "south"],
                                "client": ["retail", "institution", "hospital", "pharmacy"]},

@@ -162,14 +162,17 @@ def _validate_structure_binding(conn, tenant, plan, *, require_current=True):
     definitions = {dimension.key: dimension for dimension in configuration.dimensions}
     configured = {key: {member.key for member in definition.members}
                   for key, definition in definitions.items()}
-    if set(plan.dimensions) != set(configured):
-        raise ValueError('Plan dimensions must exactly match the approved organization structure.')
+    unknown_dimensions = sorted(set(plan.dimensions) - set(configured))
+    if unknown_dimensions:
+        raise ValueError('Plan dimensions are not present in the approved organization structure: '
+                         + ', '.join(unknown_dimensions) + '.')
     for dimension, members in plan.dimensions.items():
         unknown = sorted(set(members) - configured[dimension])
         if unknown:
             raise ValueError(dimension + ' contains members outside the approved organization structure: '
                              + ', '.join(unknown) + '.')
-    for dimension, definition in definitions.items():
+    for dimension in plan.dimensions:
+        definition = definitions[dimension]
         parents = {member.key: member.parent for member in definition.members}
         groups = {}
         for cell in plan.cells:
@@ -656,15 +659,19 @@ def explain_cell(principal, analysis_id, cell_id):
     }
 
 
-def catalog(principal, offset=0, limit=25):
+def catalog(principal, offset=0, limit=25, *, qa_plan_id=None):
     tenant, actor = _scope(principal)
     if offset < 0 or not 1 <= limit <= 50:
         raise ValueError('Invalid catalog page.')
     with _connection() as conn:
         plan_cursor = conn.execute("""SELECT p.*, r.approved_at FROM strategyos_intent_plan_versions p
             LEFT JOIN strategyos_intent_ratifications r USING(tenant_key,plan_id,version)
-            WHERE p.tenant_key=%s ORDER BY p.imported_at DESC,p.plan_id,p.version DESC LIMIT %s OFFSET %s""",
-            (tenant, limit + 1, offset))
+            WHERE p.tenant_key=%s AND (
+              (COALESCE(p.payload->>'catalog_visibility','customer')='quality_assurance' AND p.plan_id=%s)
+              OR (COALESCE(p.payload->>'catalog_visibility','customer')='customer'
+                  AND p.plan_id NOT LIKE 'human-plan-%%' AND p.plan_id NOT LIKE 'SYNTHETIC-%%')
+            ) ORDER BY p.imported_at DESC,p.plan_id,p.version DESC LIMIT %s OFFSET %s""",
+            (tenant, qa_plan_id, limit + 1, offset))
         plans = [dict(zip([c.name for c in plan_cursor.description], row)) for row in plan_cursor.fetchall()]
         actual_cursor = conn.execute("""SELECT * FROM strategyos_intent_actual_versions WHERE tenant_key=%s
             ORDER BY imported_at DESC,revision LIMIT %s OFFSET %s""", (tenant, limit + 1, offset))
@@ -674,6 +681,15 @@ def catalog(principal, offset=0, limit=25):
     for kind, records, visible in [('plan', plans, visible_plans), ('actuals', actuals, visible_actuals)]:
         for row in records[:limit]:
             _checked(row)
+            value = Plan.model_validate(row['payload']) if kind == 'plan' else None
+            if kind == 'plan':
+                legacy_qa = value.catalog_visibility == 'customer' and row['plan_id'].startswith(
+                    ('human-plan-', 'SYNTHETIC-'))
+                if value.catalog_visibility == 'quality_assurance':
+                    if qa_plan_id != row['plan_id']:
+                        continue
+                elif legacy_qa:
+                    continue
             try:
                 _sources(principal, row, kind=kind, verify_bytes=False)
             except (PermissionError, SourceUnavailable):
@@ -681,7 +697,8 @@ def catalog(principal, offset=0, limit=25):
             item = {'period': row['payload']['period'], 'imported_at': row['imported_at'].isoformat()}
             if kind == 'plan':
                 item.update(plan_id=row['plan_id'], version=row['version'], digest=row['digest'],
-                            governance_status='ratified' if row['approved_at'] else 'proposed')
+                            governance_status='ratified' if row['approved_at'] else 'proposed',
+                            display_name=value.display_name or row['plan_id'])
             else:
                 item.update(revision=row['revision'])
             visible.append(item)

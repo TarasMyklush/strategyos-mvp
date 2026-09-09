@@ -1,5 +1,6 @@
 """Authenticated dimensional Intent endpoints; no caller-selected filesystem roots."""
 from datetime import date
+from decimal import Decimal
 from typing import Annotated, Any, Literal
 from urllib.parse import quote, urlsplit
 
@@ -10,7 +11,7 @@ import psycopg
 import os
 
 from .auth import require_role
-from .dimensional_plan import Actuals, Contract, Name, Plan
+from .dimensional_plan import Actuals, Amount, Contract, Name, Plan
 from .plan_decomposition import DecompositionRequest, HistoricalDecompositionRequest, ObjectiveDecompositionRequest
 from .advisor_config import AdvisorConfiguration
 from .tenant_structure import TenantStructureConfiguration
@@ -18,6 +19,7 @@ from . import advisor_config_store as advisor_store
 from . import board_pack_store
 from . import tenant_structure_store
 from . import dimensional_intent_store as store
+from . import source_plan_package
 from .dimensional_intent_sources import SourceUnavailable
 
 Key = Annotated[str, Field(min_length=1, max_length=160, pattern=r'^[A-Za-z0-9][A-Za-z0-9_.-]*$')]
@@ -68,6 +70,10 @@ class ActualImport(Contract):
     actuals: Actuals
 
 
+class SourcePlanPackageImport(Contract):
+    cell_tolerance_sar: Amount = Field(ge=0)
+
+
 class RatifierChange(Contract):
     subject: Name
     enabled: bool = Field(strict=True)
@@ -114,6 +120,13 @@ def perform(fn):
 @router.post('/plans')
 def import_plan(body: PlanImport, principal: dict[str, Any] = require_role('operator')):
     return perform(lambda: store.import_plan(principal, body.plan, body.source_pack_id))
+
+
+@router.post('/source-packs/{source_pack_id}/plan-package/import')
+def import_source_plan_package(source_pack_id: Key, body: SourcePlanPackageImport,
+                               principal: dict[str, Any] = require_role('operator')):
+    return perform(lambda: source_plan_package.import_package(
+        principal, source_pack_id, Decimal(body.cell_tolerance_sar)))
 
 
 @router.get('/plans/{plan_id}/versions/{version}')
@@ -269,9 +282,11 @@ def evidence(analysis_id: str, cell_id: Annotated[str, Query(min_length=1, max_l
 
 
 @router.get('/catalog')
-def catalog(offset: Annotated[int, Query(ge=0)] = 0, limit: Annotated[int, Query(ge=1, le=50)] = 25,
+def catalog(request: Request, offset: Annotated[int, Query(ge=0)] = 0,
+            limit: Annotated[int, Query(ge=1, le=50)] = 25,
             principal: dict[str, Any] = require_role('operator', 'reviewer', 'executive')):
-    return perform(lambda: store.catalog(principal, offset, limit))
+    qa_plan_id = request.headers.get('X-StrategyOS-QA-Plan')
+    return perform(lambda: store.catalog(principal, offset, limit, qa_plan_id=qa_plan_id))
 
 
 @router.get('/plans/{plan_id}/versions/{version}/evidence')

@@ -165,6 +165,22 @@ class PriceVolumeMixActual(Contract):
     rows: list[PriceVolumeActualRow] = Field(min_length=2, max_length=5000)
 
 
+class SourcePlanImportReceipt(Contract):
+    """Deterministic source-to-plan transformation recorded with the plan."""
+
+    compiler_version: Literal["source-plan-package.v1"]
+    source_structure_id: Name
+    source_row_count: int = Field(ge=1, le=100000, strict=True)
+    source_total: Amount
+    approved_objective_total: Amount
+    rounding_adjustment: Amount
+    rounding_cell_id: Name | None = None
+    rounding_rule: Literal["final_lexicographic_cell"]
+    owner_rule: Name
+    cell_tolerance: Amount = Field(ge=0)
+    scope: Name
+
+
 class Plan(Contract):
     schema_version: Literal[1]
     plan_id: Name
@@ -185,6 +201,10 @@ class Plan(Contract):
     price_volume_mix_policies: list[PriceVolumeMixPolicy] = Field(default_factory=list, max_length=100)
     cells: list[Cell] = Field(min_length=1, max_length=100000)
     derivation: PlanDerivation | None = None
+    display_name: Name | None = None
+    period_dimension: Name | None = None
+    catalog_visibility: Literal["customer", "quality_assurance"] = "customer"
+    source_import: SourcePlanImportReceipt | None = None
 
     @model_validator(mode="after")
     def validate_plan(self):
@@ -196,6 +216,8 @@ class Plan(Contract):
             raise ValueError("Plan period must fit within effective dates.")
         if self.status == "ratified" and not all((self.ratified_by, self.ratified_on, self.ratification)):
             raise ValueError("Ratified imports require identity, date and source evidence.")
+        if self.period_dimension is not None and self.period_dimension not in self.dimensions:
+            raise ValueError("The period dimension must be one of the plan dimensions.")
         for members in self.dimensions.values():
             if not members or len(members) != len(set(members)):
                 raise ValueError("Dimension members must be nonempty and unique.")
@@ -463,6 +485,32 @@ def _price_volume_mix_bridges(plan, actuals, rows, check_plan, check_actual):
     return bridges
 
 
+def _comparison_cells(plan: Plan, actuals: Actuals) -> tuple[list[Cell], bool]:
+    if actuals.period == plan.period:
+        return list(plan.cells), False
+    if (plan.period_dimension is None or actuals.period.start < plan.period.start or
+            actuals.period.end > plan.period.end):
+        raise ValueError("Actual and plan periods must match unless the plan declares a comparable period dimension.")
+    if actuals.period.start.day != 1:
+        raise ValueError("Partial-period comparisons must begin on the first day of a month.")
+    next_day = date.fromordinal(actuals.period.end.toordinal() + 1)
+    if next_day.day != 1:
+        raise ValueError("Partial-period comparisons must end on the final day of a month.")
+    months = set()
+    current = actuals.period.start
+    while current <= actuals.period.end:
+        months.add(current.strftime("%Y-%m"))
+        current = date(
+            current.year + (1 if current.month == 12 else 0),
+            1 if current.month == 12 else current.month + 1,
+            1,
+        )
+    selected = [cell for cell in plan.cells if cell.dimensions.get(plan.period_dimension) in months]
+    if not selected or {cell.dimensions.get(plan.period_dimension) for cell in selected} != months:
+        raise ValueError("The plan does not contain every month in the requested comparison period.")
+    return selected, True
+
+
 def evaluate(plan: Plan, actuals: Actuals, *, source_root: Path, company_id: str, as_of: date, actual_source_root: Path | None = None) -> dict:
     """Evaluate one explicitly selected snapshot; no implicit latest-version choice.
 
@@ -471,10 +519,9 @@ def evaluate(plan: Plan, actuals: Actuals, *, source_root: Path, company_id: str
     """
     if company_id != plan.company_id or company_id != actuals.company_id:
         raise ValueError("Company scope mismatch.")
-    if actuals.period != plan.period:
-        raise ValueError("Actual and plan periods must match exactly.")
-    if as_of < plan.period.end:
-        raise ValueError("A full-period comparison requires as_of at or after period end.")
+    comparison_cells, partial_period = _comparison_cells(plan, actuals)
+    if as_of < actuals.period.end:
+        raise ValueError("A full-period comparison requires as_of at or after the actual period end.")
     if actuals.recorded_on > as_of:
         raise ValueError("Actual snapshot was recorded after as_of.")
     if actuals.recorded_on < actuals.period.end:
@@ -504,7 +551,7 @@ def evaluate(plan: Plan, actuals: Actuals, *, source_root: Path, company_id: str
     rows = []
     with localcontext() as ctx:
         ctx.prec = 80
-        for cell in sorted(plan.cells, key=lambda c: c.id):
+        for cell in sorted(comparison_cells, key=lambda c: c.id):
             check(cell.source)
             obs = observed.pop(cell_key(cell.metric, cell.dimensions), None)
             value = obs.value if obs else None
@@ -526,11 +573,15 @@ def evaluate(plan: Plan, actuals: Actuals, *, source_root: Path, company_id: str
             unplanned = [obs.model_dump(mode="json") for key, obs in sorted(observed.items()) if key[0] == name]
             complete = not missing and not unplanned
             total = sum((Decimal(row["actual"]) for row in selected if row["actual"] is not None), Decimal(0))
-            delta = total - metric.planned_total
+            comparison_target = (
+                sum((Decimal(row["target"]) for row in selected), Decimal(0))
+                if partial_period else metric.planned_total
+            )
+            delta = total - comparison_target
             status = classify(delta, metric.direction, metric.tolerance) if complete else "incomplete"
             behind = [row["cell_id"] for row in selected if row["status"] == "behind"]
             ahead = [row["cell_id"] for row in selected if row["status"] == "ahead"]
-            rollups.append({"metric": name, "unit": metric.unit, "target": str(metric.planned_total),
+            rollups.append({"metric": name, "unit": metric.unit, "target": str(comparison_target),
                 "actual": str(total) if complete else None, "variance": str(delta) if complete else None,
                 "status": status, "missing_cells": missing, "unplanned_actuals": unplanned,
                 "measured_cells": len(selected) - len(missing), "planned_cells": len(selected),
@@ -643,7 +694,9 @@ def evaluate(plan: Plan, actuals: Actuals, *, source_root: Path, company_id: str
                           ". The effects reconcile exactly to the observed variance."),
         })
     result = {"schema_version": 1, "formula_version": "cell-variance.v3", "company_id": company_id,
-        "plan_id": plan.plan_id, "plan_version": plan.version, "period": plan.period.model_dump(mode="json"),
+        "plan_id": plan.plan_id, "plan_version": plan.version,
+        "period": actuals.period.model_dump(mode="json"),
+        "plan_period": plan.period.model_dump(mode="json"), "partial_period": partial_period,
         "as_of": as_of.isoformat(), "plan_hash": plan_hash, "actuals_hash": actual_hash,
         "approval_status": plan.status, "approval_basis": "imported_metadata_not_authorization_verified",
         "comparison_basis": "imported_ratified_plan" if plan.status == "ratified" else "proposed_plan_preview",

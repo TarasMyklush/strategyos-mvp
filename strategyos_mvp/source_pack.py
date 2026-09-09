@@ -1017,12 +1017,17 @@ def _control_plane_registry(manifest: list[dict[str, Any]]) -> dict[str, Any]:
         if disposition not in {CONTROL_PLANE, EVALUATOR_ONLY}:
             continue
         rel = str(item.get("relative_path") or "")
+        lowered = rel.lower()
+        filename = PurePosixPath(lowered).name
         kind = (
-            "agent_definition"
-            if "agent_jds" in rel.lower()
-            else "task_specification"
-            if "sample_tasks" in rel.lower()
-            else "evaluation_material"
+            "agent_definition" if "agent_jds" in lowered else
+            "task_specification" if "sample_tasks" in lowered else
+            "dimension_configuration" if "dimension_config" in filename else
+            "plan_decomposition" if "plan_decomposition_structure" in filename else
+            "dimension_members" if any(marker in filename for marker in ("sku_master_cube", "client_master_cube")) else
+            "board_template" if "board_pack_template" in filename else
+            "kpi_source_contract" if "kpi_source_contract" in filename else
+            "evaluation_material"
         )
         headings: list[str] = []
         governed_path = Path(str(item.get("governed_path") or ""))

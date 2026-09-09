@@ -1083,9 +1083,22 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   </div>
   <div id="import-panel" class="vault-panel" hidden>
     <details><summary>Import plan and actual snapshots</summary>
-      <p>Use validated JSON extracts and an existing registered evidence pack. A plan import always creates a proposal. New plans must name a configured business-unit scope and the ID, version and digest of the current approved organization structure.</p>
+      <p>Compile a registered plan package into an independently approved organization structure, a plan proposal and its comparable actual snapshot. Source targets, owners, dimensions and rounding remain traceable to the registered files.</p>
+      <form id="source-plan-package-form">
+        <h3>Registered plan package</h3>
+        <div class="vault-controls">
+          <label class="vault-field">Source pack ID<input id="source-plan-pack" required maxlength="160" pattern="[A-Za-z0-9][A-Za-z0-9_.-]*"></label>
+          <label class="vault-field">Approved cell tolerance (SAR)<input id="source-plan-tolerance" required type="number" min="0" step="0.01" value="0"></label>
+          <button type="submit">Prepare governed plan</button>
+        </div>
+        <p class="vault-note">A zero tolerance flags every variance. Change it only to a threshold approved for this plan. The first submission stages the source-defined structure; after an independent administrator approves it, submit again to import the plan proposal and actual snapshot.</p>
+        <p id="source-plan-package-status" class="vault-message" role="status" aria-live="polite"></p>
+      </form>
+      <details style="margin-top:24px"><summary>Import validated Intent JSON</summary>
+      <p>Use this route for an existing product-schema extract. A plan import always creates a proposal and must bind the current approved organization structure.</p>
       <form id="plan-import-form"><h3>Plan proposal</h3><div class="vault-controls"><label class="vault-field">Plan evidence pack<input id="plan-pack" required maxlength="160"></label><label class="vault-field">Plan JSON<input id="plan-file" type="file" accept=".json,application/json" required></label><button type="submit">Import proposal</button></div></form>
       <form id="actual-import-form" style="margin-top:24px"><h3>Actual snapshot</h3><div class="vault-controls"><label class="vault-field">Actual evidence pack<input id="actual-pack" required maxlength="160"></label><label class="vault-field">Actuals JSON<input id="actual-file" type="file" accept=".json,application/json" required></label><button type="submit">Import actuals</button></div></form>
+      </details>
     </details>
   </div>
 </div>
@@ -1097,5 +1110,6 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 <script src="/static/structure_console.js" defer></script>
 <script src="/static/objective_decomposition.js" defer></script>
 <script src="/static/demo_pack.js" defer></script>
+<script src="/static/source_plan_package.js" defer></script>
 </body>
 </html>

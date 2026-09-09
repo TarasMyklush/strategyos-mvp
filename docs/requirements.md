@@ -170,6 +170,15 @@ new history tables. Schema installation is an explicit additive deployment step.
 The existing `/plan` execution tracker is repurposed as the Intent Vault. It now
 provides authenticated version selection, target/evidence review, scoped ratification,
 operator JSON imports, administrator ratifier grants and saved granular drift results.
+An operator can also compile a registered source-plan package from its declarative
+dimension configuration, plan structure, granular plan table, dimension masters and
+actual cube. The compiler proves Cartesian coverage, derives all members from the
+pack, applies a disclosed final-cell rounding remainder to the approved objective,
+and requires an explicit cell tolerance. It stages the organization structure for
+independent administrator approval before it imports the plan proposal and comparable
+actual snapshot. A full-year plan may be compared with a completed month-aligned
+partial-period snapshot only when the plan declares its period dimension; the
+comparison target is then the exact sum of the selected plan cells.
 The old tracker payload is retired; `/api/plan/latest` redirects to the authenticated
 catalog. This increment is deployed to the preview. Visual Authority
 Matrix integration, exact cell-to-source semantic verification, BU-level policy,
