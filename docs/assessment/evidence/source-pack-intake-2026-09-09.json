@@ -1,6 +1,6 @@
 {
   "schema_version": "strategyos-source-pack-intake-evidence-v1",
-  "recorded_at": "2026-09-09T11:19:06Z",
+  "recorded_at": "2026-09-09T13:26:57Z",
   "source": {
     "path": "/Users/taras/Desktop/Taras/SPsoft/Enterprise OS/Input Folder/09.09.2026/StrategyOS POC",
     "source_key": "strategyos-poc-2026-09-09",
@@ -40,16 +40,18 @@
       "yaml": 2
     },
     "counts_by_disposition": {
-      "control_plane": 7,
-      "current_evidence": 54,
+      "control_plane": 9,
+      "current_evidence": 55,
       "evaluator_only": 4,
-      "historic_context": 116,
+      "historic_context": 113,
       "quarantined_context": 3,
       "restricted_context": 1
     },
     "control_plane_files": [
+      "01_Synthetic_Dataset/24_Sales_Cube/Client_Master_Cube.xlsx",
       "01_Synthetic_Dataset/24_Sales_Cube/Dimension_Config_v1.yaml",
       "01_Synthetic_Dataset/24_Sales_Cube/Plan_Decomposition_Structure_v1.json",
+      "01_Synthetic_Dataset/24_Sales_Cube/SKU_Master_Cube.xlsx",
       "01_Synthetic_Dataset/25_Engagement/Board_Pack_Template_v1.json",
       "01_Synthetic_Dataset/25_Engagement/KPI_Source_Contracts_v1.yaml",
       "02_Agent_JDs/Finance_Analyst_JD.md",
@@ -121,7 +123,60 @@
     },
     "nupco_rescued_region_family_count": 11,
     "finding": "The H1 total is SAR 74.0M ahead while 124 of 288 plan cells are behind. Institutional tender performance, including SAR 430.44M of NUPCO gross revenue, offsets weaker retail and hospital/private channels; Eastern region remains SAR 18.21M behind.",
-    "rounding_warning": "The 288 two-decimal plan cells sum to SAR 1,194,000,000.06, which is SAR 0.06 above the stated H1 board total of SAR 1,194,000,000. A governed importer must apply and disclose a deterministic remainder rule."
+    "rounding_resolution": "The full-year source rows sum to SAR 2,540,000,000.03. The governed importer applies and records a SAR -0.03 adjustment to the final lexicographic cell, so the imported plan equals the approved SAR 2,540,000,000 objective exactly. The unchanged H1 plan slice remains SAR 1,194,000,000.06."
+  },
+  "intent_plan_import": {
+    "source_pack_id": "cffaca4ffed852e8127a37846c5ca8ee1a862297e5014303de4e2b414912f097",
+    "workflow_status": "awaiting_plan_ratification",
+    "structure": {
+      "config_id": "DIMCFG-TW-001",
+      "version": 1,
+      "digest": "e449dabd4a3c0fa507dab1f09c67cd48f8dfda49afcb10af1e071ced6d3096b8",
+      "status": "approved_and_authoritative",
+      "approved_by": "https://new.strategyos.live/:tenant-admin.tester",
+      "approved_at": "2026-09-09T12:44:33.704810+00:00"
+    },
+    "plan": {
+      "plan_id": "pd-tw-2026-v1-plan",
+      "version": 1,
+      "digest": "e73b94cd46ffb0addc035ec56546d1c10f3b8528ec738dfba124c3ec9d00ead7",
+      "display_name": "Tamween Pharma Distribution FY2026 revenue plan — SAR 2,540M (H1 1,194M)",
+      "governance_status": "proposed",
+      "period_start": "2026-01-01",
+      "period_end": "2026-12-31",
+      "source_row_count": 576,
+      "cell_count": 576,
+      "approved_objective_total_sar": 2540000000,
+      "source_total_sar": 2540000000.03,
+      "rounding_adjustment_sar": -0.03,
+      "rounding_rule": "final_lexicographic_cell",
+      "cell_tolerance_sar": 0,
+      "dimension_cardinalities": {
+        "month": 12,
+        "region": 4,
+        "channel": 3,
+        "product": 4
+      },
+      "named_owner_count": 576,
+      "owner_rule": "channel override, then unambiguous family override, then region owner"
+    },
+    "actuals": {
+      "revision": "pd-tw-2026-v1-plan-actuals-through-2026-06",
+      "digest": "f495b2b3060862965050be6baa96e3923775bfc2a686eaa91cbaabc4b7d909fc",
+      "period_start": "2026-01-01",
+      "period_end": "2026-06-30",
+      "source_row_count": 1848,
+      "observation_count": 288,
+      "gross_revenue_sar": 1267999999.96
+    },
+    "catalog_verification": {
+      "visible_plan_ids": [
+        "pd-tw-2026-v1-plan"
+      ],
+      "qa_or_synthetic_plan_count": 0
+    },
+    "analysis_status": "intentionally_blocked_until_business_ratification",
+    "production_changed": false
   },
   "candidate_analysis": {
     "local_run_id": "local-candidate-run-complete-pack-20260909t095014z-9227c801a77f",
@@ -151,24 +206,39 @@
     "production_promoted": false
   },
   "product_corrections": {
-    "revision": "35079e9b9c51869ebb49fb36b94a3a0734f58609",
+    "revision": "d7b5cf8aced3b23a7630bb68f463d612faa8e084",
     "office_and_yaml_intake": "DOCX, PPTX and YAML are governed source-pack formats with bounded OOXML extraction and stable citation locations.",
     "configuration_isolation": "YAML and the board-template and plan-decomposition JSON contracts are control-plane inputs and cannot enter business evidence.",
     "ratification_boundary": "Run-bound claim revisions participate in current truth only after the run completes and satisfies its review requirement. Pending candidate snapshots remain reviewable without invalidating the approved briefing.",
-    "capture_method_preservation": "Changing a confirmed source policy preserves the source's original capture method even after the pack has been revalidated."
+    "capture_method_preservation": "Changing a confirmed source policy preserves the source's original capture method even after the pack has been revalidated.",
+    "typed_plan_compilation": "The registered dimension configuration, plan structure, SKU and client masters now compile the FY2026 source plan and H1 sales cube into governed Intent records without sector logic in core.",
+    "partial_period_evaluation": "A completed month-aligned actual period can be compared against the matching slice of a full-year plan when the period dimension is declared.",
+    "catalog_hygiene": "Quality-assurance plans are isolated from customer plan catalogs; customer rows use source-defined display names instead of machine cell identifiers."
   },
   "release_verification": {
     "preview_url": "https://new.strategyos.live",
     "production_changed": false,
-    "revision": "801364cb796eb3ee5354f3a035b15d6bb7b1230a",
-    "image": "ghcr.io/tarasmyklush/strategyos-mvp@sha256:55feccca8e0dcb0b7ed4b57d3a471df048ae53ba9d5711390839afd9984db382",
-    "workflow_id": 34343182494,
-    "workflow_url": "https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34343182494",
+    "revision": "d7b5cf8aced3b23a7630bb68f463d612faa8e084",
+    "image": "ghcr.io/tarasmyklush/strategyos-mvp@sha256:993a7f263c04c0c42c082356529dfb64c2dc5e509cfa72a5e947da417aaebaf7",
+    "workflow_id": 34355027955,
+    "workflow_url": "https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34355027955",
     "workflow_status": "success",
-    "service_test_count": 2631,
+    "service_test_count": 2635,
     "service_test_skip_count": 0,
     "executive_chromium_walkthrough": "passed",
     "intent_lifecycle_chromium_walkthrough": "passed",
+    "intent_lifecycle_chromium_step_count": 14,
+    "real_plan_catalog_browser_walkthrough": "passed",
+    "post_deploy_plan_persistence": {
+      "plan_cell_count": 576,
+      "plan_total_sar": 2540000000,
+      "named_owner_count": 576,
+      "actual_observation_count": 288,
+      "actual_total_sar": 1267999999.96,
+      "customer_catalog_plan_ids": [
+        "pd-tw-2026-v1-plan"
+      ]
+    },
     "hosted_pack_supported_file_count": 185,
     "hosted_pack_unsupported_file_count": 0,
     "hosted_pack_failed_extraction_count": 0,
@@ -223,7 +293,7 @@
     },
     {
       "priority": "P1",
-      "item": "Extend the dimensional evaluator with governed parent-child rollups so client-level actuals remain drillable beneath month, region, channel and product-family plan cells; then add a typed importer from Plan_Data_2026.csv and Sales_Cube_Monthly_2025-2026H1.csv."
+      "item": "Extend the dimensional evaluator with governed parent-child rollups so client-level actuals remain drillable beneath month, region, channel and product-family plan cells."
     },
     {
       "priority": "P1",
