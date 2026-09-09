@@ -247,6 +247,24 @@ def _write_source_pack_run_context(dataset_root: Path, source_pack_payload: dict
     )
 
 
+def _kpi_source_contract_paths(source_pack_payload: dict | None) -> list[Path]:
+    """Return only governed KPI registry files from the control plane."""
+    if not isinstance(source_pack_payload, dict):
+        return []
+    registry = source_pack_payload.get("control_plane_registry")
+    entries = registry.get("entries") if isinstance(registry, dict) else []
+    paths: list[Path] = []
+    for entry in entries or []:
+        if not isinstance(entry, dict) or entry.get("kind") != "kpi_source_contract":
+            continue
+        if entry.get("source_disposition") != "control_plane":
+            continue
+        path = Path(str(entry.get("governed_path") or "")).resolve()
+        if path.is_file() and path.suffix.lower() in {".yaml", ".yml"}:
+            paths.append(path)
+    return paths
+
+
 def _execute_strategyos_workflow(
     dataset: Path | None = None,
     source_pack_id: str | None = None,
@@ -328,7 +346,10 @@ def _execute_strategyos_workflow(
     summary = build_run_summary(result)
     # Standard runs receive source extracts directly. Derive the CEO actuals
     # from those files instead of requiring a separate Oracle API request.
-    summary["finance_kpi"] = derive_source_finance_kpis(dataset_root)
+    summary["finance_kpi"] = derive_source_finance_kpis(
+        dataset_root,
+        kpi_source_contract_paths=_kpi_source_contract_paths(source_pack_payload),
+    )
     summary["calendar_agenda"] = derive_calendar_agenda(dataset_root)
     summary["strategy_enrichment"] = derive_strategy_enrichment(
         dataset_root,

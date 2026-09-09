@@ -8,6 +8,40 @@ from strategyos_mvp.config import RunPolicyConfig
 from strategyos_mvp.models import AuditEvent
 
 
+def test_kpi_registry_paths_are_selected_only_from_governed_control_plane(tmp_path: Path):
+    governed = tmp_path / "control_plane" / "KPI_Source_Contracts_v1.yaml"
+    governed.parent.mkdir(parents=True)
+    governed.write_text("contracts: []\n", encoding="utf-8")
+    unrelated = tmp_path / "Dimension_Config.yaml"
+    unrelated.write_text("dimensions: {}\n", encoding="utf-8")
+
+    paths = run_poc_module._kpi_source_contract_paths(
+        {
+            "control_plane_registry": {
+                "entries": [
+                    {
+                        "kind": "kpi_source_contract",
+                        "source_disposition": "control_plane",
+                        "governed_path": str(governed),
+                    },
+                    {
+                        "kind": "dimension_configuration",
+                        "source_disposition": "control_plane",
+                        "governed_path": str(unrelated),
+                    },
+                    {
+                        "kind": "kpi_source_contract",
+                        "source_disposition": "current_evidence",
+                        "governed_path": str(governed),
+                    },
+                ]
+            }
+        }
+    )
+
+    assert paths == [governed.resolve()]
+
+
 def _challenge_event(finding_id: str, round_no: int = 1) -> AuditEvent:
     return AuditEvent(
         round_no=round_no,

@@ -10,11 +10,42 @@ from strategyos_mvp.executive_presentation import (
 from strategyos_mvp.executive_read_model import build_executive_read_model
 from strategyos_mvp.source_finance_kpis import (
     _group_cost_component_drivers,
+    _kpi_source_contract_registry,
     derive_source_finance_kpis,
 )
 
 
 DATASET = Path(__file__).parent / "fixtures" / "01_Synthetic_Dataset"
+
+
+def test_governed_control_plane_registry_is_available_without_entering_evidence(tmp_path):
+    evidence_root = tmp_path / "normalized" / "current_run_model"
+    evidence_root.mkdir(parents=True)
+    control_path = tmp_path / "control_plane" / "25_Engagement" / "KPI_Source_Contracts_v1.yaml"
+    control_path.parent.mkdir(parents=True)
+    control_path.write_text(
+        """registry:
+  id: SRCREG-MZ-001
+  version: '1.1'
+contracts:
+  - kpi: KPI-05 Group cash vs floor
+    source_type: system-of-record
+    cadence: daily
+    freshness_threshold_days: 3
+    provider: Group Treasury (system feed)
+    status_at_anchor: fresh
+""",
+        encoding="utf-8",
+    )
+
+    assert not list(evidence_root.rglob("*.yaml"))
+    contracts = _kpi_source_contract_registry(
+        evidence_root,
+        configuration_paths=[control_path],
+    )
+
+    assert contracts["cash_vs_floor"]["provider"] == "Group Treasury (system feed)"
+    assert contracts["cash_vs_floor"]["source_file"] == "KPI_Source_Contracts_v1.yaml"
 
 
 def test_source_pack_calculates_four_ceo_actuals_with_lineage():

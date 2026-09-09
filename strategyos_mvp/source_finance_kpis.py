@@ -21,18 +21,36 @@ from openpyxl import load_workbook
 import yaml
 
 
-def _kpi_source_contract_registry(root: Path) -> dict[str, dict[str, Any]]:
-    """Load advisor-owned KPI providers without embedding sector terms in core."""
+def _kpi_source_contract_registry(
+    root: Path,
+    *,
+    configuration_paths: Iterable[Path | str] = (),
+) -> dict[str, dict[str, Any]]:
+    """Load advisor-owned KPI providers without embedding sector terms in core.
+
+    Source-pack normalization keeps control-plane configuration outside the
+    business-evidence tree.  Callers processing a registered source pack pass
+    the governed registry paths explicitly; direct/local datasets retain the
+    convenient in-tree discovery used by development and audits.
+    """
     # Configuration discovery is deliberately separate from business-source
     # discovery.  A malformed group workbook must still fail closed instead of
     # being affected by which advisor configuration files happen to exist.
-    candidates = sorted(
-        path
+    in_tree_candidates = {
+        path.resolve()
         for path in root.rglob("*")
         if path.is_file()
         and "kpi_source_contracts" in path.name.lower()
         and path.suffix.lower() in {".yaml", ".yml"}
-    )
+    }
+    explicit_candidates = {
+        Path(path).resolve()
+        for path in configuration_paths
+        if Path(path).is_file()
+        and "kpi_source_contracts" in Path(path).name.lower()
+        and Path(path).suffix.lower() in {".yaml", ".yml"}
+    }
+    candidates = sorted(in_tree_candidates | explicit_candidates)
     path = candidates[0] if candidates else None
     if path is None:
         return {}
@@ -63,13 +81,17 @@ def _kpi_source_contract_registry(root: Path) -> dict[str, dict[str, Any]]:
             "status": str(item.get("status_at_anchor") or ""),
             "registry_id": str((payload.get("registry") or {}).get("id") or ""),
             "registry_version": str((payload.get("registry") or {}).get("version") or ""),
-            "source_file": _relative(path, root),
+            "source_file": _relative(path, root.resolve()),
             "source_sha256": _sha256(path),
         }
     return result
 
 
-def derive_source_finance_kpis(dataset_root: Path) -> dict[str, Any]:
+def derive_source_finance_kpis(
+    dataset_root: Path,
+    *,
+    kpi_source_contract_paths: Iterable[Path | str] = (),
+) -> dict[str, Any]:
     """Return a JSON-safe calculation payload, or an explicit unavailable payload.
 
     The calculation boundary is deliberately narrow: GL balances calculate
@@ -77,7 +99,10 @@ def derive_source_finance_kpis(dataset_root: Path) -> dict[str, Any]:
     cash. Plans and the board floor are never manufactured from actuals.
     """
     root = Path(dataset_root)
-    source_contracts = _kpi_source_contract_registry(root)
+    source_contracts = _kpi_source_contract_registry(
+        root,
+        configuration_paths=kpi_source_contract_paths,
+    )
     # A group finance pack and a division ledger have different entity scopes.
     # Use the narrow GL path only when no group source was supplied; an invalid
     # group contract must never turn division numbers into group headlines.
