@@ -173,8 +173,8 @@ def test_executive_can_create_a_tenant_scoped_data_request(monkeypatch, tmp_path
 def test_outreach_request_schema_is_tenant_scoped_and_immutable():
     migration = (Path(outreach.__file__).parent / "sql" / "dimensional_intent.sql").read_text(encoding="utf-8")
     runtime = (Path(outreach.__file__).parent / "database_schema.py").read_text(encoding="utf-8")
-    assert "CREATE TABLE IF NOT EXISTS strategyos_outreach_requests" in migration
+    assert "CREATE TABLE IF NOT EXISTS strategyos_intent_outreach_requests" in migration
     assert "PRIMARY KEY(tenant_key, request_id)" in migration
-    assert "'strategyos_outreach_requests'" in migration
-    assert "governed_request_tables=intent_tables+',strategyos_outreach_requests'" in runtime
+    assert "'strategyos_intent_outreach_requests'" in migration
+    assert "'structure_configs','structure_approvals','outreach_requests'" in runtime
     assert "Worker and projector roles must not access executive outreach requests." in runtime

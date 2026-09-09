@@ -216,7 +216,7 @@ def _database_requests(principal: dict[str, object]) -> list[dict[str, object]] 
     try:
         with handle as connection:
             cursor = connection.execute(
-                """SELECT payload FROM strategyos_outreach_requests
+                """SELECT payload FROM strategyos_intent_outreach_requests
                    WHERE tenant_key=%s ORDER BY created_at DESC, request_id DESC LIMIT 500""",
                 (tenant,),
             )
@@ -261,7 +261,7 @@ def create_data_request(principal: dict[str, object], request: DataRequestCreate
         try:
             with handle as connection:
                 connection.execute(
-                    """INSERT INTO strategyos_outreach_requests
+                    """INSERT INTO strategyos_intent_outreach_requests
                        (tenant_key,request_id,payload,created_by) VALUES (%s,%s,%s::jsonb,%s)""",
                     (tenant, record["request_id"], json.dumps(record, ensure_ascii=False), actor),
                 )

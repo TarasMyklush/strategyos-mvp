@@ -199,17 +199,17 @@ def verify_runtime_schema(conn, *, expected_scope=None):
                 raise RuntimeError('Projector role exceeds or lacks its projection-only database authority.')
         if scope == 'request':
             cur.execute("""SELECT
-                has_table_privilege(current_user,'public.strategyos_outreach_requests','SELECT,INSERT')
-                AND NOT has_table_privilege(current_user,'public.strategyos_outreach_requests','UPDATE,DELETE,TRUNCATE')""")
+                has_table_privilege(current_user,'public.strategyos_intent_outreach_requests','SELECT,INSERT')
+                AND NOT has_table_privilege(current_user,'public.strategyos_intent_outreach_requests','UPDATE,DELETE,TRUNCATE')""")
             if not cur.fetchone()[0]:
                 raise RuntimeError('Request role must append outreach requests without rewrite authority.')
         else:
             cur.execute("""SELECT NOT (
-                has_table_privilege(current_user,'public.strategyos_outreach_requests','SELECT')
-                OR has_table_privilege(current_user,'public.strategyos_outreach_requests','INSERT')
-                OR has_table_privilege(current_user,'public.strategyos_outreach_requests','UPDATE')
-                OR has_table_privilege(current_user,'public.strategyos_outreach_requests','DELETE')
-                OR has_table_privilege(current_user,'public.strategyos_outreach_requests','TRUNCATE'))""")
+                has_table_privilege(current_user,'public.strategyos_intent_outreach_requests','SELECT')
+                OR has_table_privilege(current_user,'public.strategyos_intent_outreach_requests','INSERT')
+                OR has_table_privilege(current_user,'public.strategyos_intent_outreach_requests','UPDATE')
+                OR has_table_privilege(current_user,'public.strategyos_intent_outreach_requests','DELETE')
+                OR has_table_privilege(current_user,'public.strategyos_intent_outreach_requests','TRUNCATE'))""")
             if not cur.fetchone()[0]:
                 raise RuntimeError('Worker and projector roles must not access executive outreach requests.')
         checkpoint_tables = list(_LANGGRAPH_CHECKPOINT_TABLES)
@@ -327,11 +327,10 @@ def provision_preview_runtime(conn, destination: Path, *, role='strategyos_previ
         intent_tables=','.join('strategyos_intent_' + name for name in (
             'plan_versions','actual_versions','ratifier_events','ratifications','analyses',
             'advisor_configs','advisor_approvals','advisor_publications','board_templates','board_packs',
-            'structure_configs','structure_approvals'))
-        governed_request_tables=intent_tables+',strategyos_outreach_requests'
+            'structure_configs','structure_approvals','outreach_requests'))
         for login in (request_role,worker_role,projector_role):
-            cur.execute(sql.SQL('REVOKE ALL PRIVILEGES ON '+governed_request_tables+' FROM {}').format(sql.Identifier(login)))
-        cur.execute(sql.SQL('GRANT SELECT,INSERT ON '+governed_request_tables+' TO {}').format(sql.Identifier(request_role)))
+            cur.execute(sql.SQL('REVOKE ALL PRIVILEGES ON '+intent_tables+' FROM {}').format(sql.Identifier(login)))
+        cur.execute(sql.SQL('GRANT SELECT,INSERT ON '+intent_tables+' TO {}').format(sql.Identifier(request_role)))
         checkpoint_tables=','.join(_LANGGRAPH_CHECKPOINT_TABLES)
         checkpoint_data_tables=','.join(_LANGGRAPH_CHECKPOINT_DATA_TABLES)
         for login in (request_role,projector_role):
