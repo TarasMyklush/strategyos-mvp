@@ -36,13 +36,20 @@ def _format_sar(value: Any) -> str:
     return f"SAR {round(number):,}"
 
 
-def _format_sar_billions(value: Any) -> str:
-    """Render the group-liquidity contract in its declared SAR billions unit."""
+def _format_cash_contract_sar(value: Any) -> str:
+    """Render material group liquidity in billions without erasing small values.
+
+    The governed Mizan cash source declares values in SAR billions, including
+    its SAR 0.21B headroom. Smaller deterministic fixtures and client values
+    still need an honest compact unit instead of rounding to ``SAR 0.00B``.
+    """
     try:
         number = float(value or 0.0)
     except (TypeError, ValueError):
         return "--"
-    return f"SAR {number / 1_000_000_000:.2f}B"
+    if abs(number) >= 100_000_000:
+        return f"SAR {number / 1_000_000_000:.2f}B"
+    return _format_sar(number)
 
 
 def _as_money(value: Any) -> float | None:
@@ -588,7 +595,7 @@ def _executive_kpi_signal(
         favourable = gap_amount >= 0
         posture = "Above floor" if favourable else "Below floor"
         tone = "positive" if favourable else "critical"
-        variance_label = f"{_format_sar_billions(abs(gap_amount))} {'above' if favourable else 'below'} floor"
+        variance_label = f"{_format_cash_contract_sar(abs(gap_amount))} {'above' if favourable else 'below'} floor"
         recommendation = (
             _accountability_recommendation(
                 action_type="assign_liquidity_remediation",
@@ -597,7 +604,7 @@ def _executive_kpi_signal(
                 owner=None,
                 calendar_items=calendar_items,
                 requested_deliverable="Dated liquidity-remediation plan",
-                success_measure=f"Restore and protect liquidity above the governed floor by {_format_sar_billions(abs(gap_amount))}",
+                success_measure=f"Restore and protect liquidity above the governed floor by {_format_cash_contract_sar(abs(gap_amount))}",
                 source_signal_ids=("cash_vs_floor", *[str(item) for item in evidence_files if str(item)]),
             )
             if not favourable
@@ -810,11 +817,11 @@ def _executive_kpi_brief(
             {"label": "Reported cash position", "value": metric},
             {
                 "label": "Approved board cash floor",
-                "value": _format_sar_billions(floor) if floor is not None else "Not supplied",
+                "value": _format_cash_contract_sar(floor) if floor is not None else "Not supplied",
             },
             {
                 "label": "Headroom above floor" if headroom is not None and headroom >= 0 else "Shortfall to floor",
-                "value": _format_sar_billions(abs(headroom)) if headroom is not None else "Not calculated",
+                "value": _format_cash_contract_sar(abs(headroom)) if headroom is not None else "Not calculated",
             },
         ]
         reported_accounts = list(evidence_details.get("reported_accounts") or [])
@@ -1095,7 +1102,7 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
         else:
             pct = (actual / comparator) * 100 if comparator not in {None, 0} else None
             metric = (
-                _format_sar_billions(actual)
+                _format_cash_contract_sar(actual)
                 if spec["key"] == "cash_vs_floor" and comparator is not None
                 else _format_sar(actual)
             )
@@ -1109,7 +1116,7 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
             else:
                 delta = actual - comparator
                 if spec["key"] == "cash_vs_floor":
-                    comparison = f"{_format_sar_billions(abs(delta))} {'above' if delta >= 0 else 'below'} floor"
+                    comparison = f"{_format_cash_contract_sar(abs(delta))} {'above' if delta >= 0 else 'below'} floor"
                 else:
                     comparison = f"{pct:.1f}% of plan"
                 missing_inputs = []
