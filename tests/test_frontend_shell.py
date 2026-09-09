@@ -3386,11 +3386,11 @@ def test_assistant_transport_failures_log_visible_diagnostics():
     assert 'pendingThread = threadStore()[threadKey]' in executive_js
 
 
-def test_hermes_browser_deadline_exceeds_the_provider_execution_budget():
-    """A cold run hydrate plus a valid provider answer must not be aborted by UI."""
+def test_hermes_browser_deadline_degrades_to_governed_local_answer_promptly():
+    """A language-service delay must not leave the executive waiting indefinitely."""
     executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
 
-    assert "firstDefined(requestOptions.timeoutMs, 150000)" in executive_js
+    assert "firstDefined(requestOptions.timeoutMs, 15000)" in executive_js
 
 
 def test_assistant_network_count_is_labeled_not_presented_as_failed_requests():

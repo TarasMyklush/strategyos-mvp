@@ -28,6 +28,7 @@
   }
   function dimensions(value) { return Object.keys(value).sort().map(function (key) { return key + ': ' + value[key]; }).join(' · '); }
   function renderCatalog(catalog) {
+    if (window.__KYVERN_HAS_CUSTOMER_PLAN__) { panel.hidden = true; return; }
     document.getElementById('demo-pack-title').textContent = catalog.label;
     document.getElementById('demo-pack-description').textContent = catalog.description;
     document.getElementById('demo-pack-flags').replaceChildren(
@@ -92,6 +93,11 @@
   document.getElementById('demo-pack-close').addEventListener('click', function () {
     document.getElementById('demo-pack-stories').hidden = false; document.getElementById('demo-story-detail').hidden = true;
     document.getElementById('demo-pack-close').hidden = true; status('');
+  });
+  window.addEventListener('kyvern-catalog', function (event) {
+    var hasCustomerPlan = Boolean(event.detail && event.detail.plans && event.detail.plans.length);
+    window.__KYVERN_HAS_CUSTOMER_PLAN__ = hasCustomerPlan;
+    if (hasCustomerPlan) panel.hidden = true;
   });
   get('/api/demo-packs/current').then(renderCatalog).catch(function (error) { status(error.message, true); });
 }());

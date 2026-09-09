@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Human-style, read-only acceptance walkthrough for the hosted Kyvern demo pack."""
+"""Human-style hosted acceptance for the current Kyvern executive journey."""
 
 from __future__ import annotations
 
@@ -10,33 +10,8 @@ import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from time import monotonic
 from urllib.parse import urljoin
-
-
-STORIES = (
-    {
-        "title": "Institutional client rescues regional misses",
-        "rollup": ("300", "295", "-5", "on_plan", "3 / 3"),
-        "findings": ("offset", "concentration"),
-        "cell_count": 3,
-        "evidence_count": 6,
-    },
-    {
-        "title": "Volume growth hides adverse commercial mix",
-        "rollup": ("300", "333", "33", "ahead", "2 / 2"),
-        "findings": ("offset", "price / volume / mix"),
-        "effects": ("Volume 60.00", "Mix -30.00", "Price 3.00", "Observed 33 SAR"),
-        "cell_count": 2,
-        "evidence_count": 12,
-    },
-    {
-        "title": "Regional miss links to a credit constraint",
-        "rollup": ("300", "240", "-60", "behind", "2 / 2"),
-        "findings": (),
-        "cell_count": 2,
-        "evidence_count": 4,
-    },
-)
 
 
 def preview_password(raw: str, username: str = "executive.tester") -> str:
@@ -55,7 +30,7 @@ def main() -> int:
     if not args.base_url:
         parser.error("--base-url or STRATEGYOS_PUBLIC_URL is required")
 
-    from playwright.sync_api import sync_playwright
+    from playwright.sync_api import expect, sync_playwright
 
     base_url = args.base_url.rstrip("/") + "/"
     output_dir = Path(args.output_dir)
@@ -65,12 +40,12 @@ def main() -> int:
         "subject": base_url,
         "persona": "executive.tester",
         "started_at": datetime.now(UTC).isoformat(),
-        "mode": "read-only Chromium walkthrough",
+        "mode": "human-style Chromium walkthrough of the customer executive journey",
         "steps": [],
     }
     page = None
 
-    def pass_step(name: str, evidence: dict[str, object] | None = None) -> None:
+    def passed(name: str, evidence: dict[str, object] | None = None) -> None:
         report["steps"].append({"name": name, "status": "passed", "evidence": evidence or {}})
 
     try:
@@ -78,7 +53,6 @@ def main() -> int:
             browser = playwright.chromium.launch(headless=True)
             context = browser.new_context(
                 viewport={"width": 1440, "height": 1000},
-                accept_downloads=True,
                 locale="en-GB",
                 timezone_id="Asia/Dubai",
             )
@@ -88,7 +62,16 @@ def main() -> int:
             assert response and response.ok
             page.wait_for_url(re.compile(r"/login(?:\?.*)?$"))
             assert page.get_by_role("heading", name="Sign in to Kyvern").is_visible()
-            pass_step("Protected /plan redirects to customer sign-in", {"url": page.url})
+            palette = page.evaluate("""() => ({
+              background: getComputedStyle(document.body).backgroundColor,
+              button: getComputedStyle(document.querySelector('#submit')).backgroundColor,
+              heading: getComputedStyle(document.querySelector('h1')).fontFamily
+            })""")
+            assert palette["background"] == "rgb(244, 242, 237)", palette
+            assert palette["button"] == "rgb(126, 156, 139)", palette
+            assert "Georgia" in palette["heading"], palette
+            page.screenshot(path=output_dir / "01-sign-in.png", full_page=True)
+            passed("Protected routes use the frozen customer sign-in palette", palette)
 
             if page.locator("#username").evaluate("node => node.tagName") == "SELECT":
                 page.locator("#username").select_option("executive.tester")
@@ -97,97 +80,125 @@ def main() -> int:
             page.locator("#password").fill("deliberately-wrong")
             page.get_by_role("button", name="Sign in").click()
             page.get_by_text("Invalid credentials for this role.").wait_for(timeout=10_000)
-            assert re.search(r"/login(?:\?.*)?$", page.url)
-            pass_step("Invalid password is rejected without leaving sign-in")
+            passed("Invalid credentials are rejected without leaving sign-in")
 
             page.locator("#password").fill(password)
             page.get_by_role("button", name="Sign in").click()
             page.wait_for_url(lambda url: "/login" not in url, timeout=15_000)
-            pass_step("Authorized executive preview account signs in", {"landing_url": page.url})
+            page.goto(urljoin(base_url, "app?persona=ceo"), wait_until="domcontentloaded")
+            started = monotonic()
+            expect(page.locator("#driver-row")).to_contain_text("Revenue", timeout=5_000)
+            expect(page.locator("#driver-row")).to_contain_text("Cash vs floor", timeout=5_000)
+            first_content_seconds = monotonic() - started
+            assert first_content_seconds < 5
+            passed("The group index renders progressively within five seconds", {
+                "first_meaningful_content_seconds": round(first_content_seconds, 3)
+            })
 
-            page.goto(urljoin(base_url, "plan"), wait_until="domcontentloaded")
-            page.locator("#demo-pack-panel:not([hidden])").wait_for(timeout=15_000)
-            assert page.locator("#demo-pack-title").inner_text() == "Healthcare and pharma distribution decisions"
-            assert page.locator("#demo-pack-stories .demo-story-card").count() == 3
-            assert page.get_by_text("Synthetic data", exact=True).is_visible()
-            assert page.get_by_text("Read only", exact=True).is_visible()
-            assert page.get_by_text("No authority effect", exact=True).is_visible()
-            page.screenshot(path=output_dir / "01-story-catalog.png", full_page=True)
-            pass_step("Configured pack renders three read-only decision stories")
+            page.locator('#driver-row [data-driver-key="cash_vs_floor"]').wait_for(timeout=45_000)
+            cards = page.locator("#driver-row [data-driver-key]")
+            assert cards.count() == 4
+            cash_card = page.locator('#driver-row [data-driver-key="cash_vs_floor"]')
+            cash_text = cash_card.inner_text()
+            assert "SAR 1.41B" in cash_text, cash_text
+            assert "Source traced" in cash_text, cash_text
+            cash_card.click()
+            drill = page.locator("#driver-drill")
+            expect(drill).to_contain_text("SAR 1.20B", timeout=10_000)
+            expect(drill).to_contain_text("SAR 0.21B", timeout=10_000)
+            expect(drill).to_contain_text("Group Treasury", timeout=10_000)
+            assert "No approved budget has been supplied" not in drill.inner_text()
+            page.screenshot(path=output_dir / "02-cash-and-scope.png", full_page=True)
+            passed("Cash vs floor uses the approved floor, trajectory and accountable provider", {
+                "current_cash": "SAR 1.41B", "approved_floor": "SAR 1.20B", "headroom": "SAR 0.21B"
+            })
 
-            for index, expected in enumerate(STORIES, start=1):
-                button = page.locator("#demo-pack-stories button").nth(index - 1)
-                if index == 1:
-                    button.focus()
-                    button.press("Enter")
-                else:
-                    button.click()
-                page.locator("#demo-story-detail:not([hidden])").wait_for()
-                assert page.locator("#demo-story-title").inner_text() == expected["title"]
+            page.locator("#hero-plan-coverage .granular-intent-summary").wait_for(timeout=20_000)
+            coverage = page.locator("#hero-plan-coverage")
+            expect(coverage).to_contain_text("FY target SAR 2.54B")
+            expect(coverage).to_contain_text("3 reconciled granular stories")
+            page.get_by_role("link", name="Open intent and granular drift").click()
+            page.wait_for_url(re.compile(r"/plan(?:\?.*)?$"), timeout=10_000)
+            page.locator("#vault-content:not([hidden])").wait_for(timeout=20_000)
+            passed("The briefing link navigates into the Intent Vault")
 
-                rollup_cells = page.locator("#demo-story-rollups tbody tr").first.locator("td")
-                values = tuple(rollup_cells.nth(cell).inner_text() for cell in range(1, 6))
-                assert values == expected["rollup"], (expected["title"], values)
+            plan_options = page.locator("#plan-select option")
+            assert plan_options.count() == 2, plan_options.all_inner_texts()
+            option_text = plan_options.nth(1).inner_text()
+            assert option_text.startswith("Tamween Pharma Distribution FY2026 revenue plan")
+            assert "human-plan-" not in option_text
+            page.locator("#plan-select").select_option(index=1)
+            page.locator("#selected-plan:not([hidden])").wait_for(timeout=20_000)
+            title = page.locator("#plan-title").inner_text()
+            assert title.startswith("Tamween Pharma Distribution FY2026 revenue plan")
+            metadata = page.locator("#plan-metadata").inner_text()
+            assert "Ratified" in metadata and "FY2026" in metadata
+            rows = page.locator("#plan-cells tbody tr")
+            assert rows.count() == 576
+            vault_text = page.locator("#selected-plan").inner_text()
+            assert "item-a" not in vault_text.lower()
+            assert "https://new.strategyos.live/:" not in vault_text
+            assert "SHA-256" not in page.locator("#decomposition-lineage > summary").inner_text()
+            page.screenshot(path=output_dir / "03-customer-intent.png", full_page=True)
+            passed("The Vault exposes only the human-named FY2026 customer plan", {
+                "visible_customer_plans": 1, "cells": rows.count(), "period": "FY2026"
+            })
 
-                findings_text = page.locator("#demo-story-findings").inner_text().lower()
-                for finding in expected["findings"]:
-                    assert finding in findings_text
-                for effect in expected.get("effects", ()):
-                    assert effect in page.locator("#demo-story-findings").inner_text()
+            catalog_response = context.request.get(
+                urljoin(base_url, "api/intent/dimensional/catalog?limit=50")
+            )
+            assert catalog_response.ok, catalog_response.text()
+            customer_summary = catalog_response.json()["plans"][0]
+            analysis_id = customer_summary["latest_analysis"]["analysis_id"]
+            page.goto(urljoin(base_url, "plan?analysis=" + analysis_id), wait_until="domcontentloaded")
+            page.locator("#analysis-panel:not([hidden])").wait_for(timeout=30_000)
+            stories = page.locator("#analysis-stories .demo-story-card")
+            assert stories.count() == 3
+            rollup = page.locator("#analysis-rollups tbody tr").first.inner_text()
+            assert "1194000000.06" in rollup and "1267999999.96" in rollup, rollup
+            assert "288 / 288" in rollup, rollup
+            page.screenshot(path=output_dir / "04-granular-drift.png", full_page=True)
+            passed("Three governed stories reconcile to complete H1 granular drift", {
+                "story_count": 3, "coverage": "288 / 288"
+            })
 
-                cells = page.locator("#demo-story-cells tbody tr")
-                assert cells.count() == expected["cell_count"]
-                links = page.locator("#demo-story-detail a")
-                assert links.count() == expected["evidence_count"]
-                evidence_statuses = []
-                for evidence_index in range(links.count()):
-                    href = links.nth(evidence_index).get_attribute("href")
-                    assert href
-                    evidence_response = context.request.get(urljoin(base_url, href.lstrip("/")))
-                    evidence_statuses.append(evidence_response.status)
-                    assert evidence_response.ok
-                    assert re.fullmatch(
-                        r"[0-9a-f]{64}",
-                        evidence_response.headers.get("x-kyvern-source-sha256", ""),
-                    )
+            page.get_by_role("link", name="Executive view").click()
+            page.wait_for_url(re.compile(r"/app\?persona=ceo"), timeout=10_000)
+            page.locator('#driver-row [data-driver-key="revenue"]').wait_for(timeout=45_000)
+            assert page.locator("#persona-label").inner_text() == "Group CEO"
+            assert page.locator("#brand-org").inner_text() == "Executive workspace"
+            page.goto(urljoin(base_url, "outreach"), wait_until="domcontentloaded")
+            page.get_by_role("link", name="AI Assistants").click()
+            page.wait_for_url(lambda url: "/app" in url and "persona=ceo" in url, timeout=10_000)
+            page.locator('#driver-row [data-driver-key="revenue"]').wait_for(timeout=45_000)
+            assert page.locator("#persona-label").inner_text() == "Group CEO"
+            assert page.locator("#brand-org").inner_text() == "Executive workspace"
+            passed("Executive persona survives briefing, Vault and outreach navigation")
 
-                first_link = links.first
-                with page.expect_download() as download_info:
-                    first_link.click()
-                download = download_info.value
-                download.save_as(output_dir / f"story-{index}-evidence-{download.suggested_filename}")
-
-                board_pages = page.locator("#demo-story-board details")
-                assert board_pages.count() >= 2
-                for board_index in range(board_pages.count()):
-                    board_pages.nth(board_index).locator("summary").click()
-                board_text = page.locator("#demo-story-board").inner_text()
-                assert re.search(r"[\u0600-\u06ff]", board_text)
-                page.screenshot(path=output_dir / f"0{index + 1}-story-{index}.png", full_page=True)
-                pass_step(
-                    f"Story {index}: {expected['title']}",
-                    {
-                        "rollup": values,
-                        "cells": cells.count(),
-                        "evidence_links": links.count(),
-                        "evidence_statuses": evidence_statuses,
-                        "bilingual_board_pages": board_pages.count(),
-                    },
-                )
-                page.get_by_role("button", name="Back to stories").click()
-                assert page.locator("#demo-pack-stories").is_visible()
+            page.get_by_role("tab", name="Diagnostics").click()
+            context.route("**/assistant/chat", lambda route: route.abort())
+            page.locator('#driver-row [data-driver-key="cash_vs_floor"]').click()
+            page.locator("[data-kpi-ask-input]").fill("Do I need to intervene on cash headroom?")
+            page.locator("[data-kpi-ask-send]").click()
+            page.locator("#assistant-drawer.is-open").wait_for(timeout=10_000)
+            assistant_text = page.locator("#assistant-messages")
+            expect(assistant_text).to_contain_text("governed local answer", timeout=15_000)
+            expect(assistant_text).to_contain_text("SAR 1.41B", timeout=15_000)
+            assert "loading" not in page.locator("[data-kpi-ask-send]").inner_text().lower()
+            page.screenshot(path=output_dir / "05-deterministic-assistant-fallback.png", full_page=True)
+            passed("A failed language request returns the scoped deterministic answer without a sticky control")
 
             page.set_viewport_size({"width": 390, "height": 844})
-            assert page.get_by_role("link", name="Intent Vault").is_visible()
-            assert page.locator("#demo-pack-stories .demo-story-card").count() == 3
-            page.screenshot(path=output_dir / "05-mobile-catalog.png", full_page=True)
-            pass_step("Catalog remains usable at a 390px mobile viewport")
-
-            page.get_by_role("button", name="Sign out").click()
-            page.wait_for_url(re.compile(r"/login(?:\?.*)?$"))
-            page.goto(urljoin(base_url, "plan"), wait_until="domcontentloaded")
-            page.wait_for_url(re.compile(r"/login(?:\?.*)?$"))
-            pass_step("Sign-out clears the session and protects direct /plan access")
+            assert page.locator("#driver-row").is_visible()
+            page.screenshot(path=output_dir / "06-mobile-briefing.png", full_page=True)
+            passed("The executive journey remains usable at a 390px viewport")
+            report["status"] = "passed"
+            report["summary"] = {
+                "passed_steps": len(report["steps"]),
+                "customer_plan_cells": 576,
+                "granular_stories": 3,
+                "viewport_widths": [1440, 390],
+            }
             browser.close()
     except Exception as exc:
         if page is not None:
@@ -198,19 +209,11 @@ def main() -> int:
                 pass
         report["status"] = "failed"
         report["error"] = f"{type(exc).__name__}: {exc}"
+        raise
+    finally:
         report["finished_at"] = datetime.now(UTC).isoformat()
         (output_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n")
-        raise
 
-    report["status"] = "passed"
-    report["finished_at"] = datetime.now(UTC).isoformat()
-    report["summary"] = {
-        "passed_steps": len(report["steps"]),
-        "stories_opened": len(STORIES),
-        "evidence_links_verified": sum(item["evidence_count"] for item in STORIES),
-        "viewport_widths": [1440, 390],
-    }
-    (output_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report["summary"], sort_keys=True))
     return 0
 

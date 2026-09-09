@@ -15,6 +15,7 @@
   if (bootstrap.api_auth_enabled) {}
   var _tokenKey = "strategyos.ui.token";
   var EXECUTIVE_THEME_STORAGE_KEY = "strategyos.executive.theme";
+  var EXECUTIVE_PERSONA_STORAGE_KEY = "strategyos.executive.persona";
   var ASSISTANT_EXPANDED_STORAGE_KEY = "strategyos.executive.assistantExpanded";
   var ASSISTANT_ENDPOINT = "/assistant/chat";
   var ASSISTANT_TRANSPORT_FALLBACK = "I couldn't reach the shared assistant service just now.";
@@ -30,6 +31,19 @@
 
   function storedAssistantExpanded() {
     try { return window.localStorage.getItem(ASSISTANT_EXPANDED_STORAGE_KEY) === "true"; } catch (_error) { return false; }
+  }
+
+  function storedExecutivePersona() {
+    try {
+      var stored = String(window.localStorage.getItem(EXECUTIVE_PERSONA_STORAGE_KEY) || "").toLowerCase();
+      return /^[a-z][a-z0-9_-]{0,31}$/.test(stored) ? stored : "";
+    } catch (_error) { return ""; }
+  }
+
+  function persistExecutivePersona(persona) {
+    var normalized = String(persona || "ceo").toLowerCase();
+    try { window.localStorage.setItem(EXECUTIVE_PERSONA_STORAGE_KEY, normalized); } catch (_error) {}
+    return normalized;
   }
 
   function applyExecutiveTheme(theme) {
@@ -227,7 +241,25 @@
     var detailSentences = blocks.detail ? [blocks.detail] : sentences.filter(function (_sentence, index) {
       return index !== 0 && index !== recommendationIndex;
     });
-    var metrics = safeArray(blocks.figures).length ? safeArray(blocks.figures).slice(0, 4) : executiveMetricTokens(plain, 4);
+    var metrics = safeArray(blocks.figures).map(function (figure) {
+      if (figure && typeof figure === "object") {
+        var figureLabel = String(firstDefined(figure.label, figure.subject, figure.name, "")).trim();
+        var figureValue = String(firstDefined(figure.value, figure.metric, "")).trim();
+        return figureLabel && figureValue ? figureLabel + " · " + figureValue : "";
+      }
+      return String(figure || "").trim();
+    }).filter(function (figure) {
+      // A standalone currency, percentage or duration is decoration rather
+      // than information.  Render a chip only when it carries a subject noun;
+      // the complete answer sentence remains visible either way.
+      var withoutMeasure = figure
+        .replace(/\bSAR\b/gi, " ")
+        .replace(/[+\-−]?\d[\d,.]*(?:\s*(?:%|bps?|basis points?|[KMBT]|million|billion|days?|weeks?))?/gi, " ")
+        .replace(/[·:()\-–—/]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      return /[A-Za-z]{3,}/.test(withoutMeasure);
+    }).slice(0, 4);
     return '<div class="assistant-answer-dashboard">'
       + '<p class="assistant-answer-verdict">' + renderAssistantMarkdownToHtml(verdict) + '</p>'
       + (metrics.length ? '<div class="assistant-answer-stats">' + metrics.map(function (metric) { return '<span>' + escapeHtml(metric) + '</span>'; }).join('') + '</div>' : '')
@@ -242,7 +274,9 @@
       .replace(/[_-]/g, " ")
       .split(" ")
       .filter(Boolean)
-      .map(function (part) { return part.charAt(0).toUpperCase() + part.slice(1); })
+      .map(function (part) {
+        return /^[A-Z0-9]{2,4}$/.test(part) ? part : part.charAt(0).toUpperCase() + part.slice(1);
+      })
       .join(" ");
   }
 
@@ -300,6 +334,7 @@
       .replace(/\blatest governed run\b/gi, "latest verified review")
       .replace(/\bgoverned run\b/gi, "verified review")
       .replace(/\bserver[- ]resolved\b/gi, "verified")
+      .replace(/\b(?:KPI|INIT|EV|SIG)-\d+\b/gi, "strategic register entry")
       .replace(/\bPLANTED(?:\s+DRIFT)?\b\s*[-—:]?\s*/gi, "")
       .replace(/\bANSWER[ _-]?KEY\b\s*[-—:]?\s*/gi, "")
       .replace(/\(?\bPattern\s+\d+\b\)?\s*[-—:]?\s*/gi, "")
@@ -832,6 +867,27 @@
     });
   }
 
+  async function loadGranularIntentSummary() {
+    try {
+      var catalog = await fetchJson('/api/intent/dimensional/catalog?limit=50', true);
+      var plans = safeArray(catalog && catalog.plans);
+      var plan = plans.find(function (item) {
+        return item && item.governance_status === 'ratified' && item.latest_analysis;
+      }) || plans.find(function (item) {
+        return item && item.governance_status === 'ratified';
+      }) || null;
+      state.granularIntent = plan;
+      state.granularIntentLoaded = true;
+      if (state.activePersona === 'ceo' && state.activeView === 'home') renderHero();
+    } catch (error) {
+      state.granularIntent = {
+        unavailable_reason: firstDefined(error && error.message, 'Granular intent is temporarily unavailable.')
+      };
+      state.granularIntentLoaded = true;
+      if (state.activePersona === 'ceo' && state.activeView === 'home') renderHero();
+    }
+  }
+
   function putJson(path, body) {
     var headers = authHeaders();
     headers["Content-Type"] = "application/json";
@@ -872,12 +928,10 @@
 
   function postJson(path, body, options) {
     var requestOptions = options || {};
-    // Keep the browser deadline beyond the governed provider boundary. The
-    // Codex-compatible service has a 120s execution budget and the API may
-    // need to hydrate an immutable run on the first question after deploy.
-    // A shorter client deadline aborts an otherwise healthy answer and leaves
-    // the CEO with a false transport error while the server is still working.
-    var timeoutMs = Number(firstDefined(requestOptions.timeoutMs, 150000));
+    // A live executive interaction must resolve promptly.  The governed local
+    // KPI record below is the fallback when the language service cannot return
+    // inside this boundary; the request is aborted so loading state is final.
+    var timeoutMs = Number(firstDefined(requestOptions.timeoutMs, 15000));
     var headers = authHeaders({ skipAuth: requestOptions.skipAuth === true });
     var usedBearerAuth = Boolean(headers.Authorization);
     headers["Content-Type"] = "application/json";
@@ -1306,6 +1360,7 @@
   }
 
   function updateHistory() {
+    persistExecutivePersona(state.activePersona);
     var route = firstDefined(bootstrap.executive_entry_route, window.location.pathname, "/app");
     var query = buildQuery({
       persona: state.activePersona,
@@ -3105,6 +3160,58 @@
     return result;
   }
 
+  function deterministicAssistantFallback(message, context, reason, policyPayload) {
+    var ctx = context && typeof context === "object" ? context : {};
+    var key = String(firstDefined(ctx.kpi_key, ctx.driver_key, state.activeDriverKey, "")).trim();
+    var driver = getVisibleDrivers().find(function (item) {
+      return String(firstDefined(item && item.driver_key, item && item.key, "")) === key;
+    }) || getActiveDriver();
+    if (!driver || !driver.kpi_contract) return null;
+    var brief = driver.executive_brief && typeof driver.executive_brief === "object" ? driver.executive_brief : {};
+    var audit = brief.audit && typeof brief.audit === "object" ? brief.audit : {};
+    var calculation = brief.calculation && typeof brief.calculation === "object" ? brief.calculation : {};
+    var signal = brief.executive_signal && typeof brief.executive_signal === "object" ? brief.executive_signal : {};
+    var label = String(firstDefined(driver.label, ctx.kpi_label, "Selected KPI"));
+    var metric = String(firstDefined(brief.metric, driver.metric, "Not calculated"));
+    var comparison = brief.comparison && typeof brief.comparison === "object" ? brief.comparison : {};
+    var missing = safeArray(audit.missing_inputs).length
+      ? safeArray(audit.missing_inputs).filter(Boolean)
+      : safeArray(driver.missing_inputs).filter(Boolean);
+    var provider = String(firstDefined(driver.accountable_provider, audit.accountable_provider, "Finance data owner"));
+    var isPolicy = Boolean(policyPayload && policyPayload.policy_denied);
+    var prefix = isPolicy
+      ? "The external language service is not authorized for these sources. Here is the governed local answer."
+      : "The language service did not return within 15 seconds. Here is the governed local answer.";
+    var facts = [
+      "**" + label + ":** " + metric + ".",
+      String(firstDefined(signal.readout, brief.readout, driver.detail, "")).trim(),
+      comparison.value ? "Comparison: " + comparison.value + "." : "",
+      calculation.formula ? "Method: " + calculation.formula : "",
+      missing.length ? "Needed: " + missing.join("; ") + ". Accountable provider: " + provider + "." : ""
+    ].filter(Boolean);
+    var sources = safeArray(firstDefined(audit.source_titles, driver.source_files, [])).map(businessSourceLabel).filter(Boolean);
+    return {
+      ok: true,
+      answer: prefix + "\n\n" + facts.join(" "),
+      metadata: "Governed local KPI record" + (sources.length ? " · " + sources.join(" · ") : ""),
+      responsePayload: {
+        status: "ok",
+        determinism_tier: "governed_fact",
+        language_layer_unavailable: true,
+        fallback_reason: String(reason || (isPolicy ? "source permission" : "language service timeout")),
+        permission_request: isPolicy ? {
+          label: "Request source permission",
+          provider: provider,
+          kpi_label: label,
+          formula: String(firstDefined(calculation.formula, driver.formula, "Governed KPI calculation")),
+          missing_inputs: ["Data-owner authorization for approved external language processing"]
+        } : null
+      },
+      requestId: firstDefined(policyPayload && policyPayload.request_id, ""),
+      endpoint: "/assistant/chat"
+    };
+  }
+
   function applyAssistantResultToMessage(thread, message, result) {
     if (!thread || !message || !result) return;
     if (result.ok) {
@@ -3298,6 +3405,10 @@
       );
       var payload = response.payload;
       if (payload && payload.status === "ok") {
+        if (payload.policy_denied) {
+          var policyFallback = deterministicAssistantFallback(cleanMessage, entrypointCtx, "source permission", payload);
+          if (policyFallback) return policyFallback;
+        }
         var successfulResult = {
           ok: true,
           answer: qaAnswerText(payload),
@@ -3317,6 +3428,13 @@
         responseBody: payload
       });
     } catch (error) {
+      var localFallback = deterministicAssistantFallback(
+        cleanMessage,
+        entrypointCtx,
+        firstDefined(error && error.errorType, "language service unavailable"),
+        error && error.payload
+      );
+      if (localFallback) return localFallback;
       return makeAssistantFailureResult(cleanMessage, {
         endpoint: firstDefined(error && error.endpoint, "/assistant/chat"),
         statusCode: firstDefined(error && error.status, ""),
@@ -4164,7 +4282,7 @@
     });
     scroll.innerHTML = exchangeMessages.length ? exchangeMessages.map(function (message) {
       var mine = firstDefined(message.from, '') === assistantName;
-      var metrics = executiveMetricTokens(firstDefined(message.text, ''), 4);
+      var metrics = [];
       var figures = metrics.length ? '<div class="a2a-number-chips">' + metrics.map(function (metric) { return '<strong>' + escapeHtml(metric) + '</strong>'; }).join('') + '</div>' : '';
       var refs = safeArray(message.evidence_refs);
       var refsMarkup = refs.length ? '<div class="a2a-evidence">' + refs.map(function (reference) { return '<span class="evidence-badge">' + escapeHtml(evidenceReferenceLabel(reference)) + '</span>'; }).join('') + '</div>' : '';
@@ -4626,6 +4744,19 @@
     }).join("");
   }
 
+  function executiveLabeledFigures(values, limit) {
+    return safeArray(values).map(function (value) { return String(value || '').trim(); }).filter(function (value) {
+      if (!executiveMetricTokens(value, 1).length) return false;
+      var words = value
+        .replace(/\bSAR\b/gi, ' ')
+        .replace(/[+\-−]?\d[\d,.]*(?:\s*[-–—]\s*[\d,.]+)?\s*(?:%|bps?|basis points?|[KMBT]|million|billion|days?|weeks?)?/gi, ' ')
+        .replace(/[·:()\-–—/]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      return /[A-Za-z]{3,}/.test(words);
+    }).slice(0, Math.max(1, limit || 3));
+  }
+
   function planCommitmentBulletMarkup(item) {
     var actual = Number(item && item.actual);
     var checkpoint = Number(item && item.checkpoint);
@@ -4859,17 +4990,35 @@
     }
     var coverageHost = $("hero-plan-coverage");
     if (coverageHost) {
+      var granularIntent = state.granularIntent && !state.granularIntent.unavailable_reason ? state.granularIntent : null;
+      var granularAnalysis = granularIntent && granularIntent.latest_analysis || {};
+      var granularRollup = safeArray(granularAnalysis.rollups)[0] || {};
+      var fyTotal = safeArray(granularIntent && granularIntent.planned_totals)[0] || {};
+      var granularTitle = granularIntent
+        ? String(firstDefined(granularIntent.display_name, 'Approved granular plan')).split(/\s+[—–-]\s+SAR\b/i)[0]
+        : '';
+      var granularSummary = granularIntent
+        ? '<div class="granular-intent-summary"><span>Approved granular intent</span><strong>' + escapeHtml(granularTitle) + '</strong><small>FY target ' + escapeHtml(formatSarCompact(fyTotal.planned_total)) + (granularRollup.target ? ' · reported-period plan ' + escapeHtml(formatSarCompact(granularRollup.target)) : '') + (granularRollup.actual ? ' · reported actual ' + escapeHtml(formatSarCompact(granularRollup.actual)) : '') + '</small><em>' + escapeHtml(safeArray(granularAnalysis.granular_stories).length ? safeArray(granularAnalysis.granular_stories).length + ' reconciled granular stories' : 'Analysis awaits an approved actual snapshot') + '</em></div>'
+        : (state.granularIntent && state.granularIntent.unavailable_reason
+          ? '<div class="granular-intent-summary is-unavailable"><span>Granular intent</span><strong>Temporarily unavailable</strong><small>' + escapeHtml(state.granularIntent.unavailable_reason) + '</small></div>'
+          : '');
       var coverageButton = safeArray(enrichedPlanHealth.commitments).length
         ? '<button type="button" class="plan-coverage-chip" data-plan-coverage-toggle aria-expanded="' + (state.planCoverageOpen ? 'true' : 'false') + '">' + escapeHtml(firstDefined(enrichedPlanHealth.coverage_label, 'Plan coverage')) + '</button>'
         : '';
-      var granularPlanLink = safeArray(enrichedPlanHealth.commitments).length
+      var granularPlanLink = safeArray(enrichedPlanHealth.commitments).length || granularIntent
         ? '<a class="plan-coverage-chip" href="/plan">Open intent and granular drift</a>'
         : '';
       var coverageTable = state.planCoverageOpen ? '<div class="plan-coverage-table">' + safeArray(enrichedPlanHealth.commitments).map(function (item) {
         var isBehind = /^behind/i.test(String(firstDefined(item.status_vs_path, '')));
         return '<div class="plan-coverage-row' + (isBehind ? ' is-behind' : '') + '"><span>' + escapeHtml(firstDefined(item.name, item.kpi_id, 'Board commitment')) + '</span>' + planCommitmentBulletMarkup(item) + '<strong>' + escapeHtml(item.actual == null ? 'Not supplied' : String(item.actual) + (item.unit === '%' ? '%' : ' ' + firstDefined(item.unit, ''))) + '</strong><small><i class="plan-status-pip" aria-hidden="true"></i>' + escapeHtml(firstDefined(item.status_vs_path, item.measurement_status, '')) + '</small></div>';
       }).join('') + '</div>' : '';
-      coverageHost.innerHTML = coverageButton + granularPlanLink + coverageTable;
+      coverageHost.innerHTML = granularSummary + coverageButton + granularPlanLink + coverageTable;
+      var granularLink = coverageHost.querySelector('a[href="/plan"]');
+      if (granularLink) granularLink.addEventListener('click', function (event) {
+        event.preventDefault();
+        persistExecutivePersona(state.activePersona);
+        window.location.assign('/plan');
+      });
       var coverageToggle = coverageHost.querySelector('[data-plan-coverage-toggle]');
       if (coverageToggle) coverageToggle.onclick = function () {
         state.planCoverageOpen = !state.planCoverageOpen;
@@ -5212,8 +5361,12 @@
     var latestPeriod = labels.length === actual.length ? formatExecutiveTrendPeriod(labels[latestIndex]) : 'Latest period';
     var priorPeriod = labels.length === actual.length ? formatExecutiveTrendPeriod(labels[priorIndex]) : 'prior period';
     var scopeNote = firstDefined(trend && trend.scope_note, hasPlan ? 'Actual versus aligned plan' : 'Actual series only — plan is not inferred');
+    var scopeMarkup = '<div class="kpi-scope-label"><strong>Chart scope</strong><span>' + escapeHtml(scopeNote) + '</span>'
+      + (/group\s+h1\s+headline/i.test(String(scopeNote))
+        ? '<strong>Headline scope</strong><span>Group H1 position shown above</span>' : '')
+      + '</div>';
     var semanticTone = kpiSemanticTone(driver);
-    return '<section class="kpi-trend tone-' + semanticTone + '"><div class="kpi-trend__head"><div><span class="kpi-brief-label">Reporting trajectory</span><small>' + escapeHtml(scopeNote) + '</small></div><div class="kpi-trend__legend"><span class="kpi-trend__actual-key">Actual</span>' + (hasPlan ? '<span class="kpi-trend__plan-key">Plan</span>' : '') + '</div></div><svg viewBox="0 0 360 164" role="img" aria-label="' + escapeHtml(label + (hasPlan ? ' actual versus plan across ' : ' actual trend across ') + accessibleLabels) + '">' + yGrid + '<path class="trend-chain__actual" d="' + escapeHtml(pathFor(actual)) + '"></path>' + (hasPlan ? '<path class="trend-chain__plan" d="' + escapeHtml(pathFor(plan)) + '"></path>' : '') + points + xLabels + '</svg><div class="kpi-trend__summary"><div><span>Latest</span><strong class="tone-' + semanticTone + '">' + escapeHtml(formatExecutiveTrendValue(latest, driver)) + '</strong><small>' + escapeHtml(latestPeriod) + '</small></div><div><span>Change</span><strong class="tone-' + semanticTone + '">' + escapeHtml(movementLabel) + '</strong><small>versus ' + escapeHtml(priorPeriod) + '</small></div></div></section>';
+    return '<section class="kpi-trend tone-' + semanticTone + '"><div class="kpi-trend__head"><div><span class="kpi-brief-label">Reporting trajectory</span></div><div class="kpi-trend__legend"><span class="kpi-trend__actual-key">Actual</span>' + (hasPlan ? '<span class="kpi-trend__plan-key">Plan</span>' : '') + '</div></div>' + scopeMarkup + '<svg viewBox="0 0 360 164" role="img" aria-label="' + escapeHtml(label + (hasPlan ? ' actual versus plan across ' : ' actual trend across ') + accessibleLabels + '. Chart scope: ' + scopeNote) + '">' + yGrid + '<path class="trend-chain__actual" d="' + escapeHtml(pathFor(actual)) + '"></path>' + (hasPlan ? '<path class="trend-chain__plan" d="' + escapeHtml(pathFor(plan)) + '"></path>' : '') + points + xLabels + '</svg><div class="kpi-trend__summary"><div><span>Latest</span><strong class="tone-' + semanticTone + '">' + escapeHtml(formatExecutiveTrendValue(latest, driver)) + '</strong><small>' + escapeHtml(latestPeriod) + '</small></div><div><span>Change</span><strong class="tone-' + semanticTone + '">' + escapeHtml(movementLabel) + '</strong><small>versus ' + escapeHtml(priorPeriod) + '</small></div></div></section>';
   }
 
   function kpiMovementRows(driver) {
@@ -5348,6 +5501,11 @@
     var calculation = brief.calculation || {};
     var coverage = brief.coverage || {};
     var audit = brief.audit || {};
+    var accountableProvider = String(firstDefined(driver.accountable_provider, audit.accountable_provider, "Finance data owner"));
+    var sourceContract = driver.source_contract && typeof driver.source_contract === "object" ? driver.source_contract : {};
+    var missingInputs = safeArray(audit.missing_inputs).length
+      ? safeArray(audit.missing_inputs).filter(Boolean)
+      : safeArray(driver.missing_inputs).filter(Boolean);
     var steps = safeArray(calculation.steps);
     var drivers = safeArray(brief.drivers);
     var auditSources = safeArray(audit.source_titles);
@@ -5373,7 +5531,7 @@
       '<div class="kpi-executive-grid">' + trendMarkup + movementMarkup + '</div>',
       (compositionMarkup ? '<details class="kpi-supporting-analysis"><summary>Supporting analysis</summary>' + compositionMarkup + '</details>' : ''),
       '<section class="kpi-inline-chat" aria-label="Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '"><div class="kpi-inline-chat__intro"><div><span class="kpi-brief-label">Decision support</span><strong>Pressure-test the executive position with ' + escapeHtml(assistantName) + '</strong><p>The selected result, business context and supporting sources are already attached.</p></div></div><div class="kpi-question-actions"><button type="button" data-kpi-question="decision">Do I need to intervene?</button><button type="button" data-kpi-question="briefing">Who owns it—and why?</button><button type="button" data-kpi-question="outlook">What changes the outlook?</button><button type="button" data-kpi-question="advisory">Consult general practice</button></div><form class="kpi-inline-ask" data-kpi-ask-form><label class="sr-only" for="kpi-inline-ask-input">Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '</label><input id="kpi-inline-ask-input" type="text" autocomplete="off" data-kpi-ask-input placeholder="Ask a decision question about ' + escapeHtml(label) + '..." /><button type="submit" data-kpi-ask-send>Ask</button></form></section>',
-      '<details class="kpi-brief-audit"><summary>Evidence and calculation</summary><div class="kpi-brief-audit__body"><div><span>Method</span><strong>' + escapeHtml(firstDefined(calculation.formula, "Calculation method is not available.")) + '</strong></div>' + calculationMarkup + '<div><span>Coverage</span><strong>' + escapeHtml(firstDefined(coverage.value, "Unknown")) + ' — ' + escapeHtml(firstDefined(coverage.note, "")) + '</strong></div>' + governedClaimAuditMarkup(driver.provenance) + (auditSources.length ? '<div><span>Business sources</span><strong>' + escapeHtml(auditSources.join(" · ")) + '</strong></div>' : "") + (safeArray(audit.missing_inputs).length ? '<div><span>Needed for a valid comparison</span><strong>' + escapeHtml(safeArray(audit.missing_inputs).join(" · ")) + '</strong></div>' : "") + '</div></details>',
+      '<details class="kpi-brief-audit"><summary>Evidence and calculation</summary><div class="kpi-brief-audit__body"><div><span>Method</span><strong>' + escapeHtml(firstDefined(calculation.formula, driver.formula, "Calculation method is not available.")) + '</strong></div>' + calculationMarkup + '<div><span>Coverage</span><strong>' + escapeHtml(firstDefined(coverage.value, "Unknown")) + ' — ' + escapeHtml(firstDefined(coverage.note, "")) + '</strong></div>' + governedClaimAuditMarkup(driver.provenance) + (auditSources.length ? '<div><span>Business sources</span><strong>' + escapeHtml(auditSources.join(" · ")) + '</strong></div>' : "") + (missingInputs.length ? '<div><span>Needed for a valid comparison</span><strong>' + escapeHtml(missingInputs.join(" · ")) + '</strong></div><div><span>Accountable provider</span><strong>' + escapeHtml(accountableProvider) + '</strong></div><button type="button" class="assistant-retry-button" data-kpi-data-request>Create outreach request</button>' : "") + '</div></details>',
       '</div>'
     ].join("");
     var showWork = drillCard.querySelector('[data-kpi-show-work]');
@@ -5382,6 +5540,33 @@
       if (!auditPanel) return;
       auditPanel.open = true;
       auditPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
+    var dataRequest = drillCard.querySelector('[data-kpi-data-request]');
+    if (dataRequest) dataRequest.onclick = async function () {
+      if (dataRequest.disabled) return;
+      dataRequest.disabled = true;
+      dataRequest.textContent = 'Creating request…';
+      try {
+        var response = await fetch('/api/outreach/requests', {
+          method: 'POST', credentials: 'same-origin',
+          headers: Object.assign(authHeaders({}), {'Content-Type': 'application/json'}),
+          body: JSON.stringify({
+            kpi_label: label,
+            provider: accountableProvider,
+            formula: String(firstDefined(calculation.formula, driver.formula, 'Calculation definition unavailable')),
+            missing_inputs: missingInputs,
+            source_contract_id: firstDefined(sourceContract.registry_id, null)
+          })
+        });
+        var payload = await parseJsonResponse(response);
+        if (!response.ok) throw new Error(firstDefined(payload && payload.detail, 'Could not create the outreach request.'));
+        dataRequest.textContent = 'Outreach request created ✓';
+        dataRequest.disabled = false;
+        dataRequest.onclick = function () { window.location.assign('/outreach?request=' + encodeURIComponent(payload.request_id)); };
+      } catch (error) {
+        dataRequest.disabled = false;
+        dataRequest.textContent = firstDefined(error && error.message, 'Could not create — retry');
+      }
     };
     safeArray(drillCard.querySelectorAll("[data-kpi-question]")).forEach(function (button) {
       button.addEventListener("click", function () {
@@ -6379,12 +6564,7 @@
         firstDefined(ownerResolution.selected_owner_name, ''),
         firstDefined(ownerResolution.selected_role, item.owner, '')
       ].filter(Boolean).join(' · ');
-      var decisionMetricTokens = executiveMetricTokens([
-        firstDefined(item.cost_of_yes, ''),
-        firstDefined(item.cost_of_no, ''),
-        firstDefined(item.summary, ''),
-        firstDefined(item.decision, '')
-      ].join(' '), 2);
+      var decisionMetricTokens = [];
       var decisionMetricMarkup = decisionMetricTokens.length
         ? '<span class="decision-card-metrics">' + decisionMetricTokens.map(function (token) { return '<span>' + escapeHtml(token) + '</span>'; }).join('') + '</span>'
         : '';
@@ -6420,12 +6600,12 @@
       var context = item.context && typeof item.context === 'object' ? item.context : {};
       var sources = safeArray(context.sources).filter(Boolean);
       var hasContext = Boolean(summary || context.what || context.why_attached || sources.length);
-      var metricChips = executiveMetricChipMarkup([title, summary].filter(Boolean).join(' '), 'signal-delta-chip');
+      var metricChips = '';
       var owner = String(firstDefined(item.owner, '')).trim();
-      var ownerMarkup = owner ? '<span class="signal-owner" title="' + escapeHtml(owner) + '">' + escapeHtml(initialsFromName(owner)) + '</span>' : '';
+      var ownerMarkup = owner ? '<span class="signal-owner-label">Owner · ' + escapeHtml(owner) + '</span>' : '';
       var registerKey = /^(?:KPI|INIT|EV|SIG)-/i.test(String(classification)) ? String(classification) : '';
       var classificationMarkup = registerKey
-        ? '<button type="button" class="target-feed-tag target-feed-tag--action" data-register-entry="' + escapeHtml(registerKey) + '" aria-label="Open register detail for ' + escapeHtml(registerKey) + '">' + escapeHtml(classification) + '</button>'
+        ? '<button type="button" class="target-feed-tag target-feed-tag--action" data-register-entry="' + escapeHtml(registerKey) + '" aria-label="Open the strategic register context">Strategic register</button>'
         : '<span class="target-feed-tag">' + escapeHtml(classification) + '</span>';
       var row = '<span class="executive-signal__dot" role="img" aria-label="' + escapeHtml(tone === 'critical' ? 'Red concern' : tone === 'positive' ? 'Green positive development' : 'Amber watch item') + '"></span><span class="target-feed-title">' + escapeHtml(title) + '</span><span class="signal-metrics">' + metricChips + '</span>' + ownerMarkup + classificationMarkup;
       if (!hasContext) return '<article class="executive-signal target-awareness-row tone-' + escapeHtml(tone) + '">' + row + '</article>';
@@ -6727,9 +6907,7 @@
       }
       var seededMarkup = seededThreads.length ? '<div class="a2a-seeded-threads">' + seededThreads.map(function (thread, index) {
         var threadKey = String(firstDefined(thread.thread_id, thread.id, "a2a-" + index));
-        var metrics = safeArray(thread.key_figures).length
-          ? safeArray(thread.key_figures).slice(0, 5)
-          : executiveMetricTokens(safeArray(thread.turns).map(function (turn) { return firstDefined(turn.text, ''); }).join(' '), 5);
+        var metrics = executiveLabeledFigures(thread.key_figures, 5);
         return '<article class="a2a-summary-card"><div class="a2a-summary-card__head"><span><strong>' + escapeHtml(scrubExecutiveTechnicalLanguage(firstDefined(thread.topic, 'Assistant conversation'))) + '</strong><small>' + escapeHtml(safeArray(thread.participants).join(' ↔ ')) + '</small></span><em class="function-state tone-' + escapeHtml(functionStateTone(firstDefined(thread.status, 'complete'))) + '">' + escapeHtml(humanizeToken(firstDefined(thread.status, 'complete'))) + '</em></div><p>' + escapeHtml(a2aSummary(thread)) + '</p>' + (metrics.length ? '<div class="a2a-number-chips">' + metrics.map(function (metric) { return '<strong>' + escapeHtml(metric) + '</strong>'; }).join('') + '</div>' : '') + '<button type="button" class="a2a-open-log" data-a2a-open-log="' + escapeHtml(threadKey) + '">Open complete conversation log</button></article>';
       }).join('') + '</div>' : '';
       collaborationCard.innerHTML = '<div class="agents-col-head"><div><span class="ach-title">Assistant collaboration</span><span class="ach-hint">Executive summary of assistant-to-assistant exchanges</span></div></div>' + seededMarkup + (seededThreads.length ? '' : '<div class="twin-collab-summary"><div><strong>' + escapeHtml(String(openHandoffs)) + '</strong><span>in progress</span></div><div><strong>' + escapeHtml(String(resolvedHandoffs)) + '</strong><span>completed</span></div><div class="' + (attentionHandoffs ? 'needs-attention' : '') + '"><strong>' + escapeHtml(String(attentionHandoffs)) + '</strong><span>need your attention</span></div></div><p class="twin-collab-meaning">' + escapeHtml(collaborationMeaning) + '</p>' + (events.length ? '<div class="twin-event-heading">Recent activity</div><ol class="twin-event-list">' + events.slice(0, 5).map(function (event) { return '<li><div class="twin-event-meta"><span>' + escapeHtml(humanizeToken(firstDefined(event.source_role, "leadership team"))) + ' → ' + escapeHtml(humanizeToken(firstDefined(event.target_role, "leadership team"))) + '</span><em class="event-' + escapeHtml(String(firstDefined(event.status, "recorded"))) + '">' + escapeHtml(humanizeToken(firstDefined(event.status, "recorded"))) + '</em></div><strong>' + escapeHtml(firstDefined(event.subject, "Leadership-team item")) + '</strong></li>'; }).join('') + '</ol>' : '<div class="network-empty twin-empty">' + escapeHtml(noEventCopy) + '</div>'));
@@ -6745,7 +6923,7 @@
           if (title) title.textContent = firstDefined(thread.topic, 'Complete conversation log');
           if (body) body.innerHTML = '<ol>' + safeArray(thread.turns).map(function (turn) {
           var references = safeArray(turn.evidence_refs);
-          var turnMetrics = executiveMetricTokens(firstDefined(turn.text, ''), 4);
+          var turnMetrics = [];
           var metricMarkup = turnMetrics.length
             ? '<div class="a2a-number-chips">' + turnMetrics.map(function (metric) { return '<strong>' + escapeHtml(metric) + '</strong>'; }).join('') + '</div>'
             : '';
@@ -7147,6 +7325,11 @@
           }).join('') + '</div>';
         }
         var payload = message.payload && typeof message.payload === 'object' ? message.payload : {};
+        var permissionRequest = payload.permission_request && typeof payload.permission_request === 'object'
+          ? payload.permission_request : null;
+        var permissionAction = role === 'assistant' && permissionRequest
+          ? '<div class="assistant-message__actions"><button type="button" class="assistant-retry-button" data-assistant-permission-index="' + escapeHtml(String(entry.index)) + '">' + escapeHtml(firstDefined(permissionRequest.label, 'Request source permission')) + '</button></div>'
+          : '';
         if (payload.policy_denied) failureMeta = '';
         var tier = payload.policy_denied ? 'policy' : String(firstDefined(payload.determinism_tier, '')).trim();
         var sections = payload.response_sections && typeof payload.response_sections === 'object' ? payload.response_sections : {};
@@ -7166,7 +7349,7 @@
           : '';
         var evidenceRefsMarkup = role === 'assistant' && safeArray(message.evidence_refs).length
           ? '<div class="assistant-message__actions">' + safeArray(message.evidence_refs).map(function (reference) {
-              return '<button type="button" class="assistant-retry-button" data-morning-evidence="' + escapeHtml(reference) + '">Source · ' + escapeHtml(String(reference).split('/').pop()) + '</button>';
+              return '<button type="button" class="assistant-retry-button" data-morning-evidence="' + escapeHtml(reference) + '">Source · ' + escapeHtml(evidenceReferenceLabel(reference)) + '</button>';
             }).join('') + '</div>'
           : '';
         if (role === 'assistant' && tier === 'advisory') {
@@ -7176,11 +7359,40 @@
             + (sections.general_practice_suggests ? '<section class="assistant-answer-block assistant-answer-block--advisory"><span>General practice suggests</span><p>' + renderAssistantMarkdownToHtml(sections.general_practice_suggests) + '</p></section>' : '')
             + '</div>';
         }
-        return '<div class="' + classes.join(' ') + '"><span class="assistant-message__role">' + escapeHtml(roleLabel) + roleSuffix + (tierLabel ? '<em class="assistant-tier assistant-tier--' + escapeHtml(tier) + '">' + escapeHtml(tierLabel) + '</em>' : '') + '</span>' + answerMarkup + evidenceRefsMarkup + citationMarkup + failureMeta + retryButton + caseLinks + '</div>';
+        return '<div class="' + classes.join(' ') + '"><span class="assistant-message__role">' + escapeHtml(roleLabel) + roleSuffix + (tierLabel ? '<em class="assistant-tier assistant-tier--' + escapeHtml(tier) + '">' + escapeHtml(tierLabel) + '</em>' : '') + '</span>' + answerMarkup + evidenceRefsMarkup + citationMarkup + failureMeta + retryButton + permissionAction + caseLinks + '</div>';
       }).join("") : '<div class="assistant-message assistant-message--empty"><span class="assistant-message__role">No messages yet</span><p>Ask a question to begin.</p></div>';
       safeArray(messages.querySelectorAll('[data-assistant-retry-index]')).forEach(function (button) {
         button.onclick = function () {
           retryAssistantMessage(current.key, Number(button.getAttribute('data-assistant-retry-index') || '-1'), button);
+        };
+      });
+      safeArray(messages.querySelectorAll('[data-assistant-permission-index]')).forEach(function (button) {
+        button.onclick = async function () {
+          var index = Number(button.getAttribute('data-assistant-permission-index') || '-1');
+          var message = current && current.messages && current.messages[index] || {};
+          var permission = message.payload && message.payload.permission_request || {};
+          button.disabled = true;
+          button.textContent = 'Creating permission request…';
+          try {
+            var response = await fetch('/api/outreach/requests', {
+              method: 'POST', credentials: 'same-origin',
+              headers: Object.assign(authHeaders({}), {'Content-Type': 'application/json'}),
+              body: JSON.stringify({
+                kpi_label: firstDefined(permission.kpi_label, 'Governed source'),
+                provider: firstDefined(permission.provider, 'Data owner'),
+                formula: firstDefined(permission.formula, 'Governed calculation'),
+                missing_inputs: safeArray(permission.missing_inputs).length
+                  ? permission.missing_inputs
+                  : ['Data-owner authorization for approved external language processing']
+              })
+            });
+            var created = await parseJsonResponse(response);
+            if (!response.ok) throw new Error(firstDefined(created && created.detail, 'Could not create the permission request.'));
+            window.location.assign('/outreach?request=' + encodeURIComponent(created.request_id));
+          } catch (error) {
+            button.disabled = false;
+            button.textContent = firstDefined(error && error.message, 'Could not create — retry');
+          }
         };
       });
       safeArray(messages.querySelectorAll('[data-assistant-cancel]')).forEach(function (button) {
@@ -7501,6 +7713,9 @@
       ensureThreads();
       updateHistory();
       renderPersonaView();
+      if (session.authenticated && session.role === 'executive' && !frozenBoard && !state.granularIntentLoaded) {
+        loadGranularIntentSummary();
+      }
     } catch (error) {
       state.latestPacket = {};
       state.agentNetwork = null;
@@ -7547,7 +7762,7 @@
     session: null,
     personas: [],
     token: null,
-    activePersona: firstDefined(requested.persona, "ceo"),
+    activePersona: firstDefined(requested.persona, storedExecutivePersona(), "ceo"),
     activeDriverKey: firstDefined(requested.driver, "board_packet"),
     activeBoard: firstDefined(requested.board, "pre"),
       activeCompany: firstDefined(requested.company, ""),
@@ -7589,6 +7804,8 @@
       openDecisionKeys: {},
       enrichmentDecisionChoices: {},
       planCoverageOpen: false,
+      granularIntent: null,
+      granularIntentLoaded: false,
       demoDayOffset: 0,
       thinkingSeed: null,
       openA2AThreadKeys: {},

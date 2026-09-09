@@ -1,0 +1,57 @@
+{
+  "structure_id": "PD-TW-2026-v1",
+  "version": "1.0",
+  "objective": "Tamween Pharma Distribution FY2026 revenue plan — SAR 2,540M (H1 1,194M)",
+  "decomposes_along": [
+    "month",
+    "region",
+    "channel",
+    "sku_family"
+  ],
+  "data_file": "24_Sales_Cube/Plan_Data_2026.csv",
+  "ratification": {
+    "proposed_by": "system",
+    "ratified_by": "Faisal Al-Harbi (BU CEO)",
+    "ratification_date": "2025-12-20",
+    "effective_date": "2026-01-01",
+    "linked_event": "EV-2025-46 (FY2026 budget approval)"
+  },
+  "calibration_note": "H2 monthly cells calibrated x1.077 to close to the board FY total (NUPCO H2 phasing); H1 x0.998.",
+  "branches": [
+    {
+      "branch": "region:Central",
+      "owner": "Lina Al-Qahtani — Central Region GM (Sales)",
+      "fy_plan_sar_m": 766.5,
+      "assumption": "Central plan equals the division budget by month and channel (Division_Budget_2026 Revenue_Budget_Monthly)."
+    },
+    {
+      "branch": "region:Western",
+      "owner": "Bandar Al-Zahrani — Western Region GM",
+      "fy_plan_sar_m": 715.3,
+      "assumption": "Western planned +8% retail on new chain listings (Al-Fanar); hospital +5%."
+    },
+    {
+      "branch": "region:Eastern",
+      "owner": "Huda Al-Dossari — Eastern Region GM",
+      "fy_plan_sar_m": 590.6,
+      "assumption": "Eastern hospital +7% on Dammam Hospitals expansion; retail +6%."
+    },
+    {
+      "branch": "region:Southern",
+      "owner": "Saleh Al-Qarni — Southern Region GM",
+      "fy_plan_sar_m": 467.6,
+      "assumption": "Southern +5-6% across channels; no new listings assumed."
+    },
+    {
+      "branch": "channel:Institutional tender",
+      "owner": "Tariq Al-Ghamdi — Head of Institutional Sales",
+      "fy_plan_sar_m": 684.3,
+      "assumption": "Institutional tender volume assumed FLAT vs prior year outside Central (framework baseline; H2-2026 RFP upside NOT in plan)."
+    },
+    {
+      "branch": "family:Specialty & Cold-chain",
+      "owner": "Tariq Al-Ghamdi (institutional) / region GMs (private)",
+      "assumption": "Specialty planned +18% on GLP-1 and vaccine demand (SIG-2026-02)."
+    }
+  ]
+}

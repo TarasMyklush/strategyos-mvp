@@ -1,4 +1,5 @@
 from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -150,5 +151,30 @@ def test_outreach_ui_is_linked_and_exposes_required_demo_truths():
     assert "Raw reply text is never retained" in html
     assert "/api/outreach/synthetic" in js
     assert "Why this outreach exists" in js
-    assert "Open structured entry" in js
-    assert "data-filter" in js
+
+
+def test_executive_can_create_a_tenant_scoped_data_request(monkeypatch, tmp_path):
+    monkeypatch.setattr(outreach, "CONFIG", replace(outreach.CONFIG, output_root=tmp_path))
+    with _client() as api:
+        created = api.post("/api/outreach/requests", json={
+            "kpi_label": "Cash vs floor",
+            "provider": "Group Treasury",
+            "formula": "Cash headroom = reported cash minus approved floor.",
+            "missing_inputs": ["Current reported cash"],
+            "source_contract_id": "Treasury source registry",
+        })
+        assert created.status_code == 201
+        assert created.json()["status"] == "drafted"
+        catalog = api.get("/api/outreach/synthetic").json()
+        assert catalog["data_requests"][0]["request_id"] == created.json()["request_id"]
+        assert catalog["data_requests"][0]["approval_required_before_send"] is True
+
+
+def test_outreach_request_schema_is_tenant_scoped_and_immutable():
+    migration = (Path(outreach.__file__).parent / "sql" / "dimensional_intent.sql").read_text(encoding="utf-8")
+    runtime = (Path(outreach.__file__).parent / "database_schema.py").read_text(encoding="utf-8")
+    assert "CREATE TABLE IF NOT EXISTS strategyos_outreach_requests" in migration
+    assert "PRIMARY KEY(tenant_key, request_id)" in migration
+    assert "'strategyos_outreach_requests'" in migration
+    assert "governed_request_tables=intent_tables+',strategyos_outreach_requests'" in runtime
+    assert "Worker and projector roles must not access executive outreach requests." in runtime

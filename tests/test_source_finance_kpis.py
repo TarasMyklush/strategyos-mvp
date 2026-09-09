@@ -346,16 +346,38 @@ def test_group_cash_floor_history_is_a_governed_chart_not_a_synthetic_series():
     trend = _group_cash_floor_trend(workbook)
 
     assert trend == {
-        "labels": ["2025-Q4", "2026-Q1"],
-        "actual": ["1320000000.00", "1370000000.00"],
-        "plan": ["1300000000.00", "1340000000.00"],
-        "floor": ["1200000000.00", "1200000000.00"],
-        "notes": ["Approved floor", "Approved floor"],
+        "labels": ["2025-Q4", "2026-Q1", "2026-Q2"],
+        "actual": ["1320000000.00", "1370000000.00", "1410000000.00"],
+        "plan": ["1300000000.00", "1340000000.00", "1380000000.00"],
+        "floor": ["1200000000.00", "1200000000.00", "1200000000.00"],
+        "notes": ["Approved floor", "Approved floor", "Approved floor"],
         "has_plan_series": True,
         "unit": "sar",
-        "scope_note": "Explicitly labelled quarterly group cash actuals versus budget; estimates and forecasts are excluded.",
+        "scope_note": "Quarterly group cash actuals and the labelled current estimate versus approved budget.",
         "plan_note": "Approved quarterly group cash budget from Group_Cash_Floor.",
     }
+
+
+def test_current_labelled_cash_estimate_is_calculable_without_becoming_an_actual(tmp_path):
+    from openpyxl import Workbook
+    from strategyos_mvp.source_finance_kpis import _group_cash_floor
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Group_Cash_Floor"
+    sheet.append(["Quarter", "Group cash budget (SAR B)", "Actual/Forecast (SAR B)", "Floor (SAR B)"])
+    sheet.append(["2026-Q1 (actual)", 1.34, 1.37, 1.20])
+    sheet.append(["2026-Q2 (est)", 1.38, 1.41, 1.20])
+    path = tmp_path / "BU_Group_Budget_2026.xlsx"
+    workbook.save(path)
+
+    result = _group_cash_floor(workbook, path, tmp_path)
+
+    assert result["complete"] is True
+    assert result["value"] == "1410000000.00"
+    assert result["floor"] == "1200000000.00"
+    assert result["period_label"] == "2026-Q2 (est)"
+    assert result["evidence"]["details"]["classification"] == "estimate"
 
 
 def test_division_monthly_budget_aligns_plan_to_actual_account_scope(tmp_path):
@@ -484,11 +506,14 @@ def test_mixed_actual_estimate_is_quarantined_without_division_fallback(tmp_path
     result = derive_source_finance_kpis(tmp_path)
     assert result["source_semantics_version"] == "2"
     assert result["components"]["revenue_plan"] == "100000000.00"
-    for key in ("revenue_actual", "ebitda_actual", "operating_cost_actual", "cash_balance"):
+    for key in ("revenue_actual", "ebitda_actual", "operating_cost_actual"):
         assert result["components"][key] is None
         assert result["ambiguous_components"][key]["value"] is not None
         assert result["ambiguous_components"][key]["reason"]
-    assert not any(result["actual_complete"].values())
+    assert result["components"]["cash_balance"] == "1200000000.00"
+    assert "cash_balance" not in result["ambiguous_components"]
+    assert result["actual_complete"]["cash_vs_floor"] is True
+    assert not any(result["actual_complete"][key] for key in ("revenue", "ebitda_margin", "operating_cost"))
     assert result["dynamics"]["revenue"]["lifting"] == []
 
 

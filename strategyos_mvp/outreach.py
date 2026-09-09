@@ -1,20 +1,26 @@
-"""Typed, sector-neutral outreach read model for connector-free demonstrations.
+"""Typed, sector-neutral outreach workflow for connector-free demonstrations.
 
-The workflow is intentionally read-only in this increment.  A client pack may
-describe synthetic threads, while the contract enforces the same approval,
-retention and reply-parsing boundaries required by a future mailbox adapter.
+The workflow keeps synthetic thread examples read-only and permits executives to
+draft tenant-scoped structured data requests. The contract enforces the same
+approval, retention and reply-parsing boundaries required by a future mailbox
+adapter; no draft can send mail or mutate governed facts.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 import hashlib
 import json
+import os
 from pathlib import Path
+import re
+import threading
 from typing import Literal
+from uuid import uuid4
 
 from pydantic import Field, model_validator
 
 from .dimensional_plan import Contract, Name
+from .config import CONFIG
 
 Status = Literal["drafted", "awaiting_approval", "sent", "replied", "flagged"]
 OutcomeKind = Literal["confirmed_commitment", "updated_forecast", "flagged_risk"]
@@ -177,6 +183,104 @@ class OutreachPack(Contract):
         return self
 
 
+class DataRequestCreate(Contract):
+    kpi_label: Name
+    provider: Name
+    formula: str = Field(min_length=3, max_length=1000)
+    missing_inputs: list[Name] = Field(min_length=1, max_length=20)
+    source_contract_id: Name | None = None
+
+
+_REQUEST_LOCK = threading.Lock()
+
+
+class OutreachUnavailable(RuntimeError):
+    pass
+
+
+def _request_store(principal: dict[str, object]) -> Path:
+    context = principal.get("tenant_context") if isinstance(principal.get("tenant_context"), dict) else {}
+    tenant = str((context or {}).get("tenant_id") or principal.get("tenant_id") or "default")
+    safe_tenant = re.sub(r"[^A-Za-z0-9_.-]+", "-", tenant).strip("-")[:100] or "default"
+    return CONFIG.output_root / "outreach_requests" / f"{safe_tenant}.json"
+
+
+def _database_requests(principal: dict[str, object]) -> list[dict[str, object]] | None:
+    if not CONFIG.database_url:
+        return None
+    from . import state_store
+    handle, failure = state_store.database_connection()
+    if handle is None:
+        raise OutreachUnavailable(str((failure or {}).get("reason") or "The request store is unavailable."))
+    tenant = str(principal.get("tenant_id") or "").strip()
+    try:
+        with handle as connection:
+            cursor = connection.execute(
+                """SELECT payload FROM strategyos_outreach_requests
+                   WHERE tenant_key=%s ORDER BY created_at DESC, request_id DESC LIMIT 500""",
+                (tenant,),
+            )
+            return [row[0] for row in cursor.fetchall() if isinstance(row[0], dict)]
+    except Exception as exc:
+        raise OutreachUnavailable("The governed outreach request store is unavailable.") from exc
+
+
+def list_data_requests(principal: dict[str, object]) -> list[dict[str, object]]:
+    database_records = _database_requests(principal)
+    if database_records is not None:
+        return database_records
+    path = _request_store(principal)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return payload if isinstance(payload, list) else []
+
+
+def create_data_request(principal: dict[str, object], request: DataRequestCreate) -> dict[str, object]:
+    actor = str(principal.get("display_name") or principal.get("role") or "Executive")
+    record: dict[str, object] = {
+        "request_id": "data-request-" + uuid4().hex,
+        "kpi_label": request.kpi_label,
+        "provider": request.provider,
+        "formula": request.formula,
+        "missing_inputs": list(request.missing_inputs),
+        "source_contract_id": request.source_contract_id,
+        "status": "drafted",
+        "created_at": datetime.now(UTC).isoformat(),
+        "created_by": actor,
+        "approval_required_before_send": True,
+        "connector_enabled": False,
+    }
+    if CONFIG.database_url:
+        from . import state_store
+        handle, failure = state_store.database_connection()
+        if handle is None:
+            raise OutreachUnavailable(str((failure or {}).get("reason") or "The request store is unavailable."))
+        tenant = str(principal.get("tenant_id") or "").strip()
+        try:
+            with handle as connection:
+                connection.execute(
+                    """INSERT INTO strategyos_outreach_requests
+                       (tenant_key,request_id,payload,created_by) VALUES (%s,%s,%s::jsonb,%s)""",
+                    (tenant, record["request_id"], json.dumps(record, ensure_ascii=False), actor),
+                )
+            return record
+        except Exception as exc:
+            raise OutreachUnavailable("The governed outreach request could not be recorded.") from exc
+
+    path = _request_store(principal)
+    with _REQUEST_LOCK:
+        records = list_data_requests(principal)
+        records.append(record)
+        records = records[-500:]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_name(path.name + "." + uuid4().hex + ".tmp")
+        temporary.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(temporary, path)
+    return record
+
+
 DEFAULT_PACK = Path(__file__).parent / "config_packs" / "outreach" / "synthetic-neutral.v1.json"
 
 
@@ -188,7 +292,7 @@ def _canonical(value: object) -> bytes:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
-def build_catalog(pack: OutreachPack | None = None) -> dict[str, object]:
+def build_catalog(pack: OutreachPack | None = None, *, requests: list[dict[str, object]] | None = None) -> dict[str, object]:
     pack = pack or load_pack()
     payload = pack.model_dump(mode="json")
     status_counts = {status: 0 for status in ("drafted", "awaiting_approval", "sent", "replied", "flagged")}
@@ -206,6 +310,7 @@ def build_catalog(pack: OutreachPack | None = None) -> dict[str, object]:
         "status_counts": status_counts,
     }
     payload["catalog_digest"] = hashlib.sha256(_canonical(payload)).hexdigest()
+    payload["data_requests"] = list(requests or [])
     return payload
 
 

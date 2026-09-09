@@ -12,8 +12,33 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  customer-intent:
+    name: Customer Intent acceptance
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: hetzner-branch
+    env:
+      STRATEGYOS_PUBLIC_URL: ${{ vars.STRATEGYOS_PUBLIC_URL }}
+      STRATEGYOS_IDP_TEST_USERS: ${{ secrets.STRATEGYOS_IDP_TEST_USERS }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+
+      - name: Ratify and reconcile the staged customer plan
+        run: python scripts/hosted_customer_intent_acceptance.py --output-dir hosted-customer-intent-acceptance
+
+      - name: Upload acceptance report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hosted-customer-intent-acceptance-${{ github.run_id }}
+          path: hosted-customer-intent-acceptance/
+          if-no-files-found: error
+          retention-days: 30
+
   walkthrough:
     name: Executive Chromium walkthrough
+    needs: customer-intent
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: hetzner-branch

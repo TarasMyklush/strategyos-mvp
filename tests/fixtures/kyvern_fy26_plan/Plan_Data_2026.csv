@@ -1,0 +1,577 @@
+Structure_Version,Month,Region,Channel,Family_Code,Family,Plan_Gross_Revenue_SAR
+PD-TW-2026-v1,2026-01,Central,Retail pharmacy,OTC,OTC & Consumer,6717920.44
+PD-TW-2026-v1,2026-01,Central,Retail pharmacy,GEN,Generics,4773259.26
+PD-TW-2026-v1,2026-01,Central,Retail pharmacy,BRD,Branded Rx,4419684.5
+PD-TW-2026-v1,2026-01,Central,Retail pharmacy,SPC,Specialty & Cold-chain,1767873.8
+PD-TW-2026-v1,2026-01,Central,Hospital/private,BRD,Branded Rx,9606458.56
+PD-TW-2026-v1,2026-01,Central,Hospital/private,GEN,Generics,7505045.75
+PD-TW-2026-v1,2026-01,Central,Hospital/private,SPC,Specialty & Cold-chain,8405651.24
+PD-TW-2026-v1,2026-01,Central,Hospital/private,OTC,OTC & Consumer,4503027.45
+PD-TW-2026-v1,2026-01,Central,Institutional tender,GEN,Generics,9502528.36
+PD-TW-2026-v1,2026-01,Central,Institutional tender,SPC,Specialty & Cold-chain,4568523.25
+PD-TW-2026-v1,2026-01,Central,Institutional tender,BRD,Branded Rx,3289336.74
+PD-TW-2026-v1,2026-01,Central,Institutional tender,OTC,OTC & Consumer,913704.65
+PD-TW-2026-v1,2026-01,Western,Retail pharmacy,OTC,OTC & Consumer,6448667.4
+PD-TW-2026-v1,2026-01,Western,Retail pharmacy,GEN,Generics,4581947.89
+PD-TW-2026-v1,2026-01,Western,Retail pharmacy,BRD,Branded Rx,4242544.34
+PD-TW-2026-v1,2026-01,Western,Retail pharmacy,SPC,Specialty & Cold-chain,1697017.74
+PD-TW-2026-v1,2026-01,Western,Hospital/private,BRD,Branded Rx,6917856.27
+PD-TW-2026-v1,2026-01,Western,Hospital/private,GEN,Generics,5404575.21
+PD-TW-2026-v1,2026-01,Western,Hospital/private,SPC,Specialty & Cold-chain,6053124.23
+PD-TW-2026-v1,2026-01,Western,Hospital/private,OTC,OTC & Consumer,3242745.13
+PD-TW-2026-v1,2026-01,Western,Institutional tender,GEN,Generics,7180472.58
+PD-TW-2026-v1,2026-01,Western,Institutional tender,SPC,Specialty & Cold-chain,3452150.28
+PD-TW-2026-v1,2026-01,Western,Institutional tender,BRD,Branded Rx,2485548.2
+PD-TW-2026-v1,2026-01,Western,Institutional tender,OTC,OTC & Consumer,690430.06
+PD-TW-2026-v1,2026-01,Eastern,Retail pharmacy,OTC,OTC & Consumer,4213175.24
+PD-TW-2026-v1,2026-01,Eastern,Retail pharmacy,GEN,Generics,2993571.88
+PD-TW-2026-v1,2026-01,Eastern,Retail pharmacy,BRD,Branded Rx,2771825.81
+PD-TW-2026-v1,2026-01,Eastern,Retail pharmacy,SPC,Specialty & Cold-chain,1108730.33
+PD-TW-2026-v1,2026-01,Eastern,Hospital/private,BRD,Branded Rx,7115274.11
+PD-TW-2026-v1,2026-01,Eastern,Hospital/private,GEN,Generics,5558807.9
+PD-TW-2026-v1,2026-01,Eastern,Hospital/private,SPC,Specialty & Cold-chain,6225864.85
+PD-TW-2026-v1,2026-01,Eastern,Hospital/private,OTC,OTC & Consumer,3335284.74
+PD-TW-2026-v1,2026-01,Eastern,Institutional tender,GEN,Generics,6200071.09
+PD-TW-2026-v1,2026-01,Eastern,Institutional tender,SPC,Specialty & Cold-chain,2980803.41
+PD-TW-2026-v1,2026-01,Eastern,Institutional tender,BRD,Branded Rx,2146178.46
+PD-TW-2026-v1,2026-01,Eastern,Institutional tender,OTC,OTC & Consumer,596160.68
+PD-TW-2026-v1,2026-01,Southern,Retail pharmacy,OTC,OTC & Consumer,3888413.17
+PD-TW-2026-v1,2026-01,Southern,Retail pharmacy,GEN,Generics,2762819.88
+PD-TW-2026-v1,2026-01,Southern,Retail pharmacy,BRD,Branded Rx,2558166.56
+PD-TW-2026-v1,2026-01,Southern,Retail pharmacy,SPC,Specialty & Cold-chain,1023266.62
+PD-TW-2026-v1,2026-01,Southern,Hospital/private,BRD,Branded Rx,5373630.77
+PD-TW-2026-v1,2026-01,Southern,Hospital/private,GEN,Generics,4198149.04
+PD-TW-2026-v1,2026-01,Southern,Hospital/private,SPC,Specialty & Cold-chain,4701926.92
+PD-TW-2026-v1,2026-01,Southern,Hospital/private,OTC,OTC & Consumer,2518889.42
+PD-TW-2026-v1,2026-01,Southern,Institutional tender,GEN,Generics,4752814.38
+PD-TW-2026-v1,2026-01,Southern,Institutional tender,SPC,Specialty & Cold-chain,2285006.91
+PD-TW-2026-v1,2026-01,Southern,Institutional tender,BRD,Branded Rx,1645204.98
+PD-TW-2026-v1,2026-01,Southern,Institutional tender,OTC,OTC & Consumer,457001.38
+PD-TW-2026-v1,2026-02,Central,Retail pharmacy,OTC,OTC & Consumer,6109239.48
+PD-TW-2026-v1,2026-02,Central,Retail pharmacy,GEN,Generics,4340775.42
+PD-TW-2026-v1,2026-02,Central,Retail pharmacy,BRD,Branded Rx,4019236.5
+PD-TW-2026-v1,2026-02,Central,Retail pharmacy,SPC,Specialty & Cold-chain,1607694.6
+PD-TW-2026-v1,2026-02,Central,Hospital/private,BRD,Branded Rx,8128965.44
+PD-TW-2026-v1,2026-02,Central,Hospital/private,GEN,Generics,6350754.25
+PD-TW-2026-v1,2026-02,Central,Hospital/private,SPC,Specialty & Cold-chain,7112844.76
+PD-TW-2026-v1,2026-02,Central,Hospital/private,OTC,OTC & Consumer,3810452.55
+PD-TW-2026-v1,2026-02,Central,Institutional tender,GEN,Generics,8703144.84
+PD-TW-2026-v1,2026-02,Central,Institutional tender,SPC,Specialty & Cold-chain,4184204.25
+PD-TW-2026-v1,2026-02,Central,Institutional tender,BRD,Branded Rx,3012627.06
+PD-TW-2026-v1,2026-02,Central,Institutional tender,OTC,OTC & Consumer,836840.85
+PD-TW-2026-v1,2026-02,Western,Retail pharmacy,OTC,OTC & Consumer,6273926.92
+PD-TW-2026-v1,2026-02,Western,Retail pharmacy,GEN,Generics,4457790.18
+PD-TW-2026-v1,2026-02,Western,Retail pharmacy,BRD,Branded Rx,4127583.5
+PD-TW-2026-v1,2026-02,Western,Retail pharmacy,SPC,Specialty & Cold-chain,1651033.4
+PD-TW-2026-v1,2026-02,Western,Hospital/private,BRD,Branded Rx,7615557.01
+PD-TW-2026-v1,2026-02,Western,Hospital/private,GEN,Generics,5949653.92
+PD-TW-2026-v1,2026-02,Western,Hospital/private,SPC,Specialty & Cold-chain,6663612.39
+PD-TW-2026-v1,2026-02,Western,Hospital/private,OTC,OTC & Consumer,3569792.35
+PD-TW-2026-v1,2026-02,Western,Institutional tender,GEN,Generics,7677067.74
+PD-TW-2026-v1,2026-02,Western,Institutional tender,SPC,Specialty & Cold-chain,3690897.95
+PD-TW-2026-v1,2026-02,Western,Institutional tender,BRD,Branded Rx,2657446.52
+PD-TW-2026-v1,2026-02,Western,Institutional tender,OTC,OTC & Consumer,738179.59
+PD-TW-2026-v1,2026-02,Eastern,Retail pharmacy,OTC,OTC & Consumer,4456689.89
+PD-TW-2026-v1,2026-02,Eastern,Retail pharmacy,GEN,Generics,3166595.45
+PD-TW-2026-v1,2026-02,Eastern,Retail pharmacy,BRD,Branded Rx,2932032.82
+PD-TW-2026-v1,2026-02,Eastern,Retail pharmacy,SPC,Specialty & Cold-chain,1172813.13
+PD-TW-2026-v1,2026-02,Eastern,Hospital/private,BRD,Branded Rx,6996839.98
+PD-TW-2026-v1,2026-02,Eastern,Hospital/private,GEN,Generics,5466281.23
+PD-TW-2026-v1,2026-02,Eastern,Hospital/private,SPC,Specialty & Cold-chain,6122234.98
+PD-TW-2026-v1,2026-02,Eastern,Hospital/private,OTC,OTC & Consumer,3279768.74
+PD-TW-2026-v1,2026-02,Eastern,Institutional tender,GEN,Generics,6836378.12
+PD-TW-2026-v1,2026-02,Eastern,Institutional tender,SPC,Specialty & Cold-chain,3286720.25
+PD-TW-2026-v1,2026-02,Eastern,Institutional tender,BRD,Branded Rx,2366438.58
+PD-TW-2026-v1,2026-02,Eastern,Institutional tender,OTC,OTC & Consumer,657344.05
+PD-TW-2026-v1,2026-02,Southern,Retail pharmacy,OTC,OTC & Consumer,3685194.47
+PD-TW-2026-v1,2026-02,Southern,Retail pharmacy,GEN,Generics,2618427.65
+PD-TW-2026-v1,2026-02,Southern,Retail pharmacy,BRD,Branded Rx,2424470.04
+PD-TW-2026-v1,2026-02,Southern,Retail pharmacy,SPC,Specialty & Cold-chain,969788.02
+PD-TW-2026-v1,2026-02,Southern,Hospital/private,BRD,Branded Rx,5484241.55
+PD-TW-2026-v1,2026-02,Southern,Hospital/private,GEN,Generics,4284563.71
+PD-TW-2026-v1,2026-02,Southern,Hospital/private,SPC,Specialty & Cold-chain,4798711.36
+PD-TW-2026-v1,2026-02,Southern,Hospital/private,OTC,OTC & Consumer,2570738.23
+PD-TW-2026-v1,2026-02,Southern,Institutional tender,GEN,Generics,5149171.03
+PD-TW-2026-v1,2026-02,Southern,Institutional tender,SPC,Specialty & Cold-chain,2475562.99
+PD-TW-2026-v1,2026-02,Southern,Institutional tender,BRD,Branded Rx,1782405.36
+PD-TW-2026-v1,2026-02,Southern,Institutional tender,OTC,OTC & Consumer,495112.6
+PD-TW-2026-v1,2026-03,Central,Retail pharmacy,OTC,OTC & Consumer,5998855.18
+PD-TW-2026-v1,2026-03,Central,Retail pharmacy,GEN,Generics,4262344.47
+PD-TW-2026-v1,2026-03,Central,Retail pharmacy,BRD,Branded Rx,3946615.25
+PD-TW-2026-v1,2026-03,Central,Retail pharmacy,SPC,Specialty & Cold-chain,1578646.1
+PD-TW-2026-v1,2026-03,Central,Hospital/private,BRD,Branded Rx,10057418.24
+PD-TW-2026-v1,2026-03,Central,Hospital/private,GEN,Generics,7857358.0
+PD-TW-2026-v1,2026-03,Central,Hospital/private,SPC,Specialty & Cold-chain,8800240.96
+PD-TW-2026-v1,2026-03,Central,Hospital/private,OTC,OTC & Consumer,4714414.8
+PD-TW-2026-v1,2026-03,Central,Institutional tender,GEN,Generics,8638118.84
+PD-TW-2026-v1,2026-03,Central,Institutional tender,SPC,Specialty & Cold-chain,4152941.75
+PD-TW-2026-v1,2026-03,Central,Institutional tender,BRD,Branded Rx,2990118.06
+PD-TW-2026-v1,2026-03,Central,Institutional tender,OTC,OTC & Consumer,830588.35
+PD-TW-2026-v1,2026-03,Western,Retail pharmacy,OTC,OTC & Consumer,5499622.46
+PD-TW-2026-v1,2026-03,Western,Retail pharmacy,GEN,Generics,3907626.49
+PD-TW-2026-v1,2026-03,Western,Retail pharmacy,BRD,Branded Rx,3618172.67
+PD-TW-2026-v1,2026-03,Western,Retail pharmacy,SPC,Specialty & Cold-chain,1447269.07
+PD-TW-2026-v1,2026-03,Western,Hospital/private,BRD,Branded Rx,6518615.47
+PD-TW-2026-v1,2026-03,Western,Hospital/private,GEN,Generics,5092668.34
+PD-TW-2026-v1,2026-03,Western,Hospital/private,SPC,Specialty & Cold-chain,5703788.54
+PD-TW-2026-v1,2026-03,Western,Hospital/private,OTC,OTC & Consumer,3055601.0
+PD-TW-2026-v1,2026-03,Western,Institutional tender,GEN,Generics,6589114.6
+PD-TW-2026-v1,2026-03,Western,Institutional tender,SPC,Specialty & Cold-chain,3167843.56
+PD-TW-2026-v1,2026-03,Western,Institutional tender,BRD,Branded Rx,2280847.36
+PD-TW-2026-v1,2026-03,Western,Institutional tender,OTC,OTC & Consumer,633568.71
+PD-TW-2026-v1,2026-03,Eastern,Retail pharmacy,OTC,OTC & Consumer,3520325.11
+PD-TW-2026-v1,2026-03,Eastern,Retail pharmacy,GEN,Generics,2501283.63
+PD-TW-2026-v1,2026-03,Eastern,Retail pharmacy,BRD,Branded Rx,2316003.36
+PD-TW-2026-v1,2026-03,Eastern,Retail pharmacy,SPC,Specialty & Cold-chain,926401.34
+PD-TW-2026-v1,2026-03,Eastern,Hospital/private,BRD,Branded Rx,6342059.01
+PD-TW-2026-v1,2026-03,Eastern,Hospital/private,GEN,Generics,4954733.6
+PD-TW-2026-v1,2026-03,Eastern,Hospital/private,SPC,Specialty & Cold-chain,5549301.63
+PD-TW-2026-v1,2026-03,Eastern,Hospital/private,OTC,OTC & Consumer,2972840.16
+PD-TW-2026-v1,2026-03,Eastern,Institutional tender,GEN,Generics,5129330.65
+PD-TW-2026-v1,2026-03,Eastern,Institutional tender,SPC,Specialty & Cold-chain,2466024.35
+PD-TW-2026-v1,2026-03,Eastern,Institutional tender,BRD,Branded Rx,1775537.53
+PD-TW-2026-v1,2026-03,Eastern,Institutional tender,OTC,OTC & Consumer,493204.87
+PD-TW-2026-v1,2026-03,Southern,Retail pharmacy,OTC,OTC & Consumer,2931797.26
+PD-TW-2026-v1,2026-03,Southern,Retail pharmacy,GEN,Generics,2083119.1
+PD-TW-2026-v1,2026-03,Southern,Retail pharmacy,BRD,Branded Rx,1928813.98
+PD-TW-2026-v1,2026-03,Southern,Retail pharmacy,SPC,Specialty & Cold-chain,771525.59
+PD-TW-2026-v1,2026-03,Southern,Hospital/private,BRD,Branded Rx,4636962.43
+PD-TW-2026-v1,2026-03,Southern,Hospital/private,GEN,Generics,3622626.9
+PD-TW-2026-v1,2026-03,Southern,Hospital/private,SPC,Specialty & Cold-chain,4057342.12
+PD-TW-2026-v1,2026-03,Southern,Hospital/private,OTC,OTC & Consumer,2173576.14
+PD-TW-2026-v1,2026-03,Southern,Institutional tender,GEN,Generics,4110162.57
+PD-TW-2026-v1,2026-03,Southern,Institutional tender,SPC,Specialty & Cold-chain,1976039.7
+PD-TW-2026-v1,2026-03,Southern,Institutional tender,BRD,Branded Rx,1422748.58
+PD-TW-2026-v1,2026-03,Southern,Institutional tender,OTC,OTC & Consumer,395207.94
+PD-TW-2026-v1,2026-04,Central,Retail pharmacy,OTC,OTC & Consumer,6606585.76
+PD-TW-2026-v1,2026-04,Central,Retail pharmacy,GEN,Generics,4694153.04
+PD-TW-2026-v1,2026-04,Central,Retail pharmacy,BRD,Branded Rx,4346438.0
+PD-TW-2026-v1,2026-04,Central,Retail pharmacy,SPC,Specialty & Cold-chain,1738575.2
+PD-TW-2026-v1,2026-04,Central,Hospital/private,BRD,Branded Rx,9247766.4
+PD-TW-2026-v1,2026-04,Central,Hospital/private,GEN,Generics,7224817.5
+PD-TW-2026-v1,2026-04,Central,Hospital/private,SPC,Specialty & Cold-chain,8091795.6
+PD-TW-2026-v1,2026-04,Central,Hospital/private,OTC,OTC & Consumer,4334890.5
+PD-TW-2026-v1,2026-04,Central,Institutional tender,GEN,Generics,9178348.4
+PD-TW-2026-v1,2026-04,Central,Institutional tender,SPC,Specialty & Cold-chain,4412667.5
+PD-TW-2026-v1,2026-04,Central,Institutional tender,BRD,Branded Rx,3177120.6
+PD-TW-2026-v1,2026-04,Central,Institutional tender,OTC,OTC & Consumer,882533.5
+PD-TW-2026-v1,2026-04,Western,Retail pharmacy,OTC,OTC & Consumer,7380250.92
+PD-TW-2026-v1,2026-04,Western,Retail pharmacy,GEN,Generics,5243862.5
+PD-TW-2026-v1,2026-04,Western,Retail pharmacy,BRD,Branded Rx,4855428.24
+PD-TW-2026-v1,2026-04,Western,Retail pharmacy,SPC,Specialty & Cold-chain,1942171.3
+PD-TW-2026-v1,2026-04,Western,Hospital/private,BRD,Branded Rx,8359162.11
+PD-TW-2026-v1,2026-04,Western,Hospital/private,GEN,Generics,6530595.4
+PD-TW-2026-v1,2026-04,Western,Hospital/private,SPC,Specialty & Cold-chain,7314266.85
+PD-TW-2026-v1,2026-04,Western,Hospital/private,OTC,OTC & Consumer,3918357.24
+PD-TW-2026-v1,2026-04,Western,Institutional tender,GEN,Generics,9469715.81
+PD-TW-2026-v1,2026-04,Western,Institutional tender,SPC,Specialty & Cold-chain,4552747.98
+PD-TW-2026-v1,2026-04,Western,Institutional tender,BRD,Branded Rx,3277978.55
+PD-TW-2026-v1,2026-04,Western,Institutional tender,OTC,OTC & Consumer,910549.6
+PD-TW-2026-v1,2026-04,Eastern,Retail pharmacy,OTC,OTC & Consumer,4875176.27
+PD-TW-2026-v1,2026-04,Eastern,Retail pharmacy,GEN,Generics,3463941.03
+PD-TW-2026-v1,2026-04,Eastern,Retail pharmacy,BRD,Branded Rx,3207352.81
+PD-TW-2026-v1,2026-04,Eastern,Retail pharmacy,SPC,Specialty & Cold-chain,1282941.12
+PD-TW-2026-v1,2026-04,Eastern,Hospital/private,BRD,Branded Rx,7425023.9
+PD-TW-2026-v1,2026-04,Eastern,Hospital/private,GEN,Generics,5800799.92
+PD-TW-2026-v1,2026-04,Eastern,Hospital/private,SPC,Specialty & Cold-chain,6496895.91
+PD-TW-2026-v1,2026-04,Eastern,Hospital/private,OTC,OTC & Consumer,3480479.95
+PD-TW-2026-v1,2026-04,Eastern,Institutional tender,GEN,Generics,7084675.49
+PD-TW-2026-v1,2026-04,Eastern,Institutional tender,SPC,Specialty & Cold-chain,3406093.99
+PD-TW-2026-v1,2026-04,Eastern,Institutional tender,BRD,Branded Rx,2452387.67
+PD-TW-2026-v1,2026-04,Eastern,Institutional tender,OTC,OTC & Consumer,681218.8
+PD-TW-2026-v1,2026-04,Southern,Retail pharmacy,OTC,OTC & Consumer,4202197.39
+PD-TW-2026-v1,2026-04,Southern,Retail pharmacy,GEN,Generics,2985771.83
+PD-TW-2026-v1,2026-04,Southern,Retail pharmacy,BRD,Branded Rx,2764603.55
+PD-TW-2026-v1,2026-04,Southern,Retail pharmacy,SPC,Specialty & Cold-chain,1105841.42
+PD-TW-2026-v1,2026-04,Southern,Hospital/private,BRD,Branded Rx,6212226.12
+PD-TW-2026-v1,2026-04,Southern,Hospital/private,GEN,Generics,4853301.66
+PD-TW-2026-v1,2026-04,Southern,Hospital/private,SPC,Specialty & Cold-chain,5435697.86
+PD-TW-2026-v1,2026-04,Southern,Hospital/private,OTC,OTC & Consumer,2911980.99
+PD-TW-2026-v1,2026-04,Southern,Institutional tender,GEN,Generics,5644142.78
+PD-TW-2026-v1,2026-04,Southern,Institutional tender,SPC,Specialty & Cold-chain,2713530.18
+PD-TW-2026-v1,2026-04,Southern,Institutional tender,BRD,Branded Rx,1953741.73
+PD-TW-2026-v1,2026-04,Southern,Institutional tender,OTC,OTC & Consumer,542706.04
+PD-TW-2026-v1,2026-05,Central,Retail pharmacy,OTC,OTC & Consumer,5812662.02
+PD-TW-2026-v1,2026-05,Central,Retail pharmacy,GEN,Generics,4130049.33
+PD-TW-2026-v1,2026-05,Central,Retail pharmacy,BRD,Branded Rx,3824119.75
+PD-TW-2026-v1,2026-05,Central,Retail pharmacy,SPC,Specialty & Cold-chain,1529647.9
+PD-TW-2026-v1,2026-05,Central,Hospital/private,BRD,Branded Rx,8707437.44
+PD-TW-2026-v1,2026-05,Central,Hospital/private,GEN,Generics,6802685.5
+PD-TW-2026-v1,2026-05,Central,Hospital/private,SPC,Specialty & Cold-chain,7619007.76
+PD-TW-2026-v1,2026-05,Central,Hospital/private,OTC,OTC & Consumer,4081611.3
+PD-TW-2026-v1,2026-05,Central,Institutional tender,GEN,Generics,8266305.84
+PD-TW-2026-v1,2026-05,Central,Institutional tender,SPC,Specialty & Cold-chain,3974185.5
+PD-TW-2026-v1,2026-05,Central,Institutional tender,BRD,Branded Rx,2861413.56
+PD-TW-2026-v1,2026-05,Central,Institutional tender,OTC,OTC & Consumer,794837.1
+PD-TW-2026-v1,2026-05,Western,Retail pharmacy,OTC,OTC & Consumer,6481589.69
+PD-TW-2026-v1,2026-05,Western,Retail pharmacy,GEN,Generics,4605340.05
+PD-TW-2026-v1,2026-05,Western,Retail pharmacy,BRD,Branded Rx,4264203.75
+PD-TW-2026-v1,2026-05,Western,Retail pharmacy,SPC,Specialty & Cold-chain,1705681.5
+PD-TW-2026-v1,2026-05,Western,Hospital/private,BRD,Branded Rx,7909749.71
+PD-TW-2026-v1,2026-05,Western,Hospital/private,GEN,Generics,6179491.96
+PD-TW-2026-v1,2026-05,Western,Hospital/private,SPC,Specialty & Cold-chain,6921031.0
+PD-TW-2026-v1,2026-05,Western,Hospital/private,OTC,OTC & Consumer,3707695.18
+PD-TW-2026-v1,2026-05,Western,Institutional tender,GEN,Generics,8223103.07
+PD-TW-2026-v1,2026-05,Western,Institutional tender,SPC,Specialty & Cold-chain,3953414.94
+PD-TW-2026-v1,2026-05,Western,Institutional tender,BRD,Branded Rx,2846458.75
+PD-TW-2026-v1,2026-05,Western,Institutional tender,OTC,OTC & Consumer,790682.99
+PD-TW-2026-v1,2026-05,Eastern,Retail pharmacy,OTC,OTC & Consumer,4242988.68
+PD-TW-2026-v1,2026-05,Eastern,Retail pharmacy,GEN,Generics,3014755.11
+PD-TW-2026-v1,2026-05,Eastern,Retail pharmacy,BRD,Branded Rx,2791439.92
+PD-TW-2026-v1,2026-05,Eastern,Retail pharmacy,SPC,Specialty & Cold-chain,1116575.97
+PD-TW-2026-v1,2026-05,Eastern,Hospital/private,BRD,Branded Rx,7227715.17
+PD-TW-2026-v1,2026-05,Eastern,Hospital/private,GEN,Generics,5646652.48
+PD-TW-2026-v1,2026-05,Eastern,Hospital/private,SPC,Specialty & Cold-chain,6324250.78
+PD-TW-2026-v1,2026-05,Eastern,Hospital/private,OTC,OTC & Consumer,3387991.49
+PD-TW-2026-v1,2026-05,Eastern,Institutional tender,GEN,Generics,6500808.65
+PD-TW-2026-v1,2026-05,Eastern,Institutional tender,SPC,Specialty & Cold-chain,3125388.77
+PD-TW-2026-v1,2026-05,Eastern,Institutional tender,BRD,Branded Rx,2250279.92
+PD-TW-2026-v1,2026-05,Eastern,Institutional tender,OTC,OTC & Consumer,625077.75
+PD-TW-2026-v1,2026-05,Southern,Retail pharmacy,OTC,OTC & Consumer,3562686.35
+PD-TW-2026-v1,2026-05,Southern,Retail pharmacy,GEN,Generics,2531382.4
+PD-TW-2026-v1,2026-05,Southern,Retail pharmacy,BRD,Branded Rx,2343872.6
+PD-TW-2026-v1,2026-05,Southern,Retail pharmacy,SPC,Specialty & Cold-chain,937549.04
+PD-TW-2026-v1,2026-05,Southern,Hospital/private,BRD,Branded Rx,5630214.54
+PD-TW-2026-v1,2026-05,Southern,Hospital/private,GEN,Generics,4398605.11
+PD-TW-2026-v1,2026-05,Southern,Hospital/private,SPC,Specialty & Cold-chain,4926437.72
+PD-TW-2026-v1,2026-05,Southern,Hospital/private,OTC,OTC & Consumer,2639163.07
+PD-TW-2026-v1,2026-05,Southern,Institutional tender,GEN,Generics,5091532.59
+PD-TW-2026-v1,2026-05,Southern,Institutional tender,SPC,Specialty & Cold-chain,2447852.21
+PD-TW-2026-v1,2026-05,Southern,Institutional tender,BRD,Branded Rx,1762453.59
+PD-TW-2026-v1,2026-05,Southern,Institutional tender,OTC,OTC & Consumer,489570.44
+PD-TW-2026-v1,2026-06,Central,Retail pharmacy,OTC,OTC & Consumer,5792935.46
+PD-TW-2026-v1,2026-06,Central,Retail pharmacy,GEN,Generics,4116033.09
+PD-TW-2026-v1,2026-06,Central,Retail pharmacy,BRD,Branded Rx,3811141.75
+PD-TW-2026-v1,2026-06,Central,Retail pharmacy,SPC,Specialty & Cold-chain,1524456.7
+PD-TW-2026-v1,2026-06,Central,Hospital/private,BRD,Branded Rx,9808429.44
+PD-TW-2026-v1,2026-06,Central,Hospital/private,GEN,Generics,7662835.5
+PD-TW-2026-v1,2026-06,Central,Hospital/private,SPC,Specialty & Cold-chain,8582375.76
+PD-TW-2026-v1,2026-06,Central,Hospital/private,OTC,OTC & Consumer,4597701.3
+PD-TW-2026-v1,2026-06,Central,Institutional tender,GEN,Generics,8229982.28
+PD-TW-2026-v1,2026-06,Central,Institutional tender,SPC,Specialty & Cold-chain,3956722.25
+PD-TW-2026-v1,2026-06,Central,Institutional tender,BRD,Branded Rx,2848840.02
+PD-TW-2026-v1,2026-06,Central,Institutional tender,OTC,OTC & Consumer,791344.45
+PD-TW-2026-v1,2026-06,Western,Retail pharmacy,OTC,OTC & Consumer,6475124.63
+PD-TW-2026-v1,2026-06,Western,Retail pharmacy,GEN,Generics,4600746.45
+PD-TW-2026-v1,2026-06,Western,Retail pharmacy,BRD,Branded Rx,4259950.41
+PD-TW-2026-v1,2026-06,Western,Retail pharmacy,SPC,Specialty & Cold-chain,1703980.17
+PD-TW-2026-v1,2026-06,Western,Hospital/private,BRD,Branded Rx,7394672.26
+PD-TW-2026-v1,2026-06,Western,Hospital/private,GEN,Generics,5777087.7
+PD-TW-2026-v1,2026-06,Western,Hospital/private,SPC,Specialty & Cold-chain,6470338.22
+PD-TW-2026-v1,2026-06,Western,Hospital/private,OTC,OTC & Consumer,3466252.62
+PD-TW-2026-v1,2026-06,Western,Institutional tender,GEN,Generics,7369005.29
+PD-TW-2026-v1,2026-06,Western,Institutional tender,SPC,Specialty & Cold-chain,3542791.01
+PD-TW-2026-v1,2026-06,Western,Institutional tender,BRD,Branded Rx,2550809.53
+PD-TW-2026-v1,2026-06,Western,Institutional tender,OTC,OTC & Consumer,708558.2
+PD-TW-2026-v1,2026-06,Eastern,Retail pharmacy,OTC,OTC & Consumer,4396123.47
+PD-TW-2026-v1,2026-06,Eastern,Retail pharmacy,GEN,Generics,3123561.41
+PD-TW-2026-v1,2026-06,Eastern,Retail pharmacy,BRD,Branded Rx,2892186.49
+PD-TW-2026-v1,2026-06,Eastern,Retail pharmacy,SPC,Specialty & Cold-chain,1156874.6
+PD-TW-2026-v1,2026-06,Eastern,Hospital/private,BRD,Branded Rx,7414074.63
+PD-TW-2026-v1,2026-06,Eastern,Hospital/private,GEN,Generics,5792245.81
+PD-TW-2026-v1,2026-06,Eastern,Hospital/private,SPC,Specialty & Cold-chain,6487315.3
+PD-TW-2026-v1,2026-06,Eastern,Hospital/private,OTC,OTC & Consumer,3475347.48
+PD-TW-2026-v1,2026-06,Eastern,Institutional tender,GEN,Generics,6442013.58
+PD-TW-2026-v1,2026-06,Eastern,Institutional tender,SPC,Specialty & Cold-chain,3097121.91
+PD-TW-2026-v1,2026-06,Eastern,Institutional tender,BRD,Branded Rx,2229927.78
+PD-TW-2026-v1,2026-06,Eastern,Institutional tender,OTC,OTC & Consumer,619424.38
+PD-TW-2026-v1,2026-06,Southern,Retail pharmacy,OTC,OTC & Consumer,3604225.29
+PD-TW-2026-v1,2026-06,Southern,Retail pharmacy,GEN,Generics,2560896.91
+PD-TW-2026-v1,2026-06,Southern,Retail pharmacy,BRD,Branded Rx,2371200.85
+PD-TW-2026-v1,2026-06,Southern,Retail pharmacy,SPC,Specialty & Cold-chain,948480.34
+PD-TW-2026-v1,2026-06,Southern,Hospital/private,BRD,Branded Rx,5294427.07
+PD-TW-2026-v1,2026-06,Southern,Hospital/private,GEN,Generics,4136271.15
+PD-TW-2026-v1,2026-06,Southern,Hospital/private,SPC,Specialty & Cold-chain,4632623.69
+PD-TW-2026-v1,2026-06,Southern,Hospital/private,OTC,OTC & Consumer,2481762.69
+PD-TW-2026-v1,2026-06,Southern,Institutional tender,GEN,Generics,5289585.86
+PD-TW-2026-v1,2026-06,Southern,Institutional tender,SPC,Specialty & Cold-chain,2543070.13
+PD-TW-2026-v1,2026-06,Southern,Institutional tender,BRD,Branded Rx,1831010.49
+PD-TW-2026-v1,2026-06,Southern,Institutional tender,OTC,OTC & Consumer,508614.03
+PD-TW-2026-v1,2026-07,Central,Retail pharmacy,OTC,OTC & Consumer,6543414.94
+PD-TW-2026-v1,2026-07,Central,Retail pharmacy,GEN,Generics,4649268.51
+PD-TW-2026-v1,2026-07,Central,Retail pharmacy,BRD,Branded Rx,4304878.25
+PD-TW-2026-v1,2026-07,Central,Retail pharmacy,SPC,Specialty & Cold-chain,1721951.3
+PD-TW-2026-v1,2026-07,Central,Hospital/private,BRD,Branded Rx,9814977.28
+PD-TW-2026-v1,2026-07,Central,Hospital/private,GEN,Generics,7667951.0
+PD-TW-2026-v1,2026-07,Central,Hospital/private,SPC,Specialty & Cold-chain,8588105.12
+PD-TW-2026-v1,2026-07,Central,Hospital/private,OTC,OTC & Consumer,4600770.6
+PD-TW-2026-v1,2026-07,Central,Institutional tender,GEN,Generics,9278255.48
+PD-TW-2026-v1,2026-07,Central,Institutional tender,SPC,Specialty & Cold-chain,4460699.75
+PD-TW-2026-v1,2026-07,Central,Institutional tender,BRD,Branded Rx,3211703.82
+PD-TW-2026-v1,2026-07,Central,Institutional tender,OTC,OTC & Consumer,892139.95
+PD-TW-2026-v1,2026-07,Western,Retail pharmacy,OTC,OTC & Consumer,7253178.15
+PD-TW-2026-v1,2026-07,Western,Retail pharmacy,GEN,Generics,5153573.95
+PD-TW-2026-v1,2026-07,Western,Retail pharmacy,BRD,Branded Rx,4771827.73
+PD-TW-2026-v1,2026-07,Western,Retail pharmacy,SPC,Specialty & Cold-chain,1908731.09
+PD-TW-2026-v1,2026-07,Western,Hospital/private,BRD,Branded Rx,8293310.52
+PD-TW-2026-v1,2026-07,Western,Hospital/private,GEN,Generics,6479148.84
+PD-TW-2026-v1,2026-07,Western,Hospital/private,SPC,Specialty & Cold-chain,7256646.71
+PD-TW-2026-v1,2026-07,Western,Hospital/private,OTC,OTC & Consumer,3887489.31
+PD-TW-2026-v1,2026-07,Western,Institutional tender,GEN,Generics,8269348.51
+PD-TW-2026-v1,2026-07,Western,Institutional tender,SPC,Specialty & Cold-chain,3975648.32
+PD-TW-2026-v1,2026-07,Western,Institutional tender,BRD,Branded Rx,2862466.79
+PD-TW-2026-v1,2026-07,Western,Institutional tender,OTC,OTC & Consumer,795129.66
+PD-TW-2026-v1,2026-07,Eastern,Retail pharmacy,OTC,OTC & Consumer,4906948.86
+PD-TW-2026-v1,2026-07,Eastern,Retail pharmacy,GEN,Generics,3486516.3
+PD-TW-2026-v1,2026-07,Eastern,Retail pharmacy,BRD,Branded Rx,3228255.83
+PD-TW-2026-v1,2026-07,Eastern,Retail pharmacy,SPC,Specialty & Cold-chain,1291302.33
+PD-TW-2026-v1,2026-07,Eastern,Hospital/private,BRD,Branded Rx,8258477.29
+PD-TW-2026-v1,2026-07,Eastern,Hospital/private,GEN,Generics,6451935.38
+PD-TW-2026-v1,2026-07,Eastern,Hospital/private,SPC,Specialty & Cold-chain,7226167.63
+PD-TW-2026-v1,2026-07,Eastern,Hospital/private,OTC,OTC & Consumer,3871161.23
+PD-TW-2026-v1,2026-07,Eastern,Institutional tender,GEN,Generics,6812352.06
+PD-TW-2026-v1,2026-07,Eastern,Institutional tender,SPC,Specialty & Cold-chain,3275169.26
+PD-TW-2026-v1,2026-07,Eastern,Institutional tender,BRD,Branded Rx,2358121.87
+PD-TW-2026-v1,2026-07,Eastern,Institutional tender,OTC,OTC & Consumer,655033.85
+PD-TW-2026-v1,2026-07,Southern,Retail pharmacy,OTC,OTC & Consumer,4508704.1
+PD-TW-2026-v1,2026-07,Southern,Retail pharmacy,GEN,Generics,3203552.92
+PD-TW-2026-v1,2026-07,Southern,Retail pharmacy,BRD,Branded Rx,2966252.7
+PD-TW-2026-v1,2026-07,Southern,Retail pharmacy,SPC,Specialty & Cold-chain,1186501.08
+PD-TW-2026-v1,2026-07,Southern,Hospital/private,BRD,Branded Rx,5933657.58
+PD-TW-2026-v1,2026-07,Southern,Hospital/private,GEN,Generics,4635669.98
+PD-TW-2026-v1,2026-07,Southern,Hospital/private,SPC,Specialty & Cold-chain,5191950.38
+PD-TW-2026-v1,2026-07,Southern,Hospital/private,OTC,OTC & Consumer,2781401.99
+PD-TW-2026-v1,2026-07,Southern,Institutional tender,GEN,Generics,6079687.48
+PD-TW-2026-v1,2026-07,Southern,Institutional tender,SPC,Specialty & Cold-chain,2922926.67
+PD-TW-2026-v1,2026-07,Southern,Institutional tender,BRD,Branded Rx,2104507.2
+PD-TW-2026-v1,2026-07,Southern,Institutional tender,OTC,OTC & Consumer,584585.33
+PD-TW-2026-v1,2026-08,Central,Retail pharmacy,OTC,OTC & Consumer,6543414.94
+PD-TW-2026-v1,2026-08,Central,Retail pharmacy,GEN,Generics,4649268.51
+PD-TW-2026-v1,2026-08,Central,Retail pharmacy,BRD,Branded Rx,4304878.25
+PD-TW-2026-v1,2026-08,Central,Retail pharmacy,SPC,Specialty & Cold-chain,1721951.3
+PD-TW-2026-v1,2026-08,Central,Hospital/private,BRD,Branded Rx,9814977.28
+PD-TW-2026-v1,2026-08,Central,Hospital/private,GEN,Generics,7667951.0
+PD-TW-2026-v1,2026-08,Central,Hospital/private,SPC,Specialty & Cold-chain,8588105.12
+PD-TW-2026-v1,2026-08,Central,Hospital/private,OTC,OTC & Consumer,4600770.6
+PD-TW-2026-v1,2026-08,Central,Institutional tender,GEN,Generics,9278255.48
+PD-TW-2026-v1,2026-08,Central,Institutional tender,SPC,Specialty & Cold-chain,4460699.75
+PD-TW-2026-v1,2026-08,Central,Institutional tender,BRD,Branded Rx,3211703.82
+PD-TW-2026-v1,2026-08,Central,Institutional tender,OTC,OTC & Consumer,892139.95
+PD-TW-2026-v1,2026-08,Western,Retail pharmacy,OTC,OTC & Consumer,7438441.48
+PD-TW-2026-v1,2026-08,Western,Retail pharmacy,GEN,Generics,5285208.42
+PD-TW-2026-v1,2026-08,Western,Retail pharmacy,BRD,Branded Rx,4893711.5
+PD-TW-2026-v1,2026-08,Western,Retail pharmacy,SPC,Specialty & Cold-chain,1957484.6
+PD-TW-2026-v1,2026-08,Western,Hospital/private,BRD,Branded Rx,8528173.73
+PD-TW-2026-v1,2026-08,Western,Hospital/private,GEN,Generics,6662635.72
+PD-TW-2026-v1,2026-08,Western,Hospital/private,SPC,Specialty & Cold-chain,7462152.01
+PD-TW-2026-v1,2026-08,Western,Hospital/private,OTC,OTC & Consumer,3997581.43
+PD-TW-2026-v1,2026-08,Western,Institutional tender,GEN,Generics,8654581.9
+PD-TW-2026-v1,2026-08,Western,Institutional tender,SPC,Specialty & Cold-chain,4160856.68
+PD-TW-2026-v1,2026-08,Western,Institutional tender,BRD,Branded Rx,2995816.81
+PD-TW-2026-v1,2026-08,Western,Institutional tender,OTC,OTC & Consumer,832171.34
+PD-TW-2026-v1,2026-08,Eastern,Retail pharmacy,OTC,OTC & Consumer,4822113.5
+PD-TW-2026-v1,2026-08,Eastern,Retail pharmacy,GEN,Generics,3426238.54
+PD-TW-2026-v1,2026-08,Eastern,Retail pharmacy,BRD,Branded Rx,3172443.09
+PD-TW-2026-v1,2026-08,Eastern,Retail pharmacy,SPC,Specialty & Cold-chain,1268977.24
+PD-TW-2026-v1,2026-08,Eastern,Hospital/private,BRD,Branded Rx,7720540.57
+PD-TW-2026-v1,2026-08,Eastern,Hospital/private,GEN,Generics,6031672.32
+PD-TW-2026-v1,2026-08,Eastern,Hospital/private,SPC,Specialty & Cold-chain,6755473.0
+PD-TW-2026-v1,2026-08,Eastern,Hospital/private,OTC,OTC & Consumer,3619003.39
+PD-TW-2026-v1,2026-08,Eastern,Institutional tender,GEN,Generics,7045818.26
+PD-TW-2026-v1,2026-08,Eastern,Institutional tender,SPC,Specialty & Cold-chain,3387412.63
+PD-TW-2026-v1,2026-08,Eastern,Institutional tender,BRD,Branded Rx,2438937.09
+PD-TW-2026-v1,2026-08,Eastern,Institutional tender,OTC,OTC & Consumer,677482.53
+PD-TW-2026-v1,2026-08,Southern,Retail pharmacy,OTC,OTC & Consumer,4155133.63
+PD-TW-2026-v1,2026-08,Southern,Retail pharmacy,GEN,Generics,2952331.79
+PD-TW-2026-v1,2026-08,Southern,Retail pharmacy,BRD,Branded Rx,2733640.55
+PD-TW-2026-v1,2026-08,Southern,Retail pharmacy,SPC,Specialty & Cold-chain,1093456.22
+PD-TW-2026-v1,2026-08,Southern,Hospital/private,BRD,Branded Rx,5787250.85
+PD-TW-2026-v1,2026-08,Southern,Hospital/private,GEN,Generics,4521289.73
+PD-TW-2026-v1,2026-08,Southern,Hospital/private,SPC,Specialty & Cold-chain,5063844.49
+PD-TW-2026-v1,2026-08,Southern,Hospital/private,OTC,OTC & Consumer,2712773.84
+PD-TW-2026-v1,2026-08,Southern,Institutional tender,GEN,Generics,5978277.48
+PD-TW-2026-v1,2026-08,Southern,Institutional tender,SPC,Specialty & Cold-chain,2874171.87
+PD-TW-2026-v1,2026-08,Southern,Institutional tender,BRD,Branded Rx,2069403.74
+PD-TW-2026-v1,2026-08,Southern,Institutional tender,OTC,OTC & Consumer,574834.37
+PD-TW-2026-v1,2026-09,Central,Retail pharmacy,OTC,OTC & Consumer,6543414.94
+PD-TW-2026-v1,2026-09,Central,Retail pharmacy,GEN,Generics,4649268.51
+PD-TW-2026-v1,2026-09,Central,Retail pharmacy,BRD,Branded Rx,4304878.25
+PD-TW-2026-v1,2026-09,Central,Retail pharmacy,SPC,Specialty & Cold-chain,1721951.3
+PD-TW-2026-v1,2026-09,Central,Hospital/private,BRD,Branded Rx,9814977.28
+PD-TW-2026-v1,2026-09,Central,Hospital/private,GEN,Generics,7667951.0
+PD-TW-2026-v1,2026-09,Central,Hospital/private,SPC,Specialty & Cold-chain,8588105.12
+PD-TW-2026-v1,2026-09,Central,Hospital/private,OTC,OTC & Consumer,4600770.6
+PD-TW-2026-v1,2026-09,Central,Institutional tender,GEN,Generics,9278255.48
+PD-TW-2026-v1,2026-09,Central,Institutional tender,SPC,Specialty & Cold-chain,4460699.75
+PD-TW-2026-v1,2026-09,Central,Institutional tender,BRD,Branded Rx,3211703.82
+PD-TW-2026-v1,2026-09,Central,Institutional tender,OTC,OTC & Consumer,892139.95
+PD-TW-2026-v1,2026-09,Western,Retail pharmacy,OTC,OTC & Consumer,7219183.89
+PD-TW-2026-v1,2026-09,Western,Retail pharmacy,GEN,Generics,5129420.13
+PD-TW-2026-v1,2026-09,Western,Retail pharmacy,BRD,Branded Rx,4749463.08
+PD-TW-2026-v1,2026-09,Western,Retail pharmacy,SPC,Specialty & Cold-chain,1899785.23
+PD-TW-2026-v1,2026-09,Western,Hospital/private,BRD,Branded Rx,8997599.72
+PD-TW-2026-v1,2026-09,Western,Hospital/private,GEN,Generics,7029374.78
+PD-TW-2026-v1,2026-09,Western,Hospital/private,SPC,Specialty & Cold-chain,7872899.76
+PD-TW-2026-v1,2026-09,Western,Hospital/private,OTC,OTC & Consumer,4217624.87
+PD-TW-2026-v1,2026-09,Western,Institutional tender,GEN,Generics,9735015.39
+PD-TW-2026-v1,2026-09,Western,Institutional tender,SPC,Specialty & Cold-chain,4680295.86
+PD-TW-2026-v1,2026-09,Western,Institutional tender,BRD,Branded Rx,3369813.02
+PD-TW-2026-v1,2026-09,Western,Institutional tender,OTC,OTC & Consumer,936059.17
+PD-TW-2026-v1,2026-09,Eastern,Retail pharmacy,OTC,OTC & Consumer,4779760.68
+PD-TW-2026-v1,2026-09,Eastern,Retail pharmacy,GEN,Generics,3396145.75
+PD-TW-2026-v1,2026-09,Eastern,Retail pharmacy,BRD,Branded Rx,3144579.4
+PD-TW-2026-v1,2026-09,Eastern,Retail pharmacy,SPC,Specialty & Cold-chain,1257831.76
+PD-TW-2026-v1,2026-09,Eastern,Hospital/private,BRD,Branded Rx,8984721.35
+PD-TW-2026-v1,2026-09,Eastern,Hospital/private,GEN,Generics,7019313.55
+PD-TW-2026-v1,2026-09,Eastern,Hospital/private,SPC,Specialty & Cold-chain,7861631.18
+PD-TW-2026-v1,2026-09,Eastern,Hospital/private,OTC,OTC & Consumer,4211588.13
+PD-TW-2026-v1,2026-09,Eastern,Institutional tender,GEN,Generics,7375270.67
+PD-TW-2026-v1,2026-09,Eastern,Institutional tender,SPC,Specialty & Cold-chain,3545803.21
+PD-TW-2026-v1,2026-09,Eastern,Institutional tender,BRD,Branded Rx,2552978.31
+PD-TW-2026-v1,2026-09,Eastern,Institutional tender,OTC,OTC & Consumer,709160.64
+PD-TW-2026-v1,2026-09,Southern,Retail pharmacy,OTC,OTC & Consumer,4156885.81
+PD-TW-2026-v1,2026-09,Southern,Retail pharmacy,GEN,Generics,2953576.76
+PD-TW-2026-v1,2026-09,Southern,Retail pharmacy,BRD,Branded Rx,2734793.29
+PD-TW-2026-v1,2026-09,Southern,Retail pharmacy,SPC,Specialty & Cold-chain,1093917.32
+PD-TW-2026-v1,2026-09,Southern,Hospital/private,BRD,Branded Rx,6245279.91
+PD-TW-2026-v1,2026-09,Southern,Hospital/private,GEN,Generics,4879124.93
+PD-TW-2026-v1,2026-09,Southern,Hospital/private,SPC,Specialty & Cold-chain,5464619.92
+PD-TW-2026-v1,2026-09,Southern,Hospital/private,OTC,OTC & Consumer,2927474.96
+PD-TW-2026-v1,2026-09,Southern,Institutional tender,GEN,Generics,6045944.4
+PD-TW-2026-v1,2026-09,Southern,Institutional tender,SPC,Specialty & Cold-chain,2906704.04
+PD-TW-2026-v1,2026-09,Southern,Institutional tender,BRD,Branded Rx,2092826.91
+PD-TW-2026-v1,2026-09,Southern,Institutional tender,OTC,OTC & Consumer,581340.81
+PD-TW-2026-v1,2026-10,Central,Retail pharmacy,OTC,OTC & Consumer,6543414.94
+PD-TW-2026-v1,2026-10,Central,Retail pharmacy,GEN,Generics,4649268.51
+PD-TW-2026-v1,2026-10,Central,Retail pharmacy,BRD,Branded Rx,4304878.25
+PD-TW-2026-v1,2026-10,Central,Retail pharmacy,SPC,Specialty & Cold-chain,1721951.3
+PD-TW-2026-v1,2026-10,Central,Hospital/private,BRD,Branded Rx,9814977.28
+PD-TW-2026-v1,2026-10,Central,Hospital/private,GEN,Generics,7667951.0
+PD-TW-2026-v1,2026-10,Central,Hospital/private,SPC,Specialty & Cold-chain,8588105.12
+PD-TW-2026-v1,2026-10,Central,Hospital/private,OTC,OTC & Consumer,4600770.6
+PD-TW-2026-v1,2026-10,Central,Institutional tender,GEN,Generics,9278255.48
+PD-TW-2026-v1,2026-10,Central,Institutional tender,SPC,Specialty & Cold-chain,4460699.75
+PD-TW-2026-v1,2026-10,Central,Institutional tender,BRD,Branded Rx,3211703.82
+PD-TW-2026-v1,2026-10,Central,Institutional tender,OTC,OTC & Consumer,892139.95
+PD-TW-2026-v1,2026-10,Western,Retail pharmacy,OTC,OTC & Consumer,7249112.81
+PD-TW-2026-v1,2026-10,Western,Retail pharmacy,GEN,Generics,5150685.42
+PD-TW-2026-v1,2026-10,Western,Retail pharmacy,BRD,Branded Rx,4769153.17
+PD-TW-2026-v1,2026-10,Western,Retail pharmacy,SPC,Specialty & Cold-chain,1907661.27
+PD-TW-2026-v1,2026-10,Western,Hospital/private,BRD,Branded Rx,8630974.39
+PD-TW-2026-v1,2026-10,Western,Hospital/private,GEN,Generics,6742948.74
+PD-TW-2026-v1,2026-10,Western,Hospital/private,SPC,Specialty & Cold-chain,7552102.59
+PD-TW-2026-v1,2026-10,Western,Hospital/private,OTC,OTC & Consumer,4045769.25
+PD-TW-2026-v1,2026-10,Western,Institutional tender,GEN,Generics,9134763.27
+PD-TW-2026-v1,2026-10,Western,Institutional tender,SPC,Specialty & Cold-chain,4391713.11
+PD-TW-2026-v1,2026-10,Western,Institutional tender,BRD,Branded Rx,3162033.44
+PD-TW-2026-v1,2026-10,Western,Institutional tender,OTC,OTC & Consumer,878342.62
+PD-TW-2026-v1,2026-10,Eastern,Retail pharmacy,OTC,OTC & Consumer,5027662.14
+PD-TW-2026-v1,2026-10,Eastern,Retail pharmacy,GEN,Generics,3572286.26
+PD-TW-2026-v1,2026-10,Eastern,Retail pharmacy,BRD,Branded Rx,3307672.46
+PD-TW-2026-v1,2026-10,Eastern,Retail pharmacy,SPC,Specialty & Cold-chain,1323068.98
+PD-TW-2026-v1,2026-10,Eastern,Hospital/private,BRD,Branded Rx,8031995.19
+PD-TW-2026-v1,2026-10,Eastern,Hospital/private,GEN,Generics,6274996.24
+PD-TW-2026-v1,2026-10,Eastern,Hospital/private,SPC,Specialty & Cold-chain,7027995.79
+PD-TW-2026-v1,2026-10,Eastern,Hospital/private,OTC,OTC & Consumer,3764997.74
+PD-TW-2026-v1,2026-10,Eastern,Institutional tender,GEN,Generics,7343438.55
+PD-TW-2026-v1,2026-10,Eastern,Institutional tender,SPC,Specialty & Cold-chain,3530499.3
+PD-TW-2026-v1,2026-10,Eastern,Institutional tender,BRD,Branded Rx,2541959.5
+PD-TW-2026-v1,2026-10,Eastern,Institutional tender,OTC,OTC & Consumer,706099.86
+PD-TW-2026-v1,2026-10,Southern,Retail pharmacy,OTC,OTC & Consumer,3948648.14
+PD-TW-2026-v1,2026-10,Southern,Retail pharmacy,GEN,Generics,2805618.42
+PD-TW-2026-v1,2026-10,Southern,Retail pharmacy,BRD,Branded Rx,2597794.83
+PD-TW-2026-v1,2026-10,Southern,Retail pharmacy,SPC,Specialty & Cold-chain,1039117.93
+PD-TW-2026-v1,2026-10,Southern,Hospital/private,BRD,Branded Rx,5903222.99
+PD-TW-2026-v1,2026-10,Southern,Hospital/private,GEN,Generics,4611892.96
+PD-TW-2026-v1,2026-10,Southern,Hospital/private,SPC,Specialty & Cold-chain,5165320.12
+PD-TW-2026-v1,2026-10,Southern,Hospital/private,OTC,OTC & Consumer,2767135.78
+PD-TW-2026-v1,2026-10,Southern,Institutional tender,GEN,Generics,5856647.9
+PD-TW-2026-v1,2026-10,Southern,Institutional tender,SPC,Specialty & Cold-chain,2815696.11
+PD-TW-2026-v1,2026-10,Southern,Institutional tender,BRD,Branded Rx,2027301.2
+PD-TW-2026-v1,2026-10,Southern,Institutional tender,OTC,OTC & Consumer,563139.22
+PD-TW-2026-v1,2026-11,Central,Retail pharmacy,OTC,OTC & Consumer,6543414.94
+PD-TW-2026-v1,2026-11,Central,Retail pharmacy,GEN,Generics,4649268.51
+PD-TW-2026-v1,2026-11,Central,Retail pharmacy,BRD,Branded Rx,4304878.25
+PD-TW-2026-v1,2026-11,Central,Retail pharmacy,SPC,Specialty & Cold-chain,1721951.3
+PD-TW-2026-v1,2026-11,Central,Hospital/private,BRD,Branded Rx,9814977.28
+PD-TW-2026-v1,2026-11,Central,Hospital/private,GEN,Generics,7667951.0
+PD-TW-2026-v1,2026-11,Central,Hospital/private,SPC,Specialty & Cold-chain,8588105.12
+PD-TW-2026-v1,2026-11,Central,Hospital/private,OTC,OTC & Consumer,4600770.6
+PD-TW-2026-v1,2026-11,Central,Institutional tender,GEN,Generics,9278255.48
+PD-TW-2026-v1,2026-11,Central,Institutional tender,SPC,Specialty & Cold-chain,4460699.75
+PD-TW-2026-v1,2026-11,Central,Institutional tender,BRD,Branded Rx,3211703.82
+PD-TW-2026-v1,2026-11,Central,Institutional tender,OTC,OTC & Consumer,892139.95
+PD-TW-2026-v1,2026-11,Western,Retail pharmacy,OTC,OTC & Consumer,7182165.14
+PD-TW-2026-v1,2026-11,Western,Retail pharmacy,GEN,Generics,5103117.33
+PD-TW-2026-v1,2026-11,Western,Retail pharmacy,BRD,Branded Rx,4725108.64
+PD-TW-2026-v1,2026-11,Western,Retail pharmacy,SPC,Specialty & Cold-chain,1890043.46
+PD-TW-2026-v1,2026-11,Western,Hospital/private,BRD,Branded Rx,8946979.32
+PD-TW-2026-v1,2026-11,Western,Hospital/private,GEN,Generics,6989827.59
+PD-TW-2026-v1,2026-11,Western,Hospital/private,SPC,Specialty & Cold-chain,7828606.9
+PD-TW-2026-v1,2026-11,Western,Hospital/private,OTC,OTC & Consumer,4193896.55
+PD-TW-2026-v1,2026-11,Western,Institutional tender,GEN,Generics,9567480.82
+PD-TW-2026-v1,2026-11,Western,Institutional tender,SPC,Specialty & Cold-chain,4599750.4
+PD-TW-2026-v1,2026-11,Western,Institutional tender,BRD,Branded Rx,3311820.29
+PD-TW-2026-v1,2026-11,Western,Institutional tender,OTC,OTC & Consumer,919950.08
+PD-TW-2026-v1,2026-11,Eastern,Retail pharmacy,OTC,OTC & Consumer,4987519.39
+PD-TW-2026-v1,2026-11,Eastern,Retail pharmacy,GEN,Generics,3543763.77
+PD-TW-2026-v1,2026-11,Eastern,Retail pharmacy,BRD,Branded Rx,3281262.75
+PD-TW-2026-v1,2026-11,Eastern,Retail pharmacy,SPC,Specialty & Cold-chain,1312505.1
+PD-TW-2026-v1,2026-11,Eastern,Hospital/private,BRD,Branded Rx,8629513.05
+PD-TW-2026-v1,2026-11,Eastern,Hospital/private,GEN,Generics,6741807.07
+PD-TW-2026-v1,2026-11,Eastern,Hospital/private,SPC,Specialty & Cold-chain,7550823.92
+PD-TW-2026-v1,2026-11,Eastern,Hospital/private,OTC,OTC & Consumer,4045084.24
+PD-TW-2026-v1,2026-11,Eastern,Institutional tender,GEN,Generics,7028889.55
+PD-TW-2026-v1,2026-11,Eastern,Institutional tender,SPC,Specialty & Cold-chain,3379273.82
+PD-TW-2026-v1,2026-11,Eastern,Institutional tender,BRD,Branded Rx,2433077.15
+PD-TW-2026-v1,2026-11,Eastern,Institutional tender,OTC,OTC & Consumer,675854.76
+PD-TW-2026-v1,2026-11,Southern,Retail pharmacy,OTC,OTC & Consumer,4069600.65
+PD-TW-2026-v1,2026-11,Southern,Retail pharmacy,GEN,Generics,2891558.35
+PD-TW-2026-v1,2026-11,Southern,Retail pharmacy,BRD,Branded Rx,2677368.85
+PD-TW-2026-v1,2026-11,Southern,Retail pharmacy,SPC,Specialty & Cold-chain,1070947.54
+PD-TW-2026-v1,2026-11,Southern,Hospital/private,BRD,Branded Rx,6343097.74
+PD-TW-2026-v1,2026-11,Southern,Hospital/private,GEN,Generics,4955545.11
+PD-TW-2026-v1,2026-11,Southern,Hospital/private,SPC,Specialty & Cold-chain,5550210.53
+PD-TW-2026-v1,2026-11,Southern,Hospital/private,OTC,OTC & Consumer,2973327.07
+PD-TW-2026-v1,2026-11,Southern,Institutional tender,GEN,Generics,5744442.53
+PD-TW-2026-v1,2026-11,Southern,Institutional tender,SPC,Specialty & Cold-chain,2761751.22
+PD-TW-2026-v1,2026-11,Southern,Institutional tender,BRD,Branded Rx,1988460.88
+PD-TW-2026-v1,2026-11,Southern,Institutional tender,OTC,OTC & Consumer,552350.24
+PD-TW-2026-v1,2026-12,Central,Retail pharmacy,OTC,OTC & Consumer,6543414.94
+PD-TW-2026-v1,2026-12,Central,Retail pharmacy,GEN,Generics,4649268.51
+PD-TW-2026-v1,2026-12,Central,Retail pharmacy,BRD,Branded Rx,4304878.25
+PD-TW-2026-v1,2026-12,Central,Retail pharmacy,SPC,Specialty & Cold-chain,1721951.3
+PD-TW-2026-v1,2026-12,Central,Hospital/private,BRD,Branded Rx,9814977.28
+PD-TW-2026-v1,2026-12,Central,Hospital/private,GEN,Generics,7667951.0
+PD-TW-2026-v1,2026-12,Central,Hospital/private,SPC,Specialty & Cold-chain,8588105.12
+PD-TW-2026-v1,2026-12,Central,Hospital/private,OTC,OTC & Consumer,4600770.6
+PD-TW-2026-v1,2026-12,Central,Institutional tender,GEN,Generics,9278255.48
+PD-TW-2026-v1,2026-12,Central,Institutional tender,SPC,Specialty & Cold-chain,4460699.75
+PD-TW-2026-v1,2026-12,Central,Institutional tender,BRD,Branded Rx,3211703.82
+PD-TW-2026-v1,2026-12,Central,Institutional tender,OTC,OTC & Consumer,892139.95
+PD-TW-2026-v1,2026-12,Western,Retail pharmacy,OTC,OTC & Consumer,8351791.57
+PD-TW-2026-v1,2026-12,Western,Retail pharmacy,GEN,Generics,5934167.7
+PD-TW-2026-v1,2026-12,Western,Retail pharmacy,BRD,Branded Rx,5494599.72
+PD-TW-2026-v1,2026-12,Western,Retail pharmacy,SPC,Specialty & Cold-chain,2197839.89
+PD-TW-2026-v1,2026-12,Western,Hospital/private,BRD,Branded Rx,8509601.3
+PD-TW-2026-v1,2026-12,Western,Hospital/private,GEN,Generics,6648126.01
+PD-TW-2026-v1,2026-12,Western,Hospital/private,SPC,Specialty & Cold-chain,7445901.13
+PD-TW-2026-v1,2026-12,Western,Hospital/private,OTC,OTC & Consumer,3988875.61
+PD-TW-2026-v1,2026-12,Western,Institutional tender,GEN,Generics,9167494.02
+PD-TW-2026-v1,2026-12,Western,Institutional tender,SPC,Specialty & Cold-chain,4407449.05
+PD-TW-2026-v1,2026-12,Western,Institutional tender,BRD,Branded Rx,3173363.31
+PD-TW-2026-v1,2026-12,Western,Institutional tender,OTC,OTC & Consumer,881489.81
+PD-TW-2026-v1,2026-12,Eastern,Retail pharmacy,OTC,OTC & Consumer,4859153.32
+PD-TW-2026-v1,2026-12,Eastern,Retail pharmacy,GEN,Generics,3452556.3
+PD-TW-2026-v1,2026-12,Eastern,Retail pharmacy,BRD,Branded Rx,3196811.39
+PD-TW-2026-v1,2026-12,Eastern,Retail pharmacy,SPC,Specialty & Cold-chain,1278724.56
+PD-TW-2026-v1,2026-12,Eastern,Hospital/private,BRD,Branded Rx,8752402.22
+PD-TW-2026-v1,2026-12,Eastern,Hospital/private,GEN,Generics,6837814.23
+PD-TW-2026-v1,2026-12,Eastern,Hospital/private,SPC,Specialty & Cold-chain,7658351.94
+PD-TW-2026-v1,2026-12,Eastern,Hospital/private,OTC,OTC & Consumer,4102688.54
+PD-TW-2026-v1,2026-12,Eastern,Institutional tender,GEN,Generics,6975785.05
+PD-TW-2026-v1,2026-12,Eastern,Institutional tender,SPC,Specialty & Cold-chain,3353742.81
+PD-TW-2026-v1,2026-12,Eastern,Institutional tender,BRD,Branded Rx,2414694.82
+PD-TW-2026-v1,2026-12,Eastern,Institutional tender,OTC,OTC & Consumer,670748.56
+PD-TW-2026-v1,2026-12,Southern,Retail pharmacy,OTC,OTC & Consumer,4514287.3
+PD-TW-2026-v1,2026-12,Southern,Retail pharmacy,GEN,Generics,3207519.92
+PD-TW-2026-v1,2026-12,Southern,Retail pharmacy,BRD,Branded Rx,2969925.86
+PD-TW-2026-v1,2026-12,Southern,Retail pharmacy,SPC,Specialty & Cold-chain,1187970.34
+PD-TW-2026-v1,2026-12,Southern,Hospital/private,BRD,Branded Rx,6492196.09
+PD-TW-2026-v1,2026-12,Southern,Hospital/private,GEN,Generics,5072028.2
+PD-TW-2026-v1,2026-12,Southern,Hospital/private,SPC,Specialty & Cold-chain,5680671.58
+PD-TW-2026-v1,2026-12,Southern,Hospital/private,OTC,OTC & Consumer,3043216.92
+PD-TW-2026-v1,2026-12,Southern,Institutional tender,GEN,Generics,6094702.43
+PD-TW-2026-v1,2026-12,Southern,Institutional tender,SPC,Specialty & Cold-chain,2930145.4
+PD-TW-2026-v1,2026-12,Southern,Institutional tender,BRD,Branded Rx,2109704.69
+PD-TW-2026-v1,2026-12,Southern,Institutional tender,OTC,OTC & Consumer,586029.08

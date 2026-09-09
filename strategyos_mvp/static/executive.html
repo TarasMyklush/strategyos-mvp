@@ -127,7 +127,12 @@
           <h2 class="section-title" id="driver-heading">The group index</h2>
           <p class="section-note" id="driver-hint">Percent of plan is the headline. Tap a KPI for its trend and drivers.</p>
         </div>
-        <div class="driver-grid" id="driver-row"></div>
+        <div class="driver-grid" id="driver-row" aria-live="polite">
+          <article class="driver-card driver-card--loading"><span>Revenue</span><strong>Loading current figure…</strong><small>Verified source is being prepared</small></article>
+          <article class="driver-card driver-card--loading"><span>EBITDA margin</span><strong>Loading current figure…</strong><small>Verified source is being prepared</small></article>
+          <article class="driver-card driver-card--loading"><span>Operating cost</span><strong>Loading current figure…</strong><small>Verified source is being prepared</small></article>
+          <article class="driver-card driver-card--loading"><span>Cash vs floor</span><strong>Loading current figure…</strong><small>Verified source is being prepared</small></article>
+        </div>
       </section>
 
       <section class="section" id="kpi-detail-section" aria-labelledby="drill-heading">

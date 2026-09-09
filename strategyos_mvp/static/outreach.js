@@ -34,12 +34,17 @@
   function renderThreads() {
     var people = providers();
     var rows = (state.catalog.threads || []).filter(function(item){ return state.filter === "all" || item.current_status === state.filter; });
-    $("threads").innerHTML = rows.length ? rows.map(function(thread){
+    var requested = (state.catalog.data_requests || []).filter(function (item) { return state.filter === "all" || state.filter === "drafted"; });
+    var requestMarkup = requested.map(function (item) {
+      return '<article class="thread drafted" data-request-id="'+safe(item.request_id)+'"><div class="thread-head"><div><h3>'+safe(item.kpi_label)+' data request</h3><div class="thread-meta">Created by '+safe(label(item.created_by))+' → '+safe(item.provider)+'</div></div><span class="status drafted">Drafted</span></div><blockquote class="question">Request '+safe((item.missing_inputs || []).join('; '))+'</blockquote><div class="facts"><div class="fact"><span>Calculation</span><strong>'+safe(item.formula)+'</strong></div><div class="fact"><span>Provider</span><strong>'+safe(item.provider)+'</strong></div><div class="fact reason"><span>Governance</span><strong>Approval is required before any external message can be sent.</strong></div></div></article>';
+    }).join('');
+    var threadMarkup = rows.length ? rows.map(function(thread){
       var person = people.get(thread.provider_id) || {};
       var trail = (thread.lifecycle || []).map(function(event){ return '<div class="step"><strong>'+safe(label(event.action))+'</strong><span>'+safe(time(event.occurred_at))+'</span>'+(event.approved_by ? '<span>Approved by '+safe(event.approved_by)+'</span>' : '')+'</div>'; }).join("");
       var outcome = thread.outcome ? '<div class="outcome"><div><strong>'+safe(label(thread.outcome.kind))+'</strong><div>'+safe(thread.outcome.summary)+'</div></div><button data-entry="'+safe(thread.outcome.knowledge_entry.entry_id)+'">Open structured entry</button></div>' : '';
-      return '<article class="thread '+safe(thread.current_status)+'"><div class="thread-head"><div><h3>'+safe(thread.title)+'</h3><div class="thread-meta">'+safe(thread.agent.name)+' · '+safe(thread.agent.accountable_role)+' → '+safe(person.name)+' · '+safe(person.role)+'</div></div><span class="status '+safe(thread.current_status)+'">'+safe(label(thread.current_status))+'</span></div><blockquote class="question">'+safe(thread.question)+'</blockquote><div class="facts"><div class="fact"><span>Triggered by</span><strong>'+safe(thread.trigger.label)+'</strong></div><div class="fact"><span>Reference</span><strong>'+safe(label(thread.trigger.kind))+' · '+safe(thread.trigger.reference_id)+'</strong></div><div class="fact reason"><span>Why this outreach exists</span><strong>'+safe(thread.trigger.reason)+'</strong></div></div><div class="trail">'+trail+'</div>'+outcome+'</article>';
-    }).join("") : '<div class="empty">No threads have this status.</div>';
+      return '<article class="thread '+safe(thread.current_status)+'"><div class="thread-head"><div><h3>'+safe(thread.title)+'</h3><div class="thread-meta">'+safe(thread.agent.name)+' · '+safe(thread.agent.accountable_role)+' → '+safe(person.name)+' · '+safe(person.role)+'</div></div><span class="status '+safe(thread.current_status)+'">'+safe(label(thread.current_status))+'</span></div><blockquote class="question">'+safe(thread.question)+'</blockquote><div class="facts"><div class="fact"><span>Triggered by</span><strong>'+safe(thread.trigger.label)+'</strong></div><div class="fact"><span>Governed source</span><strong>'+safe(label(thread.trigger.kind))+'</strong></div><div class="fact reason"><span>Why this outreach exists</span><strong>'+safe(thread.trigger.reason)+'</strong></div></div><div class="trail">'+trail+'</div>'+outcome+'</article>';
+    }).join("") : '';
+    $("threads").innerHTML = requestMarkup + threadMarkup || '<div class="empty">No threads have this status.</div>';
     $("threads").querySelectorAll("[data-entry]").forEach(function(button){ button.onclick=function(){ openProjection(button.dataset.entry); }; });
   }
   async function openProjection(entryId) {
@@ -47,14 +52,26 @@
       var detail = await get("/api/outreach/synthetic/knowledge/" + encodeURIComponent(entryId));
       var e = detail.entry || {}, source = detail.source_thread || {}, trigger = source.trigger || {};
       $("drawer-title").textContent = label(e.kind);
-      $("drawer-body").innerHTML = '<div class="projection"><div><span>Subject</span><strong>'+safe(e.subject_ref)+'</strong></div><div><span>Structured predicate</span><strong>'+safe(e.predicate)+'</strong></div><div><span>Structured value</span><strong>'+safe(e.value)+(e.unit ? ' · '+safe(e.unit) : '')+'</strong></div><div><span>Source thread</span><strong>'+safe(source.title)+' · '+safe(source.thread_id)+'</strong></div><div><span>Trigger</span><strong>'+safe(trigger.label)+' · '+safe(trigger.reference_id)+'</strong></div><div><span>Disposition</span><strong>'+safe(label(e.disposition))+'</strong></div></div><p class="boundary">Synthetic projection · no authority effect. Only the structured result and its lineage are present; source reply text is not stored.</p>';
+      $("drawer-body").innerHTML = '<div class="projection"><div><span>Subject</span><strong>'+safe(e.subject_ref)+'</strong></div><div><span>Structured predicate</span><strong>'+safe(e.predicate)+'</strong></div><div><span>Structured value</span><strong>'+safe(e.value)+(e.unit ? ' · '+safe(e.unit) : '')+'</strong></div><div><span>Source thread</span><strong>'+safe(source.title)+'</strong></div><div><span>Trigger</span><strong>'+safe(trigger.label)+'</strong></div><div><span>Disposition</span><strong>'+safe(label(e.disposition))+'</strong></div></div><p class="boundary">Synthetic projection · no authority effect. Only the structured result and its lineage are present; source reply text is not stored.</p>';
       $("drawer").hidden=false; $("drawer-scrim").hidden=false;
     } catch (error) { $("threads").insertAdjacentHTML("afterbegin", '<div class="error">'+safe(error.message)+'</div>'); }
   }
   function closeDrawer(){ $("drawer").hidden=true; $("drawer-scrim").hidden=true; }
   async function init(){
     $("drawer-close").onclick=closeDrawer; $("drawer-scrim").onclick=closeDrawer;
-    try { state.catalog=await get("/api/outreach/synthetic"); renderCoverage(); renderPeople(); renderFilters(); renderThreads(); }
+    try {
+      var persona = "";
+      try { persona = String(localStorage.getItem("strategyos.executive.persona") || ""); } catch (_error) {}
+      document.querySelectorAll('a[href^="/app"]').forEach(function (link) {
+        if (persona) link.href = '/app?persona=' + encodeURIComponent(persona) + (link.href.indexOf('view=agents') >= 0 ? '&view=agents' : '');
+      });
+      state.catalog=await get("/api/outreach/synthetic"); renderCoverage(); renderPeople(); renderFilters(); renderThreads();
+      var requestId = new URL(location.href).searchParams.get('request');
+      if (requestId) {
+        var requestCard = document.querySelector('[data-request-id="' + requestId.replace(/"/g, '') + '"]');
+        if (requestCard) requestCard.scrollIntoView({block:'center'});
+      }
+    }
     catch(error){ $("threads").innerHTML='<div class="error">'+safe(error.message)+'</div>'; }
   }
   document.addEventListener("DOMContentLoaded", init);

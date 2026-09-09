@@ -18,6 +18,55 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from openpyxl import load_workbook
+import yaml
+
+
+def _kpi_source_contract_registry(root: Path) -> dict[str, dict[str, Any]]:
+    """Load advisor-owned KPI providers without embedding sector terms in core."""
+    # Configuration discovery is deliberately separate from business-source
+    # discovery.  A malformed group workbook must still fail closed instead of
+    # being affected by which advisor configuration files happen to exist.
+    candidates = sorted(
+        path
+        for path in root.rglob("*")
+        if path.is_file()
+        and "kpi_source_contracts" in path.name.lower()
+        and path.suffix.lower() in {".yaml", ".yml"}
+    )
+    path = candidates[0] if candidates else None
+    if path is None:
+        return {}
+    try:
+        payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return {}
+    aliases = {
+        "group revenue": "revenue",
+        "group ebitda margin": "ebitda_margin",
+        "group cash vs floor": "cash_vs_floor",
+        "operating cost": "operating_cost",
+    }
+    result: dict[str, dict[str, Any]] = {}
+    for item in payload.get("contracts") or []:
+        if not isinstance(item, Mapping):
+            continue
+        title = str(item.get("kpi") or "").lower()
+        key = next((canonical for phrase, canonical in aliases.items() if phrase in title), None)
+        if not key:
+            continue
+        result[key] = {
+            "kpi": str(item.get("kpi") or ""),
+            "provider": str(item.get("provider") or ""),
+            "source_type": str(item.get("source_type") or ""),
+            "cadence": str(item.get("cadence") or ""),
+            "freshness_threshold_days": item.get("freshness_threshold_days"),
+            "status": str(item.get("status_at_anchor") or ""),
+            "registry_id": str((payload.get("registry") or {}).get("id") or ""),
+            "registry_version": str((payload.get("registry") or {}).get("version") or ""),
+            "source_file": _relative(path, root),
+            "source_sha256": _sha256(path),
+        }
+    return result
 
 
 def derive_source_finance_kpis(dataset_root: Path) -> dict[str, Any]:
@@ -28,11 +77,13 @@ def derive_source_finance_kpis(dataset_root: Path) -> dict[str, Any]:
     cash. Plans and the board floor are never manufactured from actuals.
     """
     root = Path(dataset_root)
+    source_contracts = _kpi_source_contract_registry(root)
     # A group finance pack and a division ledger have different entity scopes.
     # Use the narrow GL path only when no group source was supplied; an invalid
     # group contract must never turn division numbers into group headlines.
     group_projection = _group_finance_projection(root)
     if group_projection is not None:
+        group_projection["kpi_source_contracts"] = source_contracts
         return group_projection
     if _first_matching(root, "bu_group_budget_2026", ".xlsx") is not None:
         return _unavailable(
@@ -197,6 +248,7 @@ def derive_source_finance_kpis(dataset_root: Path) -> dict[str, Any]:
         "actual_complete": actual_complete,
         "evidence": evidence,
         "source_files": sorted({item for group in evidence.values() for item in group["files"]}),
+        "kpi_source_contracts": source_contracts,
     }
 
 
@@ -971,7 +1023,13 @@ def _group_cash_floor(book: Any, budget_path: Path, root: Path) -> dict[str, Any
     if not candidates:
         return fallback
     quarter, value, floor = candidates[-1]
-    return {"value": _number(value * Decimal("1000000000")), "floor": _number(floor * Decimal("1000000000")), "complete": bool(re.fullmatch(r"\d{4}-Q[1-4]\s*\(actual\)", quarter.strip(), re.I)), "evidence": {"files": [_relative(budget_path, root)], "summary": f"{quarter} group cash actual/forecast and approved floor from Group_Cash_Floor.", "details": {"file": _relative(budget_path, root), "sha256": _sha256(budget_path), "sheet": "Group_Cash_Floor", "quarter": quarter}}}
+    # Treasury publishes this column as Actual/Forecast.  A closed quarter and
+    # the current labelled estimate are both valid reported positions; future
+    # budget rows have no value and never enter ``candidates``.  Preserve the
+    # label in evidence so an estimate can never be presented as a closed
+    # actual while still allowing the current liquidity position to calculate.
+    reported = bool(re.fullmatch(r"\d{4}-Q[1-4]\s*\((?:actual|est(?:imate)?)\)", quarter.strip(), re.I))
+    return {"value": _number(value * Decimal("1000000000")), "floor": _number(floor * Decimal("1000000000")), "complete": reported, "period_label": quarter, "evidence": {"files": [_relative(budget_path, root)], "summary": f"{quarter} group cash actual/forecast and approved floor from Group_Cash_Floor.", "details": {"file": _relative(budget_path, root), "sha256": _sha256(budget_path), "sheet": "Group_Cash_Floor", "quarter": quarter, "classification": "estimate" if "(est" in quarter.lower() else "actual"}}}
 
 
 def _group_cash_floor_trend(book: Any) -> dict[str, Any]:
@@ -997,7 +1055,7 @@ def _group_cash_floor_trend(book: Any) -> dict[str, Any]:
         value = _decimal(_cell(values, headers, "actualforecastsarb"))
         budget = _decimal(_cell(values, headers, "groupcashbudgetsarb"))
         floor = _decimal(_cell(values, headers, "floorsarb"))
-        if not re.fullmatch(r"\d{4}-Q[1-4]\s*\(actual\)", quarter, re.I) or value is None or budget is None or floor is None:
+        if not re.fullmatch(r"\d{4}-Q[1-4]\s*\((?:actual|est(?:imate)?)\)", quarter, re.I) or value is None or budget is None or floor is None:
             continue
         labels.append(quarter.split(" (", 1)[0])
         actual.append(_number(value * Decimal("1000000000")) or "0")
@@ -1014,7 +1072,7 @@ def _group_cash_floor_trend(book: Any) -> dict[str, Any]:
         "notes": notes,
         "has_plan_series": True,
         "unit": "sar",
-        "scope_note": "Explicitly labelled quarterly group cash actuals versus budget; estimates and forecasts are excluded.",
+        "scope_note": "Quarterly group cash actuals and the labelled current estimate versus approved budget.",
         "plan_note": "Approved quarterly group cash budget from Group_Cash_Floor.",
     }
 
@@ -1193,6 +1251,7 @@ def _unavailable(reason: str, root: Path) -> dict[str, Any]:
         "derived_from": "deterministic_source_finance_kpi_engine",
         "reason": reason,
         "source_files": [str(path.relative_to(root)) for path in root.rglob("*") if path.is_file()][:20],
+        "kpi_source_contracts": _kpi_source_contract_registry(root),
     }
 
 

@@ -621,6 +621,28 @@ def test_catalog_permissions_pagination_and_source_revocation(setup):
     assert catalog['plans'] == catalog['actuals'] == []
 
 
+def test_catalog_exposes_only_a_verified_latest_analysis_summary(setup):
+    s = setup
+    approve(s, import_pair(s))
+    saved = analyse(s)
+    newer_actual = deepcopy(s['a'])
+    newer_actual['revision'] = 'newer-unrelated-actual'
+    store.import_actuals(s['operator'], Actuals.model_validate(newer_actual), s['pack'])
+
+    # The analysis remains available when its actual snapshot has paged out of
+    # the catalog's current actual selector. Its source policy is rechecked by
+    # exact revision before the compact analysis is disclosed.
+    catalog = store.catalog(s['executive'], limit=1)
+    assert catalog['actuals'][0]['revision'] == 'newer-unrelated-actual'
+    plan = catalog['plans'][0]
+    assert plan['planned_totals'] == [{'metric': 'revenue', 'unit': 'SAR', 'planned_total': '200'}]
+    assert plan['latest_analysis']['analysis_id'] == saved['analysis_hash']
+    assert plan['latest_analysis']['rollups'][0]['target'] == saved['rollups'][0]['target']
+    assert plan['latest_analysis']['rollups'][0]['actual'] == saved['rollups'][0]['actual']
+    assert 'behind_cells' not in plan['latest_analysis']['rollups'][0]
+    assert plan['latest_analysis']['granular_stories'] == saved['granular_stories']
+
+
 def test_quality_assurance_plans_require_explicit_catalog_marker(setup):
     s = setup
     qa = deepcopy(s['p'])

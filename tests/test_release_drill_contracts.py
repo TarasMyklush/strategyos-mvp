@@ -197,3 +197,44 @@ def test_deterministic_evidence_status_depends_on_resolution_not_citation_count(
 def test_plan_health_exposes_the_granular_intent_drill():
     source = Path('strategyos_mvp/static/executive.js').read_text()
     assert 'href="/plan">Open intent and granular drift</a>' in source
+    assert "window.location.assign('/plan')" in source
+
+
+def test_build_note_executive_reliability_contracts_are_present():
+    root = Path('strategyos_mvp/static')
+    executive = (root / 'executive.js').read_text()
+    vault = (root / 'intent_vault.js').read_text()
+    outreach = (root / 'outreach.js').read_text()
+    html = (root / 'executive.html').read_text()
+    css = (root / 'executive.css').read_text()
+
+    assert 'firstDefined(requestOptions.timeoutMs, 15000)' in executive
+    assert 'deterministicAssistantFallback' in executive
+    assert 'data-kpi-data-request' in executive
+    assert '/api/outreach/requests' in executive
+    assert 'EXECUTIVE_PERSONA_STORAGE_KEY' in executive
+    assert 'strategyos.executive.persona' in vault and 'strategyos.executive.persona' in outreach
+    assert 'kpi-scope-label' in executive and '.kpi-scope-label' in css
+    assert 'driver-card--loading' in html and 'Cash vs floor' in html
+    assert 'executiveMetricTokens(plain, 4)' not in executive
+    assert 'loadGranularIntentSummary' in executive
+    assert 'reconciled granular stories' in executive
+    assert 'Open the strategic register context' in executive
+    assert 'Owner · ' in executive
+    assert 'Open register detail for ' not in executive
+
+
+def test_hosted_release_gate_exercises_customer_plan_and_deterministic_fallback():
+    workflow = Path('.github/workflows/strategyos-hosted-human-e2e.yml').read_text()
+    customer = Path('scripts/hosted_customer_intent_acceptance.py').read_text()
+    walkthrough = Path('scripts/hosted_human_e2e.py').read_text()
+
+    assert 'needs: customer-intent' in workflow
+    assert 'hosted_customer_intent_acceptance.py' in workflow
+    assert 'PLAN_ID = "pd-tw-2026-v1-plan"' in customer
+    assert 'len(payload["cells"]) == 576' in customer
+    assert 'sum((Decimal(cell["target"])' in customer
+    assert 'len(analysis["granular_stories"]) == 3' in customer
+    assert '"**/assistant/chat"' in walkthrough
+    assert '"SAR 1.41B"' in walkthrough
+    assert '"288 / 288"' in walkthrough

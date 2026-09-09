@@ -91,6 +91,12 @@ CREATE TABLE IF NOT EXISTS strategyos_intent_structure_approvals (
  FOREIGN KEY(tenant_key, config_id, version)
  REFERENCES strategyos_intent_structure_configs(tenant_key, config_id, version)
 );
+CREATE TABLE IF NOT EXISTS strategyos_outreach_requests (
+ tenant_key text NOT NULL, request_id text NOT NULL,
+ payload jsonb NOT NULL, created_by text NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(tenant_key, request_id)
+);
 CREATE OR REPLACE FUNCTION strategyos_intent_reject_change() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN RAISE EXCEPTION 'Intent history is immutable; append a new version or event'; END $$;
 DO $$ DECLARE table_name text; BEGIN
@@ -99,7 +105,7 @@ DO $$ DECLARE table_name text; BEGIN
    'strategyos_intent_advisor_configs', 'strategyos_intent_advisor_approvals',
    'strategyos_intent_advisor_publications', 'strategyos_intent_board_templates',
    'strategyos_intent_board_packs', 'strategyos_intent_structure_configs',
-   'strategyos_intent_structure_approvals'] LOOP
+   'strategyos_intent_structure_approvals', 'strategyos_outreach_requests'] LOOP
   IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = table_name || '_immutable'
       AND tgrelid = to_regclass(table_name)) THEN
    EXECUTE format('CREATE TRIGGER %I BEFORE UPDATE OR DELETE ON %I FOR EACH ROW EXECUTE FUNCTION strategyos_intent_reject_change()',

@@ -935,6 +935,7 @@ def _safe_trend(payload: Mapping[str, Any], key: str) -> dict[str, Any]:
 
 def _unavailable_ceo_kpi(spec: Mapping[str, Any], *, reason: str) -> dict[str, Any]:
     missing = list(spec["inputs"])
+    source_contract = spec.get("source_contract") if isinstance(spec.get("source_contract"), Mapping) else {}
     return {
         "kpi_contract": True,
         "driver_key": spec["key"],
@@ -950,6 +951,8 @@ def _unavailable_ceo_kpi(spec: Mapping[str, Any], *, reason: str) -> dict[str, A
         "formula": spec["formula"],
         "inputs": list(spec["inputs"]),
         "missing_inputs": missing,
+        "accountable_provider": str(source_contract.get("provider") or "Finance data owner"),
+        "source_contract": dict(source_contract),
         "availability": "unavailable",
         "comparison": "No comparison is shown until the required finance information is available.",
         "chips": [],
@@ -1001,12 +1004,18 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
         if isinstance(finance_payload.get("calculation_models"), Mapping)
         else {}
     )
+    source_contracts = (
+        finance_payload.get("kpi_source_contracts")
+        if isinstance(finance_payload.get("kpi_source_contracts"), Mapping)
+        else {}
+    )
 
     for spec in _CEO_KPI_SPECS:
         spec = {
             **spec,
             "formula": str(formula_overrides.get(spec["key"]) or spec["formula"]),
             "cost_bridge_model": calculation_models.get("operating_cost"),
+            "source_contract": dict(source_contracts.get(spec["key"]) or {}),
         }
         if not finance_payload:
             cards.append(
@@ -1187,6 +1196,8 @@ def _ceo_kpi_cards(read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
                 "formula": spec["formula"],
                 "inputs": list(spec["inputs"]),
                 "missing_inputs": missing_inputs,
+                "accountable_provider": str((source_contracts.get(spec["key"]) or {}).get("provider") or "Finance data owner"),
+                "source_contract": dict(source_contracts.get(spec["key"]) or {}),
                 "availability": availability,
                 "comparison": comparison,
                 "chips": [],
@@ -1579,7 +1590,11 @@ def _executive_priorities(
             decisions.append(
                 {
                     "key": f"kpi_{str(driver.get('driver_key') or driver.get('key') or 'performance')}",
-                    "title": f"{driver.get('label')}: {signal.get('posture')}",
+                    "title": (
+                        f"Commission a cost-remediation plan from {owner_label or 'the accountable executive'}"
+                        if str(driver.get("driver_key") or driver.get("key")) == "operating_cost"
+                        else f"Commission the required {str(driver.get('label') or 'performance').lower()} remediation"
+                    ),
                     "summary": str(signal.get("readout") or ""),
                     "decision": str(
                         recommendation.get("recommended_action")

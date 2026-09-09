@@ -169,6 +169,7 @@ def test_all_governed_tenant_tables_have_rls_enabled(isolated_roles):
         'strategyos_intent_advisor_publications', 'strategyos_intent_board_templates',
         'strategyos_intent_board_packs', 'strategyos_intent_structure_configs',
         'strategyos_intent_structure_approvals',
+        'strategyos_outreach_requests',
         'strategyos_evidence_documents','strategyos_ingestion_batch_documents',
         'strategyos_source_access_policies','strategyos_source_registration_versions',
         'strategyos_evidence_occurrences','strategyos_claim_families','strategyos_claim_revisions',

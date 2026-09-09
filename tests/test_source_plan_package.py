@@ -3,6 +3,7 @@ from datetime import date
 from decimal import Decimal
 from hashlib import sha256
 import json
+from pathlib import Path
 
 import openpyxl
 
@@ -115,3 +116,22 @@ def test_source_plan_package_actuals_compare_to_matching_months_of_full_year_pla
     assert result["rollups"][0]["variance"] == "2000000.00"
     assert result["rollups"][0]["planned_cells"] == 4
     assert result["rollups"][0]["measured_cells"] == 4
+    assert [story["dimension"] for story in result["granular_stories"]] == ["region", "channel", "product"]
+    assert all(story["target"] == result["rollups"][0]["target"] for story in result["granular_stories"])
+    assert all(story["actual"] == result["rollups"][0]["actual"] for story in result["granular_stories"])
+    assert all(story["complete"] is True for story in result["granular_stories"])
+
+
+def test_kyvern_fy26_plan_fixture_reconciles_exactly_to_the_approved_objective():
+    root = Path(__file__).parent / "fixtures" / "kyvern_fy26_plan"
+    rows = source_plan_package._rows(root / "Plan_Data_2026.csv", source_plan_package.PLAN_COLUMNS)
+    structure = json.loads((root / "Plan_Decomposition_Structure_v1.json").read_text(encoding="utf-8"))
+
+    total = sum((Decimal(row["Plan_Gross_Revenue_SAR"]) for row in rows), Decimal(0))
+    assert len(rows) == 576
+    assert total == Decimal("2540000000.03")
+    assert source_plan_package._objective_total(structure["objective"]) == Decimal("2540000000")
+    assert Decimal("2540000000") - total == Decimal("-0.03")
+    owners = source_plan_package._branch_owners(structure)
+    assert set(owners["region"]) == {"Central", "Eastern", "Western", "Southern"}
+    assert all(owner and "owner" not in owner.lower() for by_dimension in owners.values() for owner in by_dimension.values())

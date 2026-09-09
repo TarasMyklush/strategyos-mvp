@@ -11,8 +11,22 @@ READ_ROLES = ("operator", "reviewer", "executive", "tenant_admin", "system")
 
 
 @router.get("/synthetic")
-def synthetic_catalog(_: dict[str, Any] = require_role(*READ_ROLES)):
-    return outreach.build_catalog()
+def synthetic_catalog(principal: dict[str, Any] = require_role(*READ_ROLES)):
+    try:
+        return outreach.build_catalog(requests=outreach.list_data_requests(principal))
+    except outreach.OutreachUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
+
+
+@router.post("/requests", status_code=201)
+def create_data_request(
+    request: outreach.DataRequestCreate,
+    principal: dict[str, Any] = require_role(*READ_ROLES),
+):
+    try:
+        return outreach.create_data_request(principal, request)
+    except outreach.OutreachUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
 
 
 @router.get("/synthetic/threads/{thread_id}")

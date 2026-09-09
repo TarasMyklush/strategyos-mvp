@@ -693,6 +693,44 @@ def evaluate(plan: Plan, actuals: Actuals, *, source_root: Path, company_id: str
                           ", mix " + effects["mix"] + ", and price " + effects["price"] +
                           ". The effects reconcile exactly to the observed variance."),
         })
+    granular_stories = []
+    metric_name = sorted(plan.metrics)[0] if plan.metrics else None
+    for dimension in ("region", "channel", "product"):
+        selected = [row for row in rows if row["metric"] == metric_name and dimension in row["dimensions"]]
+        if not selected:
+            continue
+        grouped = {}
+        for row in selected:
+            member = row["dimensions"][dimension]
+            group = grouped.setdefault(member, {"target": Decimal(0), "actual": Decimal(0),
+                                                 "planned_cells": 0, "measured_cells": 0})
+            group["target"] += Decimal(row["target"])
+            group["planned_cells"] += 1
+            if row["actual"] is not None:
+                group["actual"] += Decimal(row["actual"])
+                group["measured_cells"] += 1
+        ranked = []
+        for member, values in sorted(grouped.items()):
+            if values["measured_cells"] == 0:
+                continue
+            ranked.append({"member": member, "target": str(values["target"]),
+                           "actual": str(values["actual"]),
+                           "variance": str(values["actual"] - values["target"]),
+                           "planned_cells": values["planned_cells"],
+                           "measured_cells": values["measured_cells"]})
+        if not ranked:
+            continue
+        ranked.sort(key=lambda item: (Decimal(item["variance"]), item["member"]))
+        granular_stories.append({
+            "dimension": dimension, "metric": metric_name, "unit": selected[0]["unit"],
+            "target": str(sum((Decimal(item["target"]) for item in ranked), Decimal(0))),
+            "actual": str(sum((Decimal(item["actual"]) for item in ranked), Decimal(0))),
+            "variance": str(sum((Decimal(item["variance"]) for item in ranked), Decimal(0))),
+            "weakest": ranked[0], "strongest": ranked[-1],
+            "member_count": len(ranked),
+            "complete": all(item["measured_cells"] == item["planned_cells"] for item in ranked),
+            "evidence_basis": "Exact aggregation of the saved plan-versus-actual cell analysis.",
+        })
     result = {"schema_version": 1, "formula_version": "cell-variance.v3", "company_id": company_id,
         "plan_id": plan.plan_id, "plan_version": plan.version,
         "period": actuals.period.model_dump(mode="json"),
@@ -700,7 +738,8 @@ def evaluate(plan: Plan, actuals: Actuals, *, source_root: Path, company_id: str
         "as_of": as_of.isoformat(), "plan_hash": plan_hash, "actuals_hash": actual_hash,
         "approval_status": plan.status, "approval_basis": "imported_metadata_not_authorization_verified",
         "comparison_basis": "imported_ratified_plan" if plan.status == "ratified" else "proposed_plan_preview",
-        "cells": rows, "rollups": rollups, "price_volume_mix": price_volume_mix, "findings": findings}
+        "cells": rows, "rollups": rollups, "granular_stories": granular_stories,
+        "price_volume_mix": price_volume_mix, "findings": findings}
     result["analysis_hash"] = fingerprint(result)
     return result
 

@@ -676,6 +676,23 @@ def catalog(principal, offset=0, limit=25, *, qa_plan_id=None):
         actual_cursor = conn.execute("""SELECT * FROM strategyos_intent_actual_versions WHERE tenant_key=%s
             ORDER BY imported_at DESC,revision LIMIT %s OFFSET %s""", (tenant, limit + 1, offset))
         actuals = [dict(zip([c.name for c in actual_cursor.description], row)) for row in actual_cursor.fetchall()]
+        analysis_cursor = conn.execute("""SELECT DISTINCT ON (plan_id,plan_version)
+            plan_id,plan_version,analysis_id,actual_revision,payload,created_at
+            FROM strategyos_intent_analyses WHERE tenant_key=%s
+            ORDER BY plan_id,plan_version,created_at DESC,analysis_id DESC""", (tenant,))
+        analyses = [dict(zip([c.name for c in analysis_cursor.description], row))
+                    for row in analysis_cursor.fetchall()]
+        analysis_actual_cursor = conn.execute("""SELECT * FROM strategyos_intent_actual_versions
+            WHERE tenant_key=%s AND revision IN (
+              SELECT actual_revision FROM strategyos_intent_analyses WHERE tenant_key=%s
+            )""", (tenant, tenant))
+        analysis_actuals = {
+            row['revision']: row
+            for row in (
+                dict(zip([c.name for c in analysis_actual_cursor.description], values))
+                for values in analysis_actual_cursor.fetchall()
+            )
+        }
     visible_plans, visible_actuals = [], []
     from .dimensional_intent_sources import SourceUnavailable
     for kind, records, visible in [('plan', plans, visible_plans), ('actuals', actuals, visible_actuals)]:
@@ -698,10 +715,41 @@ def catalog(principal, offset=0, limit=25, *, qa_plan_id=None):
             if kind == 'plan':
                 item.update(plan_id=row['plan_id'], version=row['version'], digest=row['digest'],
                             governance_status='ratified' if row['approved_at'] else 'proposed',
-                            display_name=value.display_name or row['plan_id'])
+                            display_name=value.display_name or row['plan_id'],
+                            planned_totals=[{'metric': key, 'unit': definition.unit,
+                                             'planned_total': str(definition.planned_total)}
+                                            for key, definition in sorted(value.metrics.items())])
             else:
                 item.update(revision=row['revision'])
             visible.append(item)
+    analysis_by_plan = {(item['plan_id'], item['plan_version']): item for item in analyses}
+    for item in visible_plans:
+        analysis = analysis_by_plan.get((item['plan_id'], item['version']))
+        actual_row = analysis_actuals.get(analysis['actual_revision']) if analysis else None
+        if not analysis or not actual_row:
+            continue
+        try:
+            _checked(actual_row)
+            _sources(principal, actual_row, kind='actuals', verify_bytes=False)
+        except (PermissionError, SourceUnavailable):
+            continue
+        payload = analysis['payload']
+        if (payload.get('analysis_hash') != analysis['analysis_id'] or fingerprint(
+                {key: value for key, value in payload.items() if key != 'analysis_hash'}) != analysis['analysis_id']):
+            continue
+        item['latest_analysis'] = {
+            'analysis_id': analysis['analysis_id'], 'as_of': payload.get('as_of'),
+            'period': payload.get('period'),
+            'rollups': [
+                {key: rollup.get(key) for key in (
+                    'metric', 'unit', 'target', 'actual', 'variance', 'status',
+                    'planned_cells', 'measured_cells', 'offset_detected',
+                )}
+                for rollup in (payload.get('rollups') or [])
+            ],
+            'granular_stories': payload.get('granular_stories') or [],
+            'created_at': analysis['created_at'].isoformat(),
+        }
     return {'plans': visible_plans, 'actuals': visible_actuals,
             'next_offset': offset + limit if len(plans) > limit or len(actuals) > limit else None,
             'subject': actor, 'today': datetime.now(timezone.utc).date().isoformat(),

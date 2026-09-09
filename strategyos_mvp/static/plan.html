@@ -895,11 +895,12 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   <div id="selected-plan" class="vault-panel" hidden>
     <h2 id="plan-title">Selected plan</h2><div id="plan-metadata" class="vault-metadata"></div>
     <p id="approval-note"></p><div id="plan-cells" class="vault-table" tabindex="0" role="region" aria-label="Plan targets and evidence"></div>
-    <div id="decomposition-lineage" hidden>
+    <details id="decomposition-lineage" hidden>
+      <summary>Technical detail</summary>
       <h3>Decomposition lineage</h3>
       <p id="decomposition-summary" class="vault-note"></p>
       <div id="decomposition-allocations" class="vault-table" tabindex="0" role="region" aria-label="Decomposition weights and evidence"></div>
-    </div>
+    </details>
     <form id="ratify-form" hidden>
       <h3>Ratify this version</h3>
       <label class="vault-field">Review note<textarea id="review-note" required minlength="20" maxlength="2000" rows="3" placeholder="Record the basis for approving these targets and owners."></textarea></label>
@@ -1042,7 +1043,9 @@ button:disabled { opacity: .5; cursor: not-allowed; }
     </form>
   </div>
   <div id="analysis-panel" class="vault-panel" hidden>
-    <h2>Saved drift analysis</h2><p id="analysis-context"></p><div id="analysis-findings"></div>
+    <h2>Saved drift analysis</h2><p id="analysis-context"></p>
+    <h3>Governed granular stories</h3><p class="vault-note">Each story is calculated from this approved plan and actual snapshot and reconciles to the totals below.</p><div id="analysis-stories" class="demo-story-grid"></div>
+    <div id="analysis-findings"></div>
     <div id="analysis-rollups" class="vault-table" tabindex="0" role="region" aria-label="Metric totals and coverage"></div>
     <div id="analysis-cells" class="vault-table" tabindex="0" role="region" aria-label="Cell drift and evidence"></div>
     <div id="analysis-explanation" class="pack-page" hidden tabindex="-1">
@@ -1105,11 +1108,11 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 </main>
 <footer class="footer container"><p>Kyvern · Intent, accountability and evidence</p></footer>
 <script src="/static/board_pack.js" defer></script>
-<script src="/static/intent_vault.js" defer></script>
+<script src="/static/intent_vault.js?v=20260909b" defer></script>
 <script src="/static/advisor_console.js" defer></script>
 <script src="/static/structure_console.js" defer></script>
 <script src="/static/objective_decomposition.js" defer></script>
-<script src="/static/demo_pack.js" defer></script>
+<script src="/static/demo_pack.js?v=20260909b" defer></script>
 <script src="/static/source_plan_package.js" defer></script>
 </body>
 </html>

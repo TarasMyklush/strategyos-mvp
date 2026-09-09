@@ -111,7 +111,7 @@ def test_intent_surface_loads_configured_pack_without_sector_copy_in_core():
     html = (root / "plan.html").read_text(encoding="utf-8")
     js = (root / "demo_pack.js").read_text(encoding="utf-8")
     assert 'id="demo-pack-panel"' in html
-    assert 'src="/static/demo_pack.js"' in html
+    assert 'src="/static/demo_pack.js' in html
     assert "/api/demo-packs/current" in js
     assert "Bilingual board-pack preview" in html
     assert "Open governed story" in js

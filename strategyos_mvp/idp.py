@@ -266,24 +266,24 @@ def login_page(manual: bool = False) -> HTMLResponse:
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Sign in — Kyvern</title>
   <style>
-    :root {{ color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
+    :root {{ color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; --cream:#f4f2ed; --surface:#fff; --ink:#1d1c19; --sage:#7e9c8b; --ochre:#8c6a3d; --terracotta:#b35a4b; --line:rgba(29,28,25,.14); }}
     *, *::before, *::after {{ box-sizing: border-box; }}
-    body {{ margin: 0; min-height: 100vh; display: grid; place-items: center; background: radial-gradient(circle at top, #243b64, #05070d 60%); color: #f6f8ff; }}
-    main {{ width: min(92vw, 520px); background: rgba(10, 16, 28, 0.88); border: 1px solid rgba(255,255,255,.14); border-radius: 28px; padding: 32px; box-shadow: 0 24px 80px rgba(0,0,0,.45); }}
-    .eyebrow {{ color: #f7c873; font-size: 13px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }}
-    h1 {{ margin: 12px 0 10px; font-size: clamp(30px, 5vw, 42px); line-height: 1.02; }}
-    p {{ color: #b8c2d9; line-height: 1.6; }}
+    body {{ margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--cream); color: var(--ink); }}
+    main {{ width: min(92vw, 520px); background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 32px; box-shadow: 0 24px 70px rgba(49,45,37,.10); }}
+    .eyebrow {{ color: var(--ochre); font-size: 13px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }}
+    h1 {{ margin: 12px 0 10px; font-family: Georgia, "Times New Roman", serif; font-size: clamp(30px, 5vw, 42px); font-weight: 500; line-height: 1.02; }}
+    p {{ color: rgba(29,28,25,.67); line-height: 1.6; }}
     form {{ display: grid; gap: 16px; margin-top: 22px; }}
-    label {{ display: grid; gap: 8px; color: #dce5ff; font-weight: 700; }}
-    input, select, button {{ width: 100%; font: inherit; border-radius: 14px; border: 1px solid rgba(255,255,255,.16); padding: 13px 14px; }}
-    input, select {{ background: rgba(255,255,255,.08); color: #ffffff; }}
-    option {{ color: #0b1220; }}
-    button {{ cursor: pointer; border: 0; background: linear-gradient(135deg, #7dd3fc, #a78bfa); color: #07111f; font-weight: 900; }}
+    label {{ display: grid; gap: 8px; color: var(--ink); font-weight: 700; }}
+    input, select, button {{ width: 100%; font: inherit; border-radius: 12px; border: 1px solid var(--line); padding: 13px 14px; }}
+    input, select {{ background: #fbfaf7; color: var(--ink); }}
+    option {{ color: var(--ink); }}
+    button {{ cursor: pointer; border: 0; background: var(--sage); color: #fff; font-weight: 900; }}
     button:disabled {{ opacity: .65; cursor: wait; }}
-    .error {{ min-height: 22px; color: #fca5a5; font-weight: 700; }}
-    .hint {{ font-size: 13px; color: #95a3bf; }}
+    .error {{ min-height: 22px; color: var(--terracotta); font-weight: 700; }}
+    .hint {{ font-size: 13px; color: rgba(29,28,25,.58); }}
     .links {{ display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }}
-    .links a {{ color: #93c5fd; text-decoration: none; }}
+    .links a {{ color: var(--ochre); text-decoration: none; }}
   </style>
 </head>
 <body>

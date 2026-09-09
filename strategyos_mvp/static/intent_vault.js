@@ -9,7 +9,21 @@
   function message(text) { $('vault-message').textContent = text; }
   function text(value) { return value === null || value === undefined ? 'Missing' : String(value); }
   function label(status) { return ({ on_plan: 'On plan', ahead: 'Ahead', behind: 'Behind', incomplete: 'Incomplete', missing: 'Missing', proposed: 'Proposed', ratified: 'Ratified', current: 'Current', superseded: 'Superseded' })[status] || status; }
+  function identityLabel(value) {
+    var raw = String(value || '').trim();
+    if (!raw) return 'Authorized user';
+    if (!/(?:https?:\/\/|^idp:|\.tester\b|\.hosted\b)/i.test(raw)) return raw;
+    if (/tenant[-_.]?admin/i.test(raw)) return 'Tenant administrator';
+    if (/executive|reviewer/i.test(raw)) return 'Executive reviewer';
+    if (/operator/i.test(raw)) return 'Authorized operator';
+    return 'Authorized user';
+  }
   function dimensions(value) { return Object.keys(value).sort().map(function (k) { return k + ': ' + value[k]; }).join(' · '); }
+  function planPeriodLabel(period) {
+    var start = String(period && period.start || ''), end = String(period && period.end || '');
+    var year = start.slice(0, 4);
+    return /^\d{4}-01-01$/.test(start) && end === year + '-12-31' ? 'FY' + year : start + ' to ' + end;
+  }
   function planPath() { return '/plans/' + encodeURIComponent(state.record.plan_id) + '/versions/' + state.record.version; }
   function safeId(value) { return String(value).toLowerCase().replace(/[^a-z0-9_.-]+/g, '-').replace(/^-|-$/g, '').slice(0, 120) || 'cell'; }
   function seedDecomposition() {
@@ -70,7 +84,7 @@
     window.dispatchEvent(new CustomEvent('kyvern-plan', { detail: null }));
     window.dispatchEvent(new CustomEvent('kyvern-analysis', { detail: null }));
     ['selected-plan', 'ratifier-panel', 'decomposition-panel', 'decomposition-lineage', 'drift-panel', 'analysis-panel', 'grant-form', 'ratify-form'].forEach(function (id) { show(id, false); });
-    ['plan-cells', 'decomposition-allocations', 'analysis-cells', 'analysis-rollups', 'analysis-findings', 'plan-metadata'].forEach(function (id) { $(id).replaceChildren(); });
+    ['plan-cells', 'decomposition-allocations', 'analysis-cells', 'analysis-rollups', 'analysis-stories', 'analysis-findings', 'plan-metadata'].forEach(function (id) { $(id).replaceChildren(); });
     $('reviewed').checked = false; $('review-note').value = ''; $('grant-status').textContent = '';
   }
   function options() {
@@ -79,10 +93,10 @@
     state.plans.forEach(function (p) { $('plan-select').add(new Option((p.display_name || p.plan_id) + ' · v' + p.version + ' · ' + label(p.governance_status), p.plan_id + ':' + p.version)); });
     $('plan-select').value = previous;
     $('actual-select').replaceChildren(new Option('Choose actuals', ''));
-    state.actuals.forEach(function (a) { $('actual-select').add(new Option(a.revision + ' · ' + a.period.start + ' to ' + a.period.end, a.revision)); });
+    state.actuals.forEach(function (a) { $('actual-select').add(new Option('Current actuals · through ' + a.period.end, a.revision)); });
     $('actual-select').value = actual;
     $('history-actual').replaceChildren(new Option('Choose prior actuals', ''));
-    state.actuals.forEach(function (a) { $('history-actual').add(new Option(a.revision + ' · ' + a.period.start + ' to ' + a.period.end, a.revision)); });
+    state.actuals.forEach(function (a) { $('history-actual').add(new Option('Actuals · ' + a.period.start + ' to ' + a.period.end, a.revision)); });
     $('history-actual').value = history;
     show('empty-plans', !state.plans.length); show('more', state.next !== null);
   }
@@ -92,7 +106,8 @@
     state.plans = merge(append ? state.plans : [], data.plans, function (p) { return p.plan_id + ':' + p.version; });
     state.actuals = merge(append ? state.actuals : [], data.actuals, function (a) { return a.revision; });
     state.permissions = data.permissions; state.next = data.next_offset;
-    window.dispatchEvent(new CustomEvent('kyvern-catalog', { detail: { actuals: state.actuals, permissions: state.permissions } }));
+    window.__KYVERN_HAS_CUSTOMER_PLAN__ = state.plans.length > 0;
+    window.dispatchEvent(new CustomEvent('kyvern-catalog', { detail: { plans: state.plans, actuals: state.actuals, permissions: state.permissions } }));
     if (!$('as-of').value) $('as-of').value = data.today;
     $('as-of').max = data.today;
     options(); show('vault-content', true); show('vault-login', false); show('import-panel', data.permissions.can_import);
@@ -107,20 +122,20 @@
     var record = state.record, plan = record.payload;
     $('plan-title').textContent = (plan.display_name || record.plan_id) + ' · Version ' + record.version;
     var structureText = record.structure.status === 'legacy_unbound' ? 'Legacy plan · no structure binding' :
-      'Structure ' + record.structure.config_id + ' v' + record.structure.version + ' · ' + label(record.structure.status) + ' · ' + record.structure.business_unit;
-    $('plan-metadata').replaceChildren(node('p', label(record.governance_status)), node('p', plan.period.start + ' to ' + plan.period.end), node('p', structureText), node('p', 'Imported by ' + record.imported_by));
-    $('approval-note').textContent = record.ratification ? 'Ratified by ' + record.ratification.approved_by + ' on ' + record.ratification.approved_at.slice(0, 10) + '. ' + record.ratification.note : 'This is a proposal. A separately authorized reviewer must ratify it before drift can be calculated.';
+      'Authoritative organization structure · ' + label(record.structure.status) + ' · ' + label(record.structure.business_unit);
+    $('plan-metadata').replaceChildren(node('p', label(record.governance_status)), node('p', planPeriodLabel(plan.period)), node('p', structureText), node('p', 'Imported by ' + identityLabel(record.imported_by)));
+    $('approval-note').textContent = record.ratification ? 'Ratified by ' + identityLabel(record.ratification.approved_by) + ' on ' + record.ratification.approved_at.slice(0, 10) + '. ' + record.ratification.note : 'This is a proposal. A separately authorized reviewer must ratify it before drift can be calculated.';
     table('plan-cells', ['Cell / dimensions', 'Metric', 'Owner', 'Target', 'Tolerance', 'Evidence'], plan.cells.map(function (c) {
       return [dimensions(c.dimensions), c.metric, c.owner, c.target + ' ' + plan.metrics[c.metric].unit, c.tolerance,
-              link(c.source.locator, planPath() + '/evidence?cell_id=' + encodeURIComponent(c.id))];
+              link('Open plan evidence', planPath() + '/evidence?cell_id=' + encodeURIComponent(c.id))];
     }));
     if (plan.derivation) {
       var d = plan.derivation;
       var historical = d.engine_version === 'history-adjusted-allocation.v1';
       var multidimensional = d.engine_version === 'weighted-multidimensional-allocation.v1';
       $('decomposition-summary').textContent = multidimensional ?
-        'Created from ' + d.parent_plan_id + ' v' + d.parent_version + ', objective ' + d.parent_metric + ', across ' + d.split_dimensions.join(', ') + '. Engine ' + d.engine_version + '; remainder: ' + d.remainder_rule + '. Parent fingerprint: ' + d.parent_digest + '.' :
-        'Created from ' + d.parent_plan_id + ' v' + d.parent_version + ', cell ' + d.parent_cell_id + ', split by ' + d.split_dimension + '. Engine ' + d.engine_version + '; remainder: ' + d.remainder_rule + '. Parent fingerprint: ' + d.parent_digest + '.' + (historical ? ' Historical actuals: ' + d.historical_actual_revision + ' (' + d.historical_actual_digest + ').' : '');
+        'The approved parent objective was decomposed across ' + d.split_dimensions.map(label).join(', ') + '; every result reconciles to the objective.' :
+        'The selected approved target was split by ' + label(d.split_dimension) + (historical ? ' using the governed historical mix.' : ' using the approved allocation weights.');
       table('decomposition-allocations', multidimensional ? ['Result cell', 'Dimensions', 'Weight', 'Owner / tolerance', 'Evidence'] : historical ? ['Result cell', 'Member', 'Historical', 'Adjustment', 'Effective weight', 'Owner / tolerance', 'Historical evidence'] : ['Result cell', 'Member', 'Weight', 'Owner / tolerance', 'Evidence'], d.allocations.map(function (a) {
         return multidimensional ? [a.cell_id, dimensions(a.dimensions), a.weight, a.owner + ' / ' + a.tolerance, a.basis.locator + ' · SHA-256 ' + a.basis.sha256] : historical ? [a.cell_id, a.member, a.historical_value, a.adjustment_percent + '%', a.effective_weight, a.owner + ' / ' + a.tolerance, a.basis.locator + ' · SHA-256 ' + a.basis.sha256] : [a.cell_id, a.member, a.weight, a.owner + ' / ' + a.tolerance, a.basis.locator + ' · SHA-256 ' + a.basis.sha256];
       }));
@@ -138,24 +153,36 @@
   }
   function renderAnalysis(result) {
     show('analysis-explanation', false);
-    $('analysis-context').textContent = result.plan_id + ' · Version ' + result.plan_version + ' · Actuals ' + result.actual_revision + ' · As of ' + result.as_of;
+    $('analysis-context').textContent = 'Approved plan · Version ' + result.plan_version + ' · Current actual snapshot · As of ' + result.as_of;
+    var storyHost = $('analysis-stories'); storyHost.replaceChildren();
+    (result.granular_stories || []).forEach(function (story) {
+      var weakest = story.weakest, strongest = story.strongest;
+      var weakestLabel = Number(weakest.variance) < 0 ? 'largest adverse variance' : 'lowest positive variance';
+      var strongestLabel = Number(strongest.variance) > 0 ? 'strongest offset' : 'least adverse variance';
+      var card = node('article'); card.className = 'demo-story-card';
+      card.append(node('h3', label(story.dimension) + ' drift'),
+        node('p', weakest.member + ' has the ' + weakestLabel + ' at ' + weakest.variance + ' ' + story.unit + '; ' + strongest.member + ' has the ' + strongestLabel + ' at ' + strongest.variance + ' ' + story.unit + '.'),
+        node('p', 'Plan ' + story.target + ' ' + story.unit + ' · Actual ' + story.actual + ' ' + story.unit),
+        node('small', story.complete ? story.evidence_basis : 'Partial coverage · ' + story.evidence_basis));
+      storyHost.appendChild(card);
+    });
     var findings = $('analysis-findings'); findings.replaceChildren();
     (result.findings || []).forEach(function (finding) {
       var card = node('article'), refs = node('div'); card.className = 'pack-page'; refs.className = 'vault-actions';
       var titles = { offset: 'Offset across cells', concentration: 'Concentration above threshold', price_volume_mix: 'Price / volume / mix bridge' };
       card.append(node('h3', titles[finding.finding_type] || 'Evidence-bound finding'),
-        node('p', finding.narrative), node('p', 'Ratified plan ' + finding.plan_citation.plan_id + ' · Version ' + finding.plan_citation.version));
+        node('p', finding.narrative), node('p', 'Approved plan · Version ' + finding.plan_citation.version));
       if (finding.finding_type === 'price_volume_mix') {
         card.append(node('p', 'Volume ' + finding.effects.volume + ' · Mix ' + finding.effects.mix + ' · Price ' + finding.effects.price + ' · Observed ' + finding.effects.observed_variance + ' ' + finding.currency_unit),
           node('p', finding.reconciles ? 'Exact reconciliation verified.' : 'Reconciliation failed.'));
       }
       var cells = finding.cells || [finding]; cells.forEach(function (item) {
-        if (item.plan_source) refs.appendChild(link(item.cell_id + ' · Plan', '/analyses/' + result.analysis_hash + '/evidence?side=plan&cell_id=' + encodeURIComponent(item.cell_id)));
-        if (item.actual_source) refs.appendChild(link(item.cell_id + ' · Actuals', '/analyses/' + result.analysis_hash + '/evidence?side=actuals&cell_id=' + encodeURIComponent(item.cell_id)));
+        if (item.plan_source) refs.appendChild(link('Plan evidence', '/analyses/' + result.analysis_hash + '/evidence?side=plan&cell_id=' + encodeURIComponent(item.cell_id)));
+        if (item.actual_source) refs.appendChild(link('Actual evidence', '/analyses/' + result.analysis_hash + '/evidence?side=actuals&cell_id=' + encodeURIComponent(item.cell_id)));
       });
       if (finding.finding_type === 'price_volume_mix') (finding.input_rows || []).forEach(function (item) {
         [['plan_price', 'Planned price'], ['plan_volume', 'Planned volume'], ['actual_price', 'Actual price'], ['actual_volume', 'Actual volume']].forEach(function (source) {
-          refs.appendChild(link(item.member + ' · ' + source[1], '/analyses/' + result.analysis_hash + '/evidence?side=' + source[0] + '&cell_id=' + encodeURIComponent(item.cell_id)));
+          refs.appendChild(link(item.member + ' · ' + (source[0] === 'plan' ? 'Plan evidence' : 'Actual evidence'), '/analyses/' + result.analysis_hash + '/evidence?side=' + source[0] + '&cell_id=' + encodeURIComponent(item.cell_id)));
         });
       });
       card.appendChild(refs); findings.appendChild(card);
@@ -177,12 +204,12 @@
       explain.addEventListener('click', function () { action(async function () {
         var detail = await request('/analyses/' + result.analysis_hash + '/explain?cell_id=' + encodeURIComponent(c.cell_id));
         $('analysis-explanation-answer').textContent = detail.answer;
-        $('analysis-explanation-citation').textContent = 'Ratified plan ' + detail.plan_citation.plan_id + ' · Version ' + detail.plan_citation.version + ' · ' + detail.plan_citation.digest;
+        $('analysis-explanation-citation').textContent = 'Approved plan · Version ' + detail.plan_citation.version;
         var evidence = $('analysis-explanation-evidence'); evidence.replaceChildren(); detail.evidence.forEach(function (citation) {
           evidence.appendChild(link(citation.side === 'plan' ? 'Open plan evidence' : 'Open actual evidence', '/analyses/' + result.analysis_hash + '/evidence?side=' + citation.side + '&cell_id=' + encodeURIComponent(c.cell_id)));
         }); show('analysis-explanation', true); $('analysis-explanation').focus();
       }); });
-      return [c.cell_id + ' · ' + dimensions(c.dimensions), c.owner, c.target + ' ' + c.unit, c.actual, c.variance, label(c.status), refs, explain];
+      return [dimensions(c.dimensions), c.owner, c.target + ' ' + c.unit, c.actual, c.variance, label(c.status), refs, explain];
     }));
     var url = new URL(window.location.href); url.search = ''; url.searchParams.set('analysis', result.analysis_hash);
     $('saved-link').href = url.pathname + url.search;
@@ -298,6 +325,11 @@
     }
   });
   action(async function () {
+    var persona = '';
+    try { persona = String(localStorage.getItem('strategyos.executive.persona') || ''); } catch (_error) {}
+    document.querySelectorAll('a[href="/app"]').forEach(function (link) {
+      if (persona) link.href = '/app?persona=' + encodeURIComponent(persona);
+    });
     await loadCatalog(false);
     var hash = new URL(window.location.href).searchParams.get('analysis');
     if (hash && /^[a-f0-9]{64}$/.test(hash)) { renderAnalysis(await request('/analyses/' + hash)); message('Opened the saved analysis.'); }

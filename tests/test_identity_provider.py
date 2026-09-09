@@ -119,6 +119,11 @@ def test_login_page_is_human_friendly_and_security_tagged():
         assert "operator.local" not in response.text
         assert "Sign out from your profile menu" in response.text
         assert "localStorage.removeItem" in response.text
+        assert "--sage:#7e9c8b" in response.text
+        assert "--ochre:#8c6a3d" in response.text
+        assert "--terracotta:#b35a4b" in response.text
+        assert "linear-gradient(135deg, #7dd3fc, #a78bfa)" not in response.text
+        assert "radial-gradient(circle at top, #243b64" not in response.text
     finally:
         _restore_env(original)
 
