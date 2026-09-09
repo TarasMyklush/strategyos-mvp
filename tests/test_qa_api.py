@@ -1567,6 +1567,35 @@ def test_authenticated_general_question_is_answered_by_the_governed_model(monkey
         _restore_env(original)
 
 
+def test_social_model_response_stays_plain_in_the_executive_contract():
+    result = {
+        "matched": True,
+        "answer": "Hello. How can I help?",
+        "basis": "General assistant response.",
+        "citations": [],
+        "suggestions": [],
+        "assistant_scope": "social",
+        "llm_status": {"enabled": True, "provider": "codex_cli", "model": "gpt-5.6-sol"},
+    }
+
+    payload = api_module._assistant_response_payload(
+        response_mode="llm",
+        question="hello",
+        context={"run_id": "run-1", "run_mode": "full"},
+        requested_mode="auto",
+        persona="ceo",
+        orchestrated=None,
+        base_result=result,
+        llm_status=result["llm_status"],
+    )
+
+    assert payload["answer"] == "Hello. How can I help?"
+    assert payload["assistant_scope"] == "social"
+    assert payload["determinism_tier"] == "social"
+    assert payload["response_sections"] == {}
+    assert payload["human_review_required"] is False
+
+
 def test_authenticated_assistant_explains_file_processing_workflow(monkeypatch):
     original, client = _client_with_auth()
     try:

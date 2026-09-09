@@ -12170,6 +12170,36 @@ def _assistant_response_payload(
                 "assistant_mode":"governed_fact","answered_by":"governed_fact_selection",
                 "determinism_tier":"governed_fact" if base_result.get("matched") else "needs_evidence",
                 "response_sections":{},"executive_blocks":[]}
+    if (base_result or {}).get("assistant_scope") == "social":
+        # A model-backed greeting is conversation plumbing, not business
+        # advice. Preserve its plain answer instead of manufacturing advisory
+        # sections about missing benchmarks or company evidence.
+        return sanitize_executive_payload({
+            "status": "ok",
+            "run_id": context["run_id"],
+            "run_mode": context["run_mode"],
+            "question": question,
+            "requested_mode": requested_mode,
+            "persona": persona,
+            "mode": "llm",
+            "assistant_mode": "llm",
+            "assistant_scope": "social",
+            "answer_origin": "llm",
+            "answered_by": "llm",
+            "matched": bool(base_result.get("matched", True)),
+            "answer": _sanitize_assistant_visible_text(base_result.get("answer")),
+            "basis": str(base_result.get("basis") or "General assistant response."),
+            "citations": [],
+            "suggestions": list(base_result.get("suggestions") or []),
+            "llm_status": base_result.get("llm_status") or llm_status,
+            "calculation_status": "not_applicable",
+            "review_status": "not_required",
+            "human_review_required": False,
+            "determinism_tier": "social",
+            "response_sections": {},
+            "executive_blocks": [],
+            "external_consultation": {"requested": False, "used": False},
+        })
     trace = dict(getattr(orchestrated, "trace", {}) or {})
     if assistant_context:
         trace["entrypoint_context"] = dict(assistant_context)
