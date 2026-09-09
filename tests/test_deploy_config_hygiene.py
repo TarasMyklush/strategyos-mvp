@@ -231,6 +231,13 @@ def test_actions_workflows_reuse_dependency_and_image_caches() -> None:
         )
 
 
+def test_ocr_install_ignores_unrelated_runner_vendor_repositories() -> None:
+    for name in ("strategyos-ci.yml", "strategyos-branch-deploy.yml"):
+        workflow = (REPO_ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
+        assert "dl.google.com/linux/chrome" in workflow
+        assert "packages.microsoft.com" in workflow
+
+
 def test_runtime_image_builds_embed_the_exact_source_revision() -> None:
     """The runtime manifest and OCI revision must identify the deployed commit."""
     for name in (
