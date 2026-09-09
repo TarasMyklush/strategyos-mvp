@@ -12,8 +12,33 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  source-finance:
+    name: Customer source finance acceptance
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: hetzner-branch
+    env:
+      STRATEGYOS_PUBLIC_URL: ${{ vars.STRATEGYOS_PUBLIC_URL }}
+      STRATEGYOS_IDP_TEST_USERS: ${{ secrets.STRATEGYOS_IDP_TEST_USERS }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+
+      - name: Process, review and approve the customer finance source
+        run: python scripts/hosted_source_finance_acceptance.py --output-dir hosted-source-finance-acceptance
+
+      - name: Upload source finance acceptance report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hosted-source-finance-acceptance-${{ github.run_id }}
+          path: hosted-source-finance-acceptance/
+          if-no-files-found: error
+          retention-days: 30
+
   customer-intent:
     name: Customer Intent acceptance
+    needs: source-finance
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: hetzner-branch
