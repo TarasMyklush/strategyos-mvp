@@ -1312,3 +1312,14 @@ def test_source_dataset_sync_omits_macos_metadata_files() -> None:
     assert '--exclude "._*"' in script
     assert '--exclude ".DS_Store"' in script
     assert "rm -rf /workspace/source_dataset && mkdir -p /workspace/source_dataset" in script
+
+
+def test_codex_provider_refreshes_remote_registry_authorization_before_pull() -> None:
+    workflow = (REPO_ROOT / ".github/workflows/strategyos-codex-provider.yml").read_text(
+        encoding="utf-8"
+    )
+    login = workflow.index("Refresh preview host GHCR authorization")
+    pull = workflow.index("docker pull '$IMAGE'")
+    assert login < pull
+    assert 'GHCR_TOKEN: ${{ github.token }}' in workflow[login:pull]
+    assert 'docker login ghcr.io' in workflow[login:pull]

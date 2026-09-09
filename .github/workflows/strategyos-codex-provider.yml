@@ -63,6 +63,10 @@ jobs:
           printf '%s\n' "$DEPLOY_KEY" > "$HOME/.ssh/id_ed25519"
           chmod 600 "$HOME/.ssh/id_ed25519"
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+      - name: Refresh preview host GHCR authorization
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: printf '%s' "${GHCR_TOKEN}" | ssh "$TARGET_HOST" "docker login ghcr.io -u '${GITHUB_ACTOR}' --password-stdin"
       - name: Stage isolated provider without changing app routing
         run: |
           ssh "$TARGET_HOST" 'install -d -m 750 /opt/strategyos-branch/provider-codex'
