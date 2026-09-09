@@ -238,6 +238,16 @@ def test_ocr_install_ignores_unrelated_runner_vendor_repositories() -> None:
         assert "packages.microsoft.com" in workflow
 
 
+def test_each_hosted_browser_job_ignores_unrelated_vendor_repositories() -> None:
+    workflow = (
+        REPO_ROOT / ".github/workflows/strategyos-hosted-human-e2e.yml"
+    ).read_text(encoding="utf-8")
+
+    assert workflow.count("python -m playwright install --with-deps chromium") == 2
+    assert workflow.count("dl.google.com/linux/chrome") == 2
+    assert workflow.count("packages.microsoft.com") == 2
+
+
 def test_runtime_image_builds_embed_the_exact_source_revision() -> None:
     """The runtime manifest and OCI revision must identify the deployed commit."""
     for name in (
