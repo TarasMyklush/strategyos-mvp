@@ -217,6 +217,79 @@ def test_source_pack_upload_is_deterministic_and_supports_revalidation(tmp_path)
         _restore_env(original)
 
 
+def test_source_confirmation_preserves_capture_method_after_revalidation(tmp_path):
+    workspace_root = tmp_path / "workspace"
+    output_root = workspace_root / "outputs"
+    pack_root = workspace_root / "incoming" / "pack-a"
+    pack_root.mkdir(parents=True)
+    output_root.mkdir(parents=True)
+    (pack_root / "notes.txt").write_text("governed source", encoding="utf-8")
+
+    original = _apply_env(
+        {
+            "STRATEGYOS_API_AUTH_ENABLED": "true",
+            "STRATEGYOS_OPERATOR_API_KEYS": "operator-secret",
+            "STRATEGYOS_REVIEWER_API_KEYS": "reviewer-secret",
+            "STRATEGYOS_WORKSPACE_ROOT": str(workspace_root),
+            "STRATEGYOS_OUTPUT_ROOT": str(output_root),
+        }
+    )
+    try:
+        client = TestClient(api_module.app)
+        staged = client.post(
+            "/source-packs/from-path",
+            headers=_auth_header("operator-secret"),
+            json={
+                "folder_path": str(pack_root),
+                "source_key": "governed-pack",
+                "source_display_name": "Governed pack",
+                "origin_category": "internal_system",
+                "governed_owner": "data-owner",
+                "authorization_basis": "operator authorization",
+                "allowed_roles": ["operator"],
+                "allowed_purposes": ["analysis"],
+                "storage_allowed": True,
+                "index_allowed": True,
+            },
+        )
+        assert staged.status_code == 200
+        source_pack_id = staged.json()["source_pack_id"]
+        assert staged.json()["source_contract"]["capture_method"] == "folder_import"
+
+        revalidated = client.post(
+            "/source-packs/validate",
+            headers=_auth_header("operator-secret"),
+            json={"source_pack_id": source_pack_id},
+        )
+        assert revalidated.status_code == 200
+        assert revalidated.json()["source_kind"] == "validated"
+
+        confirmed = client.post(
+            "/source-packs/confirm-source",
+            headers=_auth_header("operator-secret"),
+            json={
+                "source_pack_id": source_pack_id,
+                "source_key": "governed-pack",
+                "display_name": "Governed pack",
+                "origin_category": "internal_system",
+                "governed_owner": "data-owner",
+                "authorization_basis": "operator authorization",
+                "allowed_roles": ["operator"],
+                "allowed_purposes": ["analysis"],
+                "external_model_allowed": True,
+                "storage_allowed": True,
+                "index_allowed": True,
+            },
+        )
+
+        assert confirmed.status_code == 200
+        contract = confirmed.json()["source_contract"]
+        assert contract["capture_method"] == "folder_import"
+        assert contract["access_policy"]["external_model_allowed"] is True
+    finally:
+        _restore_env(original)
+
+
 def test_ceo_question_bank_schema_is_evaluator_only_and_never_run_evidence(tmp_path, monkeypatch):
     raw_root = tmp_path / "raw"
     raw_root.mkdir()

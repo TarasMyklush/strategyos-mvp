@@ -1,6 +1,6 @@
 {
   "schema_version": "strategyos-source-pack-intake-evidence-v1",
-  "recorded_at": "2026-09-09T10:21:00Z",
+  "recorded_at": "2026-09-09T10:59:00Z",
   "source": {
     "path": "/Users/taras/Desktop/Taras/SPsoft/Enterprise OS/Input Folder/09.09.2026/StrategyOS POC",
     "source_key": "strategyos-poc-2026-09-09",
@@ -58,7 +58,7 @@
     ],
     "evaluator_material_is_evidence": false,
     "control_plane_material_is_evidence": false,
-    "external_model_allowed": false,
+    "external_model_allowed": true,
     "export_allowed": false,
     "quote_allowed": false,
     "storage_allowed": true,
@@ -154,7 +154,8 @@
     "revision": "35079e9b9c51869ebb49fb36b94a3a0734f58609",
     "office_and_yaml_intake": "DOCX, PPTX and YAML are governed source-pack formats with bounded OOXML extraction and stable citation locations.",
     "configuration_isolation": "YAML and the board-template and plan-decomposition JSON contracts are control-plane inputs and cannot enter business evidence.",
-    "ratification_boundary": "Run-bound claim revisions participate in current truth only after the run completes and satisfies its review requirement. Pending candidate snapshots remain reviewable without invalidating the approved briefing."
+    "ratification_boundary": "Run-bound claim revisions participate in current truth only after the run completes and satisfies its review requirement. Pending candidate snapshots remain reviewable without invalidating the approved briefing.",
+    "capture_method_preservation": "Changing a confirmed source policy preserves the source's original capture method even after the pack has been revalidated."
   },
   "release_verification": {
     "preview_url": "https://new.strategyos.live",
@@ -173,6 +174,17 @@
     "hosted_pack_failed_extraction_count": 0,
     "hosted_pack_silent_omission_count": 0,
     "hosted_candidate_artifact_upload_count": 7,
+    "source_access_update": {
+      "external_model_allowed": true,
+      "authorized_by": "user",
+      "authorized_at": "2026-09-09T10:57:48.045809+00:00",
+      "capture_method": "folder_import",
+      "policy_fingerprint": "source-policy:a6a3222a4d40a5daeccf876947a84f97b81096ae8d5301df92533b7ecddecc2b",
+      "export_allowed": false,
+      "quote_allowed": false,
+      "storage_allowed": true,
+      "index_allowed": true
+    },
     "approved_run_preserved_while_candidate_pending": {
       "route": "/runs/latest",
       "http_status": 200,

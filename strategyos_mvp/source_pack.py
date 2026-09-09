@@ -2002,10 +2002,17 @@ def confirm_source_pack_source_contract(
     if _summary_path(source_pack_id).is_file():
         previous = json.loads(_summary_path(source_pack_id).read_text(encoding="utf-8"))
     source_kind = str(previous.get("source_kind") or "validated")
+    previous_contract = previous.get("source_contract")
+    capture_method = (
+        str(previous_contract.get("capture_method") or "").strip()
+        if isinstance(previous_contract, dict)
+        else ""
+    )
     contract = {
         "source_key": source_key,
         "display_name": display_name,
         "origin_category": origin_category,
+        "capture_method": capture_method or None,
         "governed_owner": governed_owner,
         "provider_name": provider_name,
         "authorization_basis": authorization_basis,
