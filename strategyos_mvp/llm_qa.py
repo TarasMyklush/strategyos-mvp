@@ -65,6 +65,18 @@ _EVIDENCE_TEXT_KEYS = {
 }
 
 
+_SOCIAL_TURN_RE = re.compile(
+    r"^\s*(?:(?:hi|hello|hey|good\s+(?:morning|afternoon|evening))(?:\s+hermes)?|"
+    r"(?:thanks|thank\s+you)(?:\s+hermes)?|how\s+are\s+you)[!?.\s]*$",
+    re.IGNORECASE,
+)
+
+
+def _is_social_turn(question: str) -> bool:
+    """Recognize a complete social turn without swallowing a business request."""
+    return bool(_SOCIAL_TURN_RE.fullmatch(str(question or "")))
+
+
 SYSTEM_PROMPT = """You are Hermes, the executive assistant for Kyvern.
 You are the ONLY assistant the executive talks to, and you always hold the
 run's evidence. There is no second model to defer to: never say a question is
@@ -289,6 +301,16 @@ def answer_question(
             "suggestions": [],
             "llm_status": status,
         }
+
+    # A greeting contains no customer evidence to select or disclose. Keep it
+    # inside the same configured Hermes provider, but do not force it through
+    # the immutable-fact selector: that turns "hello" into a false missing-data
+    # warning. The anchored classifier deliberately rejects compound prompts
+    # such as "hello, what is revenue?", which remain evidence governed.
+    if _is_social_turn(question):
+        result = answer_general_question(question, config=config, persona=persona)
+        result["assistant_scope"] = "social"
+        return result
 
     public_packet = dict(public_context_packet or {})
     public_mode = bool(public_packet)

@@ -90,6 +90,39 @@ def _bundle() -> DataBundle:
     )
 
 
+def test_social_turn_uses_hermes_without_fabricating_a_missing_fact(monkeypatch):
+    calls = []
+
+    def provider(**kwargs):
+        calls.append(kwargs)
+        return json.dumps({
+            "matched": True,
+            "answer": "Hello. What would you like to review?",
+            "basis": "General assistant response.",
+            "citations": [],
+            "suggestions": [],
+        })
+
+    monkeypatch.setattr(llm_qa, "_call_openai_compatible_chat", provider)
+    result = llm_qa.answer_question(
+        "hello",
+        bundle=SimpleNamespace(authorized_claim_records=({
+            "claim_revision_id": "private-fact",
+            "traceability": "present",
+        },)),
+        findings=[],
+        summary={"run_id": "governed-run"},
+        config=_config(),
+        persona="ceo",
+    )
+
+    assert result["answer"] == "Hello. What would you like to review?"
+    assert result["assistant_scope"] == "social"
+    assert len(calls) == 1
+    assert "private-fact" not in json.dumps(calls[0]["messages"])
+    assert llm_qa._is_social_turn("hello, what is revenue?") is False
+
+
 @pytest.mark.parametrize('repaired,expected', [('SAR 120', True), ('SAR 999M', False)])
 def test_numerical_repair_is_bounded_and_revalidated(monkeypatch, repaired, expected):
     calls = []
