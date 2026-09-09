@@ -5615,22 +5615,39 @@
     // the figure on screen stays the subject: whatever the executive types is
     // answered about THIS KPI first, and only widens if the question plainly
     // reaches past it.
-    var askForm = drillCard.querySelector("[data-kpi-ask-form]");
-    if (askForm) {
-      askForm.addEventListener("submit", function (event) {
+    // The drill contents are replaced whenever live diagnostics refresh. Bind
+    // the submit handler to the stable drill container so a question typed
+    // during that refresh cannot fall through to the browser's native form
+    // navigation and disappear. Keep the current governed KPI context on the
+    // container; the single delegated handler reads it at submit time.
+    drillCard.__strategyosKpiAskContext = {
+      key: key,
+      label: label,
+      subject: kpiAssistantSubject(driver),
+      availability: availability
+    };
+    if (!drillCard.__strategyosKpiAskBound) {
+      drillCard.__strategyosKpiAskBound = true;
+      drillCard.addEventListener("submit", function (event) {
+        var target = event.target;
+        var askForm = target && typeof target.closest === "function"
+          ? target.closest("[data-kpi-ask-form]")
+          : null;
+        if (!askForm || !drillCard.contains(askForm)) return;
         event.preventDefault();
         var input = askForm.querySelector("[data-kpi-ask-input]");
         var typed = String((input && input.value) || "").trim();
         if (!typed) return;
+        var askContext = drillCard.__strategyosKpiAskContext || {};
         input.value = "";
-        askAssistant(typed, askForm.querySelector("[data-kpi-ask-send]") || askForm, {
+        askAssistant(typed, askForm.querySelector("[data-kpi-ask-send]") || null, {
           entrypoint: "ceo_kpi_inline",
           source: "executive_surface",
-          kpi_key: key,
-          kpi_label: label,
-          subject: kpiAssistantSubject(driver),
+          kpi_key: askContext.key,
+          kpi_label: askContext.label,
+          subject: askContext.subject,
           kpi_question_intent: "free_text",
-          kpi_availability: availability,
+          kpi_availability: askContext.availability,
           active_view: "home"
         });
       });

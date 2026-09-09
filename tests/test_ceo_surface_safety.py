@@ -2229,13 +2229,20 @@ def test_kpi_panel_free_text_ask_carries_the_active_figure_as_context():
         "a typed question must be distinguishable from the preset intents"
     )
 
-    form_start = js.index("[data-kpi-ask-form]")
-    handler = js[form_start:form_start + 900]
-    assert "kpi_key: key" in handler and "kpi_label: label" in handler, (
+    form_start = js.index("__strategyosKpiAskContext")
+    handler = js[form_start:form_start + 2200]
+    assert "key: key" in handler and "label: label" in handler, (
         "the typed question must carry the active KPI as context, so the "
         "figure on screen is answered first"
     )
+    assert "kpi_key: askContext.key" in handler and "kpi_label: askContext.label" in handler
     assert 'entrypoint: "ceo_kpi_inline"' in handler
+    assert 'drillCard.addEventListener("submit"' in handler, (
+        "the handler must survive live drill-content replacement"
+    )
+    assert "event.preventDefault()" in handler, (
+        "a refresh race must not turn the KPI question into native form navigation"
+    )
 
     assert ".kpi-inline-ask" in css, "the free-text ask must be styled with the panel"
 
