@@ -5898,13 +5898,49 @@ def test_provider_thread_pool_preserves_each_requests_authorized_scope(monkeypat
     asyncio.run(check())
 
 
-def test_assistant_claim_hydration_excludes_unrelated_raw_transactions():
-    executive = api_module._assistant_claim_metric_keys("Explain the main operating cost concern")
-    transaction = api_module._assistant_claim_metric_keys("Which vendor invoices are duplicate payments?")
+def test_assistant_claim_hydration_has_no_literal_keyword_gate(monkeypatch):
+    from strategyos_mvp import model_policy
+    from strategyos_mvp.source_claims import PolicyContext, UsePurpose
+    catalog = [{'metric_key': 'newly_ingested.unexpected_metric', 'subject_types': ['group'], 'record_count': 200}]
+    class Repository:
+        def snapshot_metric_catalog(self, run_id, *, context):
+            assert run_id == 'run' and context.purpose == UsePurpose.EXTERNAL_MODEL
+            assert context.tenant_id == 'tenant-a' and context.business_units == frozenset({'east'})
+            return catalog
+    monkeypatch.setattr(api_module, 'ClaimRepository', Repository)
+    monkeypatch.setattr(api_module.llm_qa, 'chat_status', lambda _: {'enabled': True})
+    monkeypatch.setattr(model_policy, 'evidence_model_access', lambda _: True)
+    def select(question, **kwargs):
+        assert question == 'tell me about this in ordinary language' and kwargs['catalog'] == catalog
+        return frozenset({'newly_ingested.unexpected_metric'})
+    monkeypatch.setattr(api_module.llm_qa, 'select_claim_metrics', select)
+    context = PolicyContext('tenant-a', 'reader', frozenset({'executive'}), UsePurpose.EXECUTIVE_BRIEFING,
+        business_units=frozenset({'east'}))
+    selected = api_module._assistant_claim_metric_keys('tell me about this in ordinary language',
+        run_id='run', context=context, summary={})
+    assert 'newly_ingested.unexpected_metric' in selected
 
-    assert "ceo.operating_cost" in executive
-    assert "ceo.presentation.cost_component" in executive
-    assert "finance.trial_balance.net" in executive
-    assert "finance.cash_forecast.balance" in executive
-    assert "finance.transaction.amount" not in executive
-    assert "finance.transaction.amount" in transaction
+
+@pytest.mark.parametrize('service_failure', [False, True])
+def test_governed_chat_failures_never_become_source_backed_facts(monkeypatch, service_failure):
+    import asyncio
+    from strategyos_mvp.fact_rendering import render_selection
+    monkeypatch.setattr(api_module, '_resolve_qa_context', lambda _: {
+        'bundle': SimpleNamespace(authorized_claim_records=[]), 'findings': [],
+        'summary': {'run_id': 'run'}, 'run_id': 'run', 'run_mode': 'full', 'kg_nodes': [], 'kg_edges': []})
+    monkeypatch.setattr(api_module.llm_qa, 'chat_status', lambda _: {'enabled': True, 'model': 'gpt-test'})
+    monkeypatch.setattr(api_module, 'parse_scenario', lambda *a, **k: _parsed_scenario(matched=False))
+    monkeypatch.setattr(api_module, 'route_graph_question', lambda *a, **k: {'matched': False})
+    monkeypatch.setattr(api_module, '_route_keyword_retrieval', lambda *a, **k: {'matched': False})
+    monkeypatch.setattr(api_module.qa_engine, 'answer_question', lambda *a, **k: {
+        'matched': False, 'answer': 'No deterministic match', 'citations': [], 'suggestions': []})
+    async def provider(*a, **k):
+        if service_failure:
+            raise RuntimeError('Provider timeout')
+        return render_selection({'matched': False, 'fact_refs': []}, {}, run_id='run')
+    monkeypatch.setattr(api_module, '_llm_answer_question_async', provider)
+    payload = asyncio.run(api_module._assistant_chat_response(
+        api_module.AssistantChatRequest(question='my number for ebidta??', persona='ceo', mode='auto')))
+    assert payload['matched'] is False
+    assert payload['determinism_tier'] == ('service_error' if service_failure else 'needs_evidence')
+    assert payload['citations'] == []

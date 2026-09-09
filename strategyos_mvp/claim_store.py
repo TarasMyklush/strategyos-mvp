@@ -1036,6 +1036,33 @@ class ClaimRepository:
         return {'items':items,'next_cursor':str(rows[-1]['claim_family_id']) if rows and has_more else None,
                 'as_of':at.isoformat()}
 
+    def snapshot_metric_catalog(self, run_id: str, *, context: PolicyContext) -> list[dict[str, Any]]:
+        """Discover every metric in an authorized run, without searching question words.
+
+        This is a directory, not factual evidence. Exact selected revisions still
+        pass snapshot policy, freshness and conflict checks before model use.
+        """
+        if not self.run_source_access(run_id, context=context).get("allowed"):
+            raise PermissionError("Source permissions do not allow this evidence directory.")
+        from .assistant_scope import domain_read_predicate, domain_read_parameters, business_unit_read_predicate, business_unit_read_parameters
+        with self._require_connection() as conn:
+            self._ensure_schema(conn)
+            with conn.cursor() as cur:
+                tenant_id = self._tenant_uuid(cur, context.tenant_id)
+                cur.execute(f"""
+                    select f.metric_key, array_agg(distinct f.subject_type) as subject_types,
+                           array_agg(distinct r.unit) as units, count(*) as record_count
+                    from strategyos_analysis_snapshots s
+                    join strategyos_analysis_snapshot_claims sc on sc.snapshot_id=s.id
+                    join strategyos_claim_revisions r on r.id=sc.claim_revision_id
+                    join strategyos_claim_families f on f.id=r.claim_family_id
+                    where s.tenant_id=%s and s.snapshot_key=%s
+                      and {domain_read_predicate()} and {business_unit_read_predicate()}
+                    group by f.metric_key order by f.metric_key
+                """, (tenant_id, f"run:{run_id}", *domain_read_parameters(context.allowed_domains),
+                      *business_unit_read_parameters(context)))
+                return [_record(cur, row) for row in cur.fetchall()]
+
     def snapshot(
         self,
         snapshot_key: str,

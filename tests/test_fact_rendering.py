@@ -38,8 +38,8 @@ def test_rendering_binds_value_metric_subject_period_and_citation(record):
     registry=fact_registry([record])
     record['value']='999999'
     result=render_selection({'matched':True,'fact_refs':['approved-revision']},registry,run_id='run')
-    assert '1200000.00 SAR' in result['answer']
-    assert 'finance.revenue' in result['answer'] and 'NUPCO' in result['answer']
+    assert 'SAR 1,200,000.00' in result['answer']
+    assert 'REVENUE' in result['answer'] and 'NUPCO' in result['answer']
     assert '2026-01-01 to 2026-06-30' in result['answer']
     assert result['fact_cells'][0]['value']=='1200000.00'
     assert result['citations'][0]['excerpt']==result['answer']
@@ -83,10 +83,66 @@ def test_claim_citation_endpoint_reauthorizes_identity_and_hides_missing_fact(mo
     assert seen[0][1]['revision_id']=='foreign-revision'
 
 
-def test_candidate_selection_is_bounded_and_preserves_the_fact(record):
-    from strategyos_mvp.fact_rendering import select_candidates
-    records=[{**record,'claim_revision_id':f'r-{i}','subject':{'type':'client','key':f'customer-{i}'}} for i in range(100)]
-    registry=fact_registry(records)
-    selected=select_candidates(registry,'Revenue for customer-99?',limit=5)
-    assert len(selected)==5 and 'r-99' in selected
-    assert selected['r-99']==registry['r-99']
+@pytest.mark.parametrize('question', ['my number for ebidta??', 'what did we earn before financing, tax and depreciation?', 'كم أرباحنا قبل الفوائد والضرائب والإهلاك؟'])
+def test_semantic_selection_sees_all_facts_without_literal_or_eighty_record_cutoff(record, monkeypatch, question):
+    from strategyos_mvp import llm_qa, model_policy
+    from tests.test_llm_qa import _config
+    records = [{**record, 'claim_revision_id': f'r-{i}', 'metric_key': 'finance.revenue'} for i in range(160)]
+    records.append({**record, 'claim_revision_id': 'last-ebitda', 'metric_key': 'ceo.ebitda', 'value': '617'})
+    monkeypatch.setattr(model_policy, 'evidence_model_access', lambda _: True)
+    def provider(**kwargs):
+        request = json.loads(kwargs['messages'][-1]['content'])
+        assert request['question'] == question
+        assert {fact['ref'] for fact in request['facts']} == {r['claim_revision_id'] for r in records}
+        return json.dumps({'matched': True, 'fact_refs': ['last-ebitda']})
+    monkeypatch.setattr(llm_qa, '_call_openai_compatible_chat', provider)
+    result = llm_qa.answer_question(question, bundle=SimpleNamespace(authorized_claim_records=records),
+        findings=[], summary={'run_id': 'run'}, config=_config())
+    assert result['matched'] and result['fact_cells'][0]['value'] == '617000000'
+    assert result['retrieval']['facts_considered'] == 161
+
+
+def test_large_evidence_packets_are_lossless_and_every_batch_is_validated(record, monkeypatch):
+    from strategyos_mvp import llm_qa, model_policy, fact_rendering
+    from tests.test_llm_qa import _config
+    records = [{**record, 'claim_revision_id': f'r-{i}'} for i in range(27)]
+    original_batches = fact_rendering.fact_batches
+    monkeypatch.setattr(fact_rendering, 'fact_batches', lambda registry: original_batches(registry, max_bytes=1200))
+    monkeypatch.setattr(model_policy, 'evidence_model_access', lambda _: True)
+    seen = []
+    def provider(**kwargs):
+        facts = json.loads(kwargs['messages'][-1]['content'])['facts']
+        seen.extend(fact['ref'] for fact in facts)
+        return json.dumps({'matched': True, 'fact_refs': [fact['ref'] for fact in facts]})
+    monkeypatch.setattr(llm_qa, '_call_openai_compatible_chat', provider)
+    result = llm_qa.answer_question('Show all values', bundle=SimpleNamespace(authorized_claim_records=records),
+        findings=[], summary={'run_id': 'run'}, config=_config())
+    assert seen == [r['claim_revision_id'] for r in records]
+    assert len(result['fact_cells']) == 27  # No hidden 20-result limit either.
+    assert result['retrieval']['batches_completed'] > 1
+    assert result['retrieval']['complete'] is True
+
+
+@pytest.mark.parametrize('response', ['not json', '{"matched":true,"fact_refs":["foreign"]}'])
+def test_invalid_provider_selection_is_a_service_failure_not_missing_evidence(record, monkeypatch, response):
+    from strategyos_mvp import llm_qa, model_policy
+    from tests.test_llm_qa import _config
+    monkeypatch.setattr(model_policy, 'evidence_model_access', lambda _: True)
+    monkeypatch.setattr(llm_qa, '_call_openai_compatible_chat', lambda **kwargs: response)
+    with pytest.raises(RuntimeError, match='invalid evidence selection'):
+        llm_qa.answer_question('Our earnings?', bundle=SimpleNamespace(authorized_claim_records=[record]),
+            findings=[], summary={'run_id': 'run'}, config=_config())
+
+
+@pytest.mark.parametrize('result,tier', [
+    ({'matched': False, 'fact_contract': 'governed-fact-selection-v1', 'answer': 'No match'}, 'needs_evidence'),
+    ({'matched': False, 'answer_status': 'service_error', 'answer': 'Service failed'}, 'service_error'),
+    ({'matched': True, 'assistant_scope': 'general', 'answer': 'A general explanation'}, 'general'),
+])
+def test_unverified_answers_never_get_a_source_backed_badge(result, tier):
+    from strategyos_mvp import api
+    payload = api._assistant_response_payload(response_mode='llm', question='Question',
+        context={'run_id': 'run', 'run_mode': 'full'}, requested_mode='auto', persona='ceo',
+        orchestrated=None, base_result=result)
+    assert payload['determinism_tier'] == tier
+    assert not payload.get('citations')

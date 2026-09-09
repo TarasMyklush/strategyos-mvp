@@ -3120,9 +3120,13 @@ def test_ceo_dead_end_guard_handles_driver_relevance_questions():
     assert 'var endpoint = "/assistant/chat";' in executive_js
 
 
-def test_ceo_typo_normalization_includes_whis():
+def test_ceo_sends_original_words_to_semantic_model_and_labels_answer_sources():
     executive_js = Path("strategyos_mvp/static/executive.js").read_text()
-    assert "whis: 'why'" in executive_js
+    assert "normalizeTypos" not in executive_js
+    assert 'question: cleanMessage, mode: "auto"' in executive_js
+    assert "general: 'General AI answer'" in executive_js
+    assert "governed_fact: 'Source-backed fact'" in executive_js
+    assert "service_error: 'Service unavailable'" in executive_js
 
 
 def test_ceo_generic_fallback_no_relevant_card_operator_punt():

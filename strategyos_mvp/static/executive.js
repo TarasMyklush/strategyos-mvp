@@ -3350,17 +3350,7 @@
       return makeAssistantFailureResult(cleanMessage, {errorType: "question_too_long", statusCode: 413});
     }
 
-    // Typo normalization for common misspellings before API call
-    var normalizeTypos = function (q) {
-      var fixes = { whar: 'what', whcih: 'which', waht: 'what', whta: 'what', wher: 'where', whne: 'when', whay: 'why', whis: 'why', hwo: 'how', wats: "what's", hows: "how's", whos: "who's", cn: 'can', shoudl: 'should', coudl: 'could', woudl: 'would', pleas: 'please', hlep: 'help' };
-      return q.split(/\s+/).map(function (w) {
-        var lower = w.toLowerCase().replace(/[^a-z']/g, '');
-        return fixes[lower] ? w.replace(new RegExp(lower.replace(/'/g, "\\'"), 'i'), fixes[lower]) : w;
-      }).join(' ');
-    };
-    var apiQuestion = normalizeTypos(cleanMessage);
-
-    var body = { question: apiQuestion, mode: "auto", persona: state.activePersona || "ceo" };
+    var body = { question: cleanMessage, mode: "auto", persona: state.activePersona || "ceo" };
     var entrypointCtx = Object.assign(
       {},
       assistantEntrypointContext(sourceEl),
@@ -7363,7 +7353,7 @@
         if (payload.policy_denied) failureMeta = '';
         var tier = payload.policy_denied ? 'policy' : String(firstDefined(payload.determinism_tier, '')).trim();
         var sections = payload.response_sections && typeof payload.response_sections === 'object' ? payload.response_sections : {};
-        var tierLabel = { policy: 'Permission required', governed_fact: 'Source-backed fact', derived_insight: 'Derived insight', advisory: 'Advisory' }[tier] || '';
+        var tierLabel = { policy: 'Permission required', governed_fact: 'Source-backed fact', needs_evidence: 'Evidence unavailable', service_error: 'Service unavailable', general: 'General AI answer', derived_insight: 'Derived insight', advisory: 'AI advice' }[tier] || '';
         var bodyHtml = role === 'assistant'
           ? renderAssistantMarkdownToHtml(firstDefined(message.text, ''))
           : escapeHtml(firstDefined(message.text, ''));

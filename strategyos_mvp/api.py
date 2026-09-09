@@ -11679,10 +11679,16 @@ def _hydrate_governed_qa_context(
         ),
     )
     try:
+        metric_keys = _assistant_claim_metric_keys(question, run_id=run_id, context=policy_context, summary=summary) if question is not None else None
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    try:
         snapshot = ClaimRepository().snapshot(
             f"run:{run_id}",
             context=policy_context,
-            metric_keys=_assistant_claim_metric_keys(question) if question is not None else None,
+            metric_keys=metric_keys,
         )
     except (KeyError, RuntimeError):
         raise HTTPException(
@@ -11709,31 +11715,23 @@ def _hydrate_governed_qa_context(
     return context
 
 
-def _assistant_claim_metric_keys(question: str) -> frozenset[str]:
-    """Select the governed claim families needed for an assistant question.
+def _assistant_claim_metric_keys(
+    question: str, *, run_id: str, context: PolicyContext, summary: Mapping[str, Any]
+) -> frozenset[str] | None:
+    """Semantic category selection over the complete authorized run directory.
 
-    Raw transaction claims can outnumber dimensional executive facts by tens of
-    thousands. Loading all of them before routing every greeting or KPI question
-    blocks the API and adds no evidence. Keep the complete executive, trial
-    balance, and cash forecast scope; add transactions for explicit transaction
-    or counterparty questions.
+    Presentation claims are retained to reconstruct executive controls. They
+    are a preload, not a retrieval allowlist: newly ingested categories are
+    discoverable automatically, with no keyword rules or candidate cutoff.
     """
-    metric_keys = {
-        *FINANCE_HEADLINE_METRIC_KEYS,
-        *FINANCE_PRESENTATION_METRIC_KEYS,
-        "finance.trial_balance.net",
-        "finance.cash_forecast.balance",
-    }
-    normalized = " ".join(str(question or "").casefold().split())
-    if re.search(
-        r"\b(invoice|invoices|payable|payables|receivable|receivables|payment|payments|"
-        r"vendor|vendors|supplier|suppliers|customer|customers|client|clients|"
-        r"transaction|transactions|purchase order|purchase orders|duplicate|duplicates|"
-        r"ap ledger|ar ledger|po number|po id)\b",
-        normalized,
-    ):
-        metric_keys.add("finance.transaction.amount")
-    return frozenset(metric_keys)
+    from dataclasses import replace
+    from .model_policy import evidence_model_access
+    if not llm_qa.chat_status(CONFIG).get("enabled") or not evidence_model_access(summary):
+        return None
+    catalog = ClaimRepository().snapshot_metric_catalog(
+        run_id, context=replace(context, purpose=UsePurpose.EXTERNAL_MODEL))
+    selected = llm_qa.select_claim_metrics(question, catalog=catalog, config=CONFIG)
+    return selected | FINANCE_HEADLINE_METRIC_KEYS | FINANCE_PRESENTATION_METRIC_KEYS
 
 
 def _resolve_public_assistant_context(
@@ -12143,6 +12141,13 @@ def _assistant_response_payload(
     llm_status: dict[str, Any] | None = None,
     assistant_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    if (base_result or {}).get("answer_status") == "service_error":
+        return {**base_result, "status": "error", "run_id": context["run_id"],
+                "run_mode": context["run_mode"], "question": question, "persona": persona,
+                "requested_mode": requested_mode, "mode": "llm", "matched": False,
+                "assistant_mode": "service_error", "answered_by": "service_status",
+                "determinism_tier": "service_error", "citations": [], "suggestions": [],
+                "response_sections": {}, "executive_blocks": [], "llm_status": llm_status}
     if (base_result or {}).get("policy_denied"):
         # A runtime authorization outcome is neither model advice nor evidence.
         # Preserve it before orchestration can reclassify an unmatched answer.
@@ -15424,12 +15429,14 @@ async def _assistant_chat_response(
         principal_context.setdefault("role", authenticated_role or "")
         tenant_payload = context["summary"].get("tenant_context") if isinstance(context["summary"].get("tenant_context"), Mapping) else {}
         principal_context.setdefault("tenant_id", tenant_payload.get("tenant_id"))
-        context["summary"] = _summary_with_governed_claim_snapshot(
+        context["summary"] = await asyncio.to_thread(_summary_with_governed_claim_snapshot,
             context["summary"],
             principal=principal_context,
         )
         context["authenticated_role"] = str(principal_context.get("role") or "")
-        context = _hydrate_governed_qa_context(context, principal=principal_context, question=question)
+        async with _LLM_PROVIDER_SEMAPHORE:
+            context = await asyncio.to_thread(_hydrate_governed_qa_context, context,
+                principal=principal_context, question=question if mode != "deterministic" else None)
     llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
 
     if _question_has_semantic_kpi_mismatch(question) or _question_has_semantic_self_reference(question):
@@ -16247,6 +16254,14 @@ async def _assistant_chat_response(
         )
     except RuntimeError as exc:
         transport_status = dict(llm_qa.provider_transport_payload(exc) or {})
+        if getattr(context.get("bundle"), "authorized_claim_records", None) is not None:
+            return _assistant_response_payload(response_mode="llm", question=question,
+                context=context, requested_mode=mode, persona=persona, orchestrated=None,
+                base_result={"answer_status": "service_error",
+                             "answer": "I could not finish reading the evidence because the language service failed. Please retry.",
+                             "basis": "Service failure; no conclusion about the available evidence was made.",
+                             "llm_fallback_attempted": True},
+                llm_status={**llm_status, "transport": transport_status}, assistant_context=assistant_context)
         if mode == "llm":
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
@@ -16282,6 +16297,12 @@ async def _assistant_chat_response(
         payload["llm_error"] = str(exc)
         payload["trace"]["llm_transport_failed"] = True
         return payload
+    from .fact_rendering import CONTRACT as FACT_CONTRACT
+    if result.get("fact_contract") == FACT_CONTRACT or result.get("policy_denied"):
+        return _assistant_response_payload(response_mode="llm", question=question,
+            context=context, requested_mode=mode, persona=persona, orchestrated=None,
+            base_result=result, llm_status=result.get("llm_status") or llm_status,
+            assistant_context=assistant_context)
     if result.get("matched") is False:
         grounded_fallback = None
         if graph_result and graph_result.get("matched"):

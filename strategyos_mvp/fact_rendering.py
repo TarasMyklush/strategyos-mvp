@@ -4,6 +4,7 @@ The model selects references. Metric, entity, period, units, source locations an
 calculation lineage come exclusively from the authorized snapshot.
 """
 from copy import deepcopy
+import json
 from decimal import Decimal, InvalidOperation, localcontext
 from typing import Mapping
 from urllib.parse import quote
@@ -54,9 +55,34 @@ def fact_registry(records):
         if record.get('scenario'):
             parts.append('scenario: ' + str(record['scenario']))
         parts.extend(f'{key}: {value}' for key,value in identity_dimensions.items())
+        metric_name = str(dimensions.get('driver_key') or record['metric_key'].split('.')[-1]).replace('_', ' ').upper()
+        label = str(record.get('label') or record.get('claim_kind') or '')
+        display_scope = [when, str(subject['key'])]
+        if record.get('business_unit'):
+            display_scope.append(str(record['business_unit']))
+        if record.get('scenario'):
+            display_scope.append(str(record['scenario']))
+        display_scope.extend(f'{key.replace("_", " ")}: {value}' for key, value in identity_dimensions.items()
+                             if key not in {'driver_key', 'component_key'})
+        display_text = f'{metric_name} ({label}): {unit} {Decimal(normalized):,f}\n' + ' · '.join(display_scope)
         result[ref] = {'ref':ref, 'text':' · '.join(parts) + f': {normalized} {unit}',
-                       'record':record, 'value':normalized, 'unit':unit}
+                       'display_text':display_text, 'record':record, 'value':normalized, 'unit':unit}
     return result
+
+
+def fact_batches(registry, *, max_bytes=180_000):
+    """Pack every fact into bounded requests; never discard or shorten a fact."""
+    batch, size = {}, 0
+    for ref, fact in registry.items():
+        encoded_size = len(json.dumps({'ref': ref, 'text': fact['text'],
+            'formula': fact['record'].get('formula')}, ensure_ascii=False).encode('utf-8'))
+        if batch and size + encoded_size > max_bytes:
+            yield batch
+            batch, size = {}, 0
+        batch[ref] = fact
+        size += encoded_size
+    if batch:
+        yield batch
 
 
 def render_selection(selection, registry, *, run_id):
@@ -65,11 +91,11 @@ def render_selection(selection, registry, *, run_id):
             or not isinstance(selection['fact_refs'], list)):
         raise ValueError('Only the governed fact-selection contract is accepted.')
     refs = selection['fact_refs']
-    if (len(refs) > 20 or any(not isinstance(ref,str) or ref not in registry for ref in refs)
+    if (any(not isinstance(ref,str) or ref not in registry for ref in refs)
             or len(set(refs)) != len(refs) or bool(refs) != selection['matched']):
         raise ValueError('Every selected fact must belong to this authorized snapshot.')
     if not refs:
-        return {'matched':False,'answer':'The authorized evidence does not contain the fact or approved calculation needed to answer this question.',
+        return {'matched':False,'answer':"I could not find a source-backed answer to that question in the available evidence.",
                 'basis':'Authorized claim snapshot.','citations':[],'suggestions':[], 'fact_contract':CONTRACT}
     citations=[]
     facts=[]
@@ -78,26 +104,13 @@ def render_selection(selection, registry, *, run_id):
         record=fact['record']
         href='/api/claims/snapshots/'+quote(str(run_id),safe='')+'/revisions/'+quote(ref,safe='')
         citations.append({'source_path':'claim://'+ref,'locator':'immutable revision '+ref,
-                          'excerpt':fact['text'],'claim_revision_id':ref,'href':href,'resolved':True})
+                          'excerpt':fact['display_text'],'claim_revision_id':ref,'href':href,'resolved':True})
         facts.append({'claim_revision_id':ref,'metric_key':record['metric_key'],
                       'subject':record['subject'],'period':record.get('period'),
                       'value':fact['value'],'unit':fact['unit'],'claim_kind':record.get('claim_kind'),
                       'formula':record.get('formula'),'business_unit':record.get('business_unit'),
                       'scenario':record.get('scenario'),'dimensions':record.get('identity_dimensions',{})})
-    return {'matched':True,'answer':'\n\n'.join(registry[ref]['text'] for ref in refs),
+    return {'matched':True,'answer':'\n\n'.join(registry[ref]['display_text'] for ref in refs),
             'basis':'Immutable facts from the authorized claim snapshot.', 'citations':citations,
             'suggestions':[], 'fact_contract':CONTRACT,'fact_cells':facts,
             '_orchestrator_force_answer':True}
-
-
-def select_candidates(registry, question, *, limit=80, require_match=False):
-    """Bound provider input while keeping each chosen fact indivisible."""
-    import re
-    words = set(re.findall(r"[^\W_]+", question.casefold())) - {
-        'what','which','how','the','is','are','our','for','and','of','in','to','a'}
-    def score(item):
-        ref,fact=item
-        tokens=set(re.findall(r"[^\W_]+", fact['text'].casefold()))
-        return (-len(words & tokens), ref)
-    candidates = (item for item in registry.items() if not require_match or score(item)[0] < 0)
-    return dict(sorted(candidates,key=score)[:limit])
