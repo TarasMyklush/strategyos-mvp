@@ -2,6 +2,7 @@
 import json
 import os
 import sys
+import time
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -54,10 +55,13 @@ if "--http" in sys.argv:
         "question": "Explain the main operating cost concern and distinguish what is evidenced from what still needs verification.",
         "persona": "ceo", "mode": "llm",
     }).encode(), headers={"Content-Type": "application/json", "Authorization": "Bearer " + token})
-    with urlopen(request, timeout=180) as response:
+    started = time.monotonic()
+    with urlopen(request, timeout=30) as response:
         result = json.load(response)
+    elapsed = time.monotonic() - started
     assert result.get("answer"), "No executive answer returned"
     assert result.get("mode") == "llm", "Expected a real model-backed response"
     assert (result.get("llm_status") or {}).get("provider") == "codex_cli", "Wrong provider"
+    assert elapsed < 15, f"Authenticated Hermes exceeded the browser service boundary: {elapsed:.1f}s"
     # Keep actual company answers and evidence out of CI logs.
-    print(json.dumps({"authenticated_hermes_endpoint": True, "mode": result["mode"], "provider": "codex_cli", "answer_characters": len(result["answer"])}), flush=True)
+    print(json.dumps({"authenticated_hermes_endpoint": True, "mode": result["mode"], "provider": "codex_cli", "seconds": round(elapsed, 1), "answer_characters": len(result["answer"])}), flush=True)

@@ -69,6 +69,7 @@ def test_no_credentials_or_tool_authority_in_child_environment(monkeypatch, tmp_
     assert "--ignore-user-config" in command and "--ephemeral" in command
     assert command[command.index("--sandbox") + 1] == "read-only"
     assert 'approval_policy="never"' in command and 'web_search="disabled"' in command
+    assert 'model_reasoning_effort="low"' in command
     assert "mcp_servers={}" in command
     for feature in gateway.DISABLED_FEATURES:
         assert command[command.index(feature) - 1] == "--disable"
@@ -79,6 +80,18 @@ def test_no_credentials_or_tool_authority_in_child_environment(monkeypatch, tmp_
 def test_explicit_model_is_server_controlled(tmp_path):
     command, _ = gateway.invocation(gateway.Settings(TOKEN, model="chosen-model"), tmp_path, "")
     assert command[command.index("--model") + 1] == "chosen-model"
+
+
+def test_reasoning_effort_is_server_controlled(tmp_path):
+    command, _ = gateway.invocation(
+        gateway.Settings(TOKEN, reasoning_effort="medium"), tmp_path, ""
+    )
+    assert 'model_reasoning_effort="medium"' in command
+
+
+def test_invalid_reasoning_effort_is_rejected():
+    with pytest.raises(ValueError):
+        gateway.Settings(TOKEN, reasoning_effort="unbounded")
 
 
 def test_bounded_concurrency_and_recovery():

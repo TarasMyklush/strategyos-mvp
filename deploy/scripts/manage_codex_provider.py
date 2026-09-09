@@ -88,7 +88,11 @@ def main():
             "STRATEGYOS_CODEX_TOKEN_PATH=" + str(token_path),
             "STRATEGYOS_CODEX_AUTH_DIR=" + str(auth_dir),
             "STRATEGYOS_CODEX_IMAGE=" + args.image,
-            "STRATEGYOS_CODEX_MODEL=",
+            # Interactive Hermes has a 15-second browser service boundary.
+            # Pin the provider to the fast, low-reasoning profile; deployment
+            # acceptance exercises the complete evidence-grounded HTTP path.
+            "STRATEGYOS_CODEX_MODEL=gpt-5.6-luna",
+            "STRATEGYOS_CODEX_REASONING_EFFORT=low",
             "",
         ]))
     configured = compose + ["--env-file", str(PROVIDER / "provider.env"), "-f", str(PROVIDER / "compose.yml"), "-f", str(PROVIDER / "activation-images.json")]

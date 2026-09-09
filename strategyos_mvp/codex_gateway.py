@@ -25,6 +25,7 @@ class Settings:
     home: str = "/var/lib/strategyos-codex"
     command: str = "/usr/local/bin/codex"
     model: str = ""  # Same as WebAgents: empty means the authenticated CLI default.
+    reasoning_effort: str = "low"
     timeout: float = 120
     concurrency: int = 1
 
@@ -33,6 +34,8 @@ class Settings:
             raise ValueError("A private gateway token of at least 32 characters is required")
         if not 1 <= self.concurrency <= 4 or not 1 <= self.timeout <= 300:
             raise ValueError("Invalid provider resource limits")
+        if self.reasoning_effort not in {"low", "medium", "high"}:
+            raise ValueError("Invalid provider reasoning effort")
 
 
 DISABLED_FEATURES = (
@@ -63,6 +66,7 @@ def invocation(settings: Settings, directory: Path, system: str) -> tuple[list[s
         command.extend(["--disable", feature])
     if settings.model:
         command.extend(["--model", settings.model])
+    command.extend(["-c", 'model_reasoning_effort=' + json.dumps(settings.reasoning_effort)])
     command.append("-")
     allowed = {"PATH", "LANG", "LC_ALL", "SSL_CERT_DIR", "SSL_CERT_FILE"}
     environment = {k: v for k, v in os.environ.items() if k in allowed}
@@ -188,6 +192,7 @@ def app_factory():
         token=Path(os.environ["STRATEGYOS_CODEX_TOKEN_FILE"]).read_text().strip(),
         home=os.environ.get("STRATEGYOS_CODEX_HOME", "/var/lib/strategyos-codex"),
         model=os.environ.get("STRATEGYOS_CODEX_MODEL", ""),
+        reasoning_effort=os.environ.get("STRATEGYOS_CODEX_REASONING_EFFORT", "low"),
         timeout=float(os.environ.get("STRATEGYOS_CODEX_TIMEOUT", "120")),
         concurrency=int(os.environ.get("STRATEGYOS_CODEX_CONCURRENCY", "1")),
     ))
