@@ -14,7 +14,8 @@ def grant_controller_source(monkeypatch):
     class Repository:
         def resolve_context(self, context): return context
         def run_source_access(self, run_id, *, context): return {'allowed': True}
-        def snapshot(self, key, *, context): return {'records':[], 'snapshot_key':key}
+        def snapshot(self, key, *, context, metric_keys=None, revision_id=None, limit=None, offset=0):
+            return {'records':[], 'snapshot_key':key}
     monkeypatch.setattr(claim_store,'ClaimRepository',Repository)
     monkeypatch.setattr(api,'ClaimRepository',Repository)
     monkeypatch.setattr(api,'_latest_summary',lambda:{'run_id':'twin-controller-fixture',

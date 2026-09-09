@@ -72,7 +72,7 @@ with sync_playwright() as p:
             assert 'Checking the board data' not in visible and 'did not return within' not in visible
             if kind=='service_error':
                 assert 'Service unavailable' in visible and 'Source-backed fact' not in visible, visible
-                assert rendered.get_by_role('button',name='Retry',exact=True).is_visible(), visible
+                assert rendered.get_by_role('button',name='Retry now',exact=True).is_visible(), visible
                 assert not payload.get('citations')
                 item['verification']='browser-local fault injection'
                 page.unroute('**/assistant/chat')
