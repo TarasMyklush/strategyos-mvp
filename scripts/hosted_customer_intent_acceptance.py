@@ -117,7 +117,7 @@ def main() -> int:
         assert sum((Decimal(cell["target"]) for cell in payload["cells"]), Decimal()) == OBJECTIVE
         assert all(cell["owner"].strip() for cell in payload["cells"])
         assert {cell["dimensions"]["region"] for cell in payload["cells"]} == {
-            "central", "eastern", "southern", "western"
+            "Central", "Eastern", "Southern", "Western"
         }
         assert all("item-a" not in json.dumps(cell).lower() for cell in payload["cells"])
         passed("The only customer plan is the source-bound FY2026 plan of record", {
