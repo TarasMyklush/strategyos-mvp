@@ -1,0 +1,222 @@
+{
+  "schema_version": "strategyos-source-pack-intake-evidence-v1",
+  "recorded_at": "2026-09-09T10:21:00Z",
+  "source": {
+    "path": "/Users/taras/Desktop/Taras/SPsoft/Enterprise OS/Input Folder/09.09.2026/StrategyOS POC",
+    "source_key": "strategyos-poc-2026-09-09",
+    "tree_sha256": "f8230f4a30d96a3c8715242f22b304945e7406c59f6c9cd48bc1963a62c369a8",
+    "local_source_pack_id": "43aa7cfd7c6c681fac7f8cf9f25566db1b69261d20afc719f4b87daa49ba1827",
+    "hosted_source_pack_id_before_format_release": "cffaca4ffed852e8127a37846c5ca8ee1a862297e5014303de4e2b414912f097",
+    "hosted_source_pack_id_after_format_release": "cffaca4ffed852e8127a37846c5ca8ee1a862297e5014303de4e2b414912f097",
+    "synthetic": true
+  },
+  "integrity": {
+    "file_count": 185,
+    "byte_count": 9696542,
+    "unique_sha256_count": 185,
+    "duplicate_file_count": 0,
+    "symlink_count": 0,
+    "zero_byte_file_count": 0,
+    "office_archive_count": 72,
+    "unsafe_office_archive_count": 0,
+    "remote_tree_digest_matches_local": true
+  },
+  "governed_intake_after_format_release": {
+    "supported_file_count": 185,
+    "unsupported_file_count": 0,
+    "pending_extraction_count": 0,
+    "failed_extraction_count": 0,
+    "accounted_file_count": 185,
+    "silent_omission_count": 0,
+    "counts_by_file_type": {
+      "csv": 11,
+      "docx": 5,
+      "json": 4,
+      "markdown": 6,
+      "pdf": 57,
+      "pptx": 3,
+      "text": 33,
+      "spreadsheet": 64,
+      "yaml": 2
+    },
+    "counts_by_disposition": {
+      "control_plane": 7,
+      "current_evidence": 54,
+      "evaluator_only": 4,
+      "historic_context": 116,
+      "quarantined_context": 3,
+      "restricted_context": 1
+    },
+    "control_plane_files": [
+      "01_Synthetic_Dataset/24_Sales_Cube/Dimension_Config_v1.yaml",
+      "01_Synthetic_Dataset/24_Sales_Cube/Plan_Decomposition_Structure_v1.json",
+      "01_Synthetic_Dataset/25_Engagement/Board_Pack_Template_v1.json",
+      "01_Synthetic_Dataset/25_Engagement/KPI_Source_Contracts_v1.yaml",
+      "02_Agent_JDs/Finance_Analyst_JD.md",
+      "02_Agent_JDs/Finance_Auditor_JD.md",
+      "03_Sample_Tasks/POC_Task_Brief.md"
+    ],
+    "evaluator_material_is_evidence": false,
+    "control_plane_material_is_evidence": false,
+    "external_model_allowed": false,
+    "export_allowed": false,
+    "quote_allowed": false,
+    "storage_allowed": true,
+    "index_allowed": true
+  },
+  "operator_mapping": {
+    "source": "01_Synthetic_Dataset/14_CEO_Office/CEO_Calendar_Mizan_Apr-Jul_2026.xlsx",
+    "role": "calendar",
+    "column_mapping": {
+      "Event_Date": "Date",
+      "Title": "Title",
+      "Type": "Category"
+    },
+    "unconfirmed_roles_after_mapping": []
+  },
+  "quality_review": {
+    "status": "review_required",
+    "ready_for_acceptance": false,
+    "high_severity_issue_count": 5,
+    "medium_severity_issue_count": 2,
+    "high_severity_issues": [
+      "CFO cash forecast G105 mixes row 102 and row 105 references",
+      "CFO cash forecast I4 SUM stops before populated H4",
+      "CFO cash forecast D7 contains #REF!",
+      "Bordeaux correspondence references a Servier ledger invoice",
+      "Servier invoice total EUR 89,472 differs from AP ledger EUR 89,400"
+    ],
+    "reporting_basis_warnings": [
+      "GL debits and credits differ by SAR 55,292,000",
+      "Trial balance debits and credits differ by SAR 55,292,000"
+    ],
+    "quarantined_files": [
+      "01_Synthetic_Dataset/19_Document_Vault/AP_Controls_SOP_v3_Jun2026.pdf",
+      "01_Synthetic_Dataset/19_Document_Vault/Cash_Leakage_Audit_Final_Report_May2026.docx",
+      "01_Synthetic_Dataset/19_Document_Vault/KAUST_Repricing_Board_Mandate_Jun2026.pdf"
+    ]
+  },
+  "granular_sales_reconciliation": {
+    "period": "2026-01 through 2026-06",
+    "plan_cell_count": 288,
+    "actual_detail_row_count": 1848,
+    "client_count": 19,
+    "sku_count": 14,
+    "plan_gross_revenue_sar": 1194000000.06,
+    "actual_gross_revenue_sar": 1267999999.96,
+    "variance_sar": 73999999.90,
+    "ahead_cell_count": 164,
+    "behind_cell_count": 124,
+    "nupco_gross_revenue_sar": 430443755.13,
+    "region_variances_sar": {
+      "Central": 13000001.99,
+      "Eastern": -18205402.51,
+      "Southern": 31259925.73,
+      "Western": 47945474.69
+    },
+    "channel_variances_sar": {
+      "Hospital/private": -5048518.39,
+      "Institutional tender": 108794538.42,
+      "Retail pharmacy": -29746020.13
+    },
+    "nupco_rescued_region_family_count": 11,
+    "finding": "The H1 total is SAR 74.0M ahead while 124 of 288 plan cells are behind. Institutional tender performance, including SAR 430.44M of NUPCO gross revenue, offsets weaker retail and hospital/private channels; Eastern region remains SAR 18.21M behind.",
+    "rounding_warning": "The 288 two-decimal plan cells sum to SAR 1,194,000,000.06, which is SAR 0.06 above the stated H1 board total of SAR 1,194,000,000. A governed importer must apply and disclose a deterministic remainder rule."
+  },
+  "candidate_analysis": {
+    "local_run_id": "local-candidate-run-complete-pack-20260909t095014z-9227c801a77f",
+    "local_run_summary_sha256": "1e4cf2f6cadd317e9b99a98f71b599e14305c3216e8915d8533fe05d32f542f6",
+    "hosted_run_id_before_format_release": "606a07af-b659-4d32-b571-d38e37a169ef",
+    "hosted_run_id_after_format_release": "ff6bce51-f169-4acd-b58b-85a2864da2b6",
+    "hosted_run_summary_sha256": "b281085740c9ac593b5e0a86e3e3b4dd69884d436726611b29c06e27c8e9b5dc",
+    "hosted_job_id_after_format_release": "ebdc514a-dd6f-4cd7-a61c-e2a4ea5b7310",
+    "hosted_hatchet_run_id_after_format_release": "f29d1a24-ba7f-4eaa-a417-d6683c9249a5",
+    "status": "awaiting_review",
+    "approval_status": "pending",
+    "finding_count": 8,
+    "locked_finding_count": 8,
+    "total_recoverable_sar": 794108,
+    "group_h1_finance": {
+      "revenue_actual_sar": 4006000000,
+      "revenue_plan_sar": 3904000000,
+      "ebitda_actual_sar": 617000000,
+      "ebitda_plan_sar": 608100000,
+      "operating_cost_actual_sar": 3389000000,
+      "operating_cost_plan_sar": 3295900000,
+      "cash_actual": null,
+      "cash_actual_reason": "The selected cash row is not explicitly labelled actual.",
+      "board_floor_sar": 1200000000
+    },
+    "automatically_approved": false,
+    "production_promoted": false
+  },
+  "product_corrections": {
+    "revision": "35079e9b9c51869ebb49fb36b94a3a0734f58609",
+    "office_and_yaml_intake": "DOCX, PPTX and YAML are governed source-pack formats with bounded OOXML extraction and stable citation locations.",
+    "configuration_isolation": "YAML and the board-template and plan-decomposition JSON contracts are control-plane inputs and cannot enter business evidence.",
+    "ratification_boundary": "Run-bound claim revisions participate in current truth only after the run completes and satisfies its review requirement. Pending candidate snapshots remain reviewable without invalidating the approved briefing."
+  },
+  "release_verification": {
+    "preview_url": "https://new.strategyos.live",
+    "production_changed": false,
+    "revision": "35079e9b9c51869ebb49fb36b94a3a0734f58609",
+    "image": "ghcr.io/tarasmyklush/strategyos-mvp@sha256:513c0525e4b09b988527e5c0a4650d26c49a0baf3c0fcd27b0eeb4d3fcf2d2bf",
+    "workflow_id": 34337184348,
+    "workflow_url": "https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34337184348",
+    "workflow_status": "success",
+    "service_test_count": 2630,
+    "service_test_skip_count": 0,
+    "executive_chromium_walkthrough": "passed",
+    "intent_lifecycle_chromium_walkthrough": "passed",
+    "hosted_pack_supported_file_count": 185,
+    "hosted_pack_unsupported_file_count": 0,
+    "hosted_pack_failed_extraction_count": 0,
+    "hosted_pack_silent_omission_count": 0,
+    "hosted_candidate_artifact_upload_count": 7,
+    "approved_run_preserved_while_candidate_pending": {
+      "route": "/runs/latest",
+      "http_status": 200,
+      "approved_run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
+      "candidate_run_id": "ff6bce51-f169-4acd-b58b-85a2864da2b6",
+      "candidate_status": "awaiting_review",
+      "candidate_approval_status": "pending"
+    },
+    "preview_capacity_recovery": {
+      "failed_job_id": "e93d4079-9c2c-4663-aa8d-21d4e4c2bdac",
+      "failed_hatchet_run_id": "039ef2d7-cc8d-4ded-851c-75856c342a53",
+      "failure": "MinIO refused artifact upload because the shared preview host was below its minimum free-space threshold.",
+      "remediation": "Pruned only unused Docker images older than 12 hours; governed volumes and active images were retained.",
+      "docker_reported_reclaimed_gb": 9.779,
+      "host_free_space_after_gb": 41,
+      "preview_api_healthy_after": true,
+      "production_api_healthy_after": true,
+      "replacement_job_status": "succeeded"
+    }
+  },
+  "remaining_backlog": [
+    {
+      "priority": "P0-review",
+      "item": "Resolve or explicitly accept the five high-severity source issues, two reporting-basis warnings and three quarantined documents before approving this candidate."
+    },
+    {
+      "priority": "P0-product",
+      "item": "G10 remains open until the current fixed 50-question corpus reaches at least 45 correct evidence-grounded answers with source-owner permissions."
+    },
+    {
+      "priority": "P1",
+      "item": "Extend the dimensional evaluator with governed parent-child rollups so client-level actuals remain drillable beneath month, region, channel and product-family plan cells; then add a typed importer from Plan_Data_2026.csv and Sales_Cube_Monthly_2025-2026H1.csv."
+    },
+    {
+      "priority": "P1",
+      "item": "Import the board template and KPI source contracts into Advisor configuration and the immutable board-template registry."
+    },
+    {
+      "priority": "P1",
+      "item": "Bind provider and outreach records to the existing connector-free engagement workflow; keep live connector work deferred."
+    },
+    {
+      "priority": "P1-operations",
+      "item": "Add an automated preview image-retention policy and disk-capacity alert before the host reaches MinIO's write threshold."
+    }
+  ]
+}
