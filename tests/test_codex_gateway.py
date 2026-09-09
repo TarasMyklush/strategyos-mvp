@@ -69,7 +69,7 @@ def test_no_credentials_or_tool_authority_in_child_environment(monkeypatch, tmp_
     assert "--ignore-user-config" in command and "--ephemeral" in command
     assert command[command.index("--sandbox") + 1] == "read-only"
     assert 'approval_policy="never"' in command and 'web_search="disabled"' in command
-    assert 'model_reasoning_effort="low"' in command
+    assert 'model_reasoning_effort="medium"' in command
     assert "mcp_servers={}" in command
     for feature in gateway.DISABLED_FEATURES:
         assert command[command.index(feature) - 1] == "--disable"

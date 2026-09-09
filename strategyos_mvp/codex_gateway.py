@@ -25,7 +25,7 @@ class Settings:
     home: str = "/var/lib/strategyos-codex"
     command: str = "/usr/local/bin/codex"
     model: str = ""  # Same as WebAgents: empty means the authenticated CLI default.
-    reasoning_effort: str = "low"
+    reasoning_effort: str = "medium"
     timeout: float = 120
     concurrency: int = 1
 
@@ -192,7 +192,7 @@ def app_factory():
         token=Path(os.environ["STRATEGYOS_CODEX_TOKEN_FILE"]).read_text().strip(),
         home=os.environ.get("STRATEGYOS_CODEX_HOME", "/var/lib/strategyos-codex"),
         model=os.environ.get("STRATEGYOS_CODEX_MODEL", ""),
-        reasoning_effort=os.environ.get("STRATEGYOS_CODEX_REASONING_EFFORT", "low"),
+        reasoning_effort=os.environ.get("STRATEGYOS_CODEX_REASONING_EFFORT", "medium"),
         timeout=float(os.environ.get("STRATEGYOS_CODEX_TIMEOUT", "120")),
         concurrency=int(os.environ.get("STRATEGYOS_CODEX_CONCURRENCY", "1")),
     ))
