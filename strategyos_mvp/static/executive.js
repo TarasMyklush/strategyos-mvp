@@ -5503,6 +5503,7 @@
     var audit = brief.audit || {};
     var accountableProvider = String(firstDefined(driver.accountable_provider, audit.accountable_provider, "Finance data owner"));
     var sourceContract = driver.source_contract && typeof driver.source_contract === "object" ? driver.source_contract : {};
+    var namedProvider = String(firstDefined(sourceContract.provider, "")).trim();
     var missingInputs = safeArray(audit.missing_inputs).length
       ? safeArray(audit.missing_inputs).filter(Boolean)
       : safeArray(driver.missing_inputs).filter(Boolean);
@@ -5524,6 +5525,12 @@
     var movementMarkup = kpiMovementMarkup(driver);
     var compositionMarkup = kpiCompositionMarkup(key, brief, drivers);
     var executiveContextMarkup = kpiExecutiveContextMarkup(brief, comparison, strategicReference);
+    var accountableProviderMarkup = namedProvider || missingInputs.length
+      ? '<div><span>Accountable provider</span><strong>' + escapeHtml(namedProvider || accountableProvider) + '</strong></div>'
+      : '';
+    var dataRequestMarkup = missingInputs.length
+      ? '<div><span>Needed for a valid comparison</span><strong>' + escapeHtml(missingInputs.join(" · ")) + '</strong></div><button type="button" class="assistant-retry-button" data-kpi-data-request>Create outreach request</button>'
+      : '';
     drillCard.innerHTML = [
       '<div class="drill-surface kpi-inline-drill" data-kpi-key="' + escapeHtml(key) + '">',
       '<div class="kpi-brief-header"><div><p class="detail-eyebrow">' + escapeHtml(firstDefined(brief.period_label, "Current actual")) + '</p><div class="kpi-brief-title-row"><h3 class="detail-title">' + escapeHtml(label) + '</h3><span class="kpi-brief-variance tone-' + semanticTone + '">' + escapeHtml(firstDefined(executiveSignal.variance_label, comparison.value, 'Current position')) + '</span><strong class="kpi-brief-value">' + escapeHtml(firstDefined(brief.metric, driver.metric, "—")) + '</strong></div></div><button type="button" class="kpi-show-work" data-kpi-show-work="true">Show the work</button>' + groundingBadgeMarkup(driver.provenance, driver.grounding) + '</div>',
@@ -5531,7 +5538,7 @@
       '<div class="kpi-executive-grid">' + trendMarkup + movementMarkup + '</div>',
       (compositionMarkup ? '<details class="kpi-supporting-analysis"><summary>Supporting analysis</summary>' + compositionMarkup + '</details>' : ''),
       '<section class="kpi-inline-chat" aria-label="Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '"><div class="kpi-inline-chat__intro"><div><span class="kpi-brief-label">Decision support</span><strong>Pressure-test the executive position with ' + escapeHtml(assistantName) + '</strong><p>The selected result, business context and supporting sources are already attached.</p></div></div><div class="kpi-question-actions"><button type="button" data-kpi-question="decision">Do I need to intervene?</button><button type="button" data-kpi-question="briefing">Who owns it—and why?</button><button type="button" data-kpi-question="outlook">What changes the outlook?</button><button type="button" data-kpi-question="advisory">Consult general practice</button></div><form class="kpi-inline-ask" data-kpi-ask-form><label class="sr-only" for="kpi-inline-ask-input">Ask ' + escapeHtml(assistantName) + ' about ' + escapeHtml(label) + '</label><input id="kpi-inline-ask-input" type="text" autocomplete="off" data-kpi-ask-input placeholder="Ask a decision question about ' + escapeHtml(label) + '..." /><button type="submit" data-kpi-ask-send>Ask</button></form></section>',
-      '<details class="kpi-brief-audit"><summary>Evidence and calculation</summary><div class="kpi-brief-audit__body"><div><span>Method</span><strong>' + escapeHtml(firstDefined(calculation.formula, driver.formula, "Calculation method is not available.")) + '</strong></div>' + calculationMarkup + '<div><span>Coverage</span><strong>' + escapeHtml(firstDefined(coverage.value, "Unknown")) + ' — ' + escapeHtml(firstDefined(coverage.note, "")) + '</strong></div>' + governedClaimAuditMarkup(driver.provenance) + (auditSources.length ? '<div><span>Business sources</span><strong>' + escapeHtml(auditSources.join(" · ")) + '</strong></div>' : "") + (missingInputs.length ? '<div><span>Needed for a valid comparison</span><strong>' + escapeHtml(missingInputs.join(" · ")) + '</strong></div><div><span>Accountable provider</span><strong>' + escapeHtml(accountableProvider) + '</strong></div><button type="button" class="assistant-retry-button" data-kpi-data-request>Create outreach request</button>' : "") + '</div></details>',
+      '<details class="kpi-brief-audit"><summary>Evidence and calculation</summary><div class="kpi-brief-audit__body"><div><span>Method</span><strong>' + escapeHtml(firstDefined(calculation.formula, driver.formula, "Calculation method is not available.")) + '</strong></div>' + calculationMarkup + '<div><span>Coverage</span><strong>' + escapeHtml(firstDefined(coverage.value, "Unknown")) + ' — ' + escapeHtml(firstDefined(coverage.note, "")) + '</strong></div>' + governedClaimAuditMarkup(driver.provenance) + (auditSources.length ? '<div><span>Business sources</span><strong>' + escapeHtml(auditSources.join(" · ")) + '</strong></div>' : "") + accountableProviderMarkup + dataRequestMarkup + '</div></details>',
       '</div>'
     ].join("");
     var showWork = drillCard.querySelector('[data-kpi-show-work]');
