@@ -5969,3 +5969,17 @@ def test_semantic_fact_plan_cannot_be_overridden_by_legacy_scenario_words(monkey
         api_module.AssistantChatRequest(question=question, persona='ceo', mode='auto')))
     assert payload['answer'] == answer['answer'] and payload['matched'] == matched
     assert payload['determinism_tier'] == ('governed_fact' if matched else 'needs_evidence')
+
+
+def test_operational_qa_uses_same_semantic_fact_path(monkeypatch):
+    from strategyos_mvp.fact_rendering import render_selection
+    monkeypatch.setattr(api_module, '_resolve_qa_context', lambda _: {
+        'bundle': SimpleNamespace(authorized_claim_records=[]), 'findings': [],
+        'summary': {'run_id': 'run'}, 'run_id': 'run', 'run_mode': 'full',
+        'assistant_data_intent': 'facts', 'kg_nodes': [], 'kg_edges': []})
+    monkeypatch.setattr(api_module, 'parse_scenario', lambda *a, **k: pytest.fail('Semantic fact lookup reached legacy scenario parser'))
+    monkeypatch.setattr(api_module.llm_qa, 'answer_question', lambda *a, **k:
+        render_selection({'matched': False, 'fact_refs': []}, {}, run_id='run'))
+    payload = api_module._data_qa_scoped(api_module.QaRequest(question='What is our EBITDA for 2029?', mode='auto'),
+        {'role':'executive','subject':'reader','tenant_id':'test'})
+    assert payload['matched'] is False and payload['determinism_tier'] == 'needs_evidence'

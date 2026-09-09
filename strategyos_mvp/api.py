@@ -16463,6 +16463,17 @@ def _data_qa_scoped(request: QaRequest, _: dict[str, Any]) -> dict[str, Any]:
             context["summary"], principal=_,
         )
         context = _hydrate_governed_qa_context(context, principal=_, question=question)
+    if mode != "deterministic" and context.get("assistant_data_intent") == "facts":
+        try:
+            result = llm_qa.answer_question(question, bundle=context["bundle"], findings=context["findings"],
+                summary=context["summary"], config=CONFIG, persona=persona)
+        except RuntimeError:
+            result = {"answer_status": "service_error",
+                      "answer": "I could not finish reading the evidence because the language service failed. Please retry.",
+                      "basis": "Service failure; no conclusion about the available evidence was made."}
+        return _assistant_response_payload(response_mode="llm", question=question, context=context,
+            requested_mode=mode, persona=persona, orchestrated=None, base_result=result,
+            llm_status=result.get("llm_status") or llm_status, assistant_context=request_context)
     orchestrator = get_orchestrator()
 
     def _risk_payload(response_mode: str, basis: str, matched: bool, status_payload: dict[str, Any] | None = None) -> dict[str, Any]:

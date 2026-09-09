@@ -3243,7 +3243,8 @@
     } else {
       message.text = result.answer;
       message.meta = "";
-      message.payload = null;
+      message.payload = result.responsePayload && result.responsePayload.answer_status === 'service_error'
+        ? result.responsePayload : null;
       message.caseLinks = [];
       message.timestamp = new Date().toISOString();
       message.status = "failed";
@@ -3404,6 +3405,15 @@
         clientRequestId
       );
       var payload = response.payload;
+      if (payload && payload.answer_status === 'service_error') {
+        var serviceFailure = makeAssistantFailureResult(cleanMessage, {
+          endpoint: endpoint, statusCode: response.status, requestId: requestId,
+          errorType: 'service_error', details: 'The evidence service could not complete this answer.'
+        });
+        serviceFailure.answer = payload.answer;
+        serviceFailure.responsePayload = payload;
+        return serviceFailure;
+      }
       if (payload && payload.status === "ok") {
         if (payload.policy_denied) {
           var policyFallback = deterministicAssistantFallback(cleanMessage, entrypointCtx, "source permission", payload);
