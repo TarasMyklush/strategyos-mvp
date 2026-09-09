@@ -3086,6 +3086,49 @@ def test_executive_diagnostics_persona_blueprint_derives_from_shared_packet(monk
     assert blueprint["week"] == shared_packet["week"]
 
 
+def test_executive_diagnostics_preserves_governed_kpi_provider(monkeypatch):
+    source_contract = {
+        "provider": "Group Treasury (system feed)",
+        "source_type": "system-of-record",
+        "cadence": "daily",
+        "status": "fresh",
+        "registry_id": "SRCREG-MZ-001",
+        "registry_version": "1.1",
+        "freshness_threshold_days": 3,
+    }
+    monkeypatch.setattr(
+        api_module,
+        "build_executive_presentation",
+        lambda _read_model: {
+            "driver_grid": [
+                {
+                    "key": "cash_vs_floor",
+                    "label": "Cash vs floor",
+                    "metric": "SAR 1.41B",
+                    "accountable_provider": source_contract["provider"],
+                    "source_contract": source_contract,
+                }
+            ]
+        },
+    )
+
+    diagnostics = api_module._executive_diagnostics_payload(
+        {"run_id": "run-provider"},
+        principal={"role": "executive", "authenticated": True},
+        board_portal={},
+        executive_modes={"active_persona_id": "ceo", "active_driver_key": "cash_vs_floor"},
+        drilldown={},
+        strategy_substrate={},
+        agent_modules={},
+        audit_summary=None,
+        finding_rows=[],
+    )
+
+    cash = diagnostics["driver_grid"][0]
+    assert cash["accountable_provider"] == "Group Treasury (system feed)"
+    assert cash["source_contract"] == source_contract
+
+
 def test_assistant_chat_public_ceo_legacy_prompts_use_governed_packet(monkeypatch):
     original = _apply_env(
         {

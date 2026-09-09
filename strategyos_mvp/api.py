@@ -5066,6 +5066,12 @@ def _executive_diagnostics_payload(
                 "formula": item.get("formula"),
                 "inputs": item.get("inputs"),
                 "missing_inputs": item.get("missing_inputs"),
+                # Provider accountability is part of the governed KPI evidence
+                # contract. Keep it in the compact diagnostics projection used
+                # by the browser instead of dropping it after presentation is
+                # built from the authorized claim snapshot.
+                "accountable_provider": item.get("accountable_provider"),
+                "source_contract": item.get("source_contract"),
                 "comparison": item.get("comparison"),
                 "evidence_summary": item.get("evidence_summary"),
                 "source_files": item.get("source_files"),
