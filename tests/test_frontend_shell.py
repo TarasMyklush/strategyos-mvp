@@ -123,6 +123,22 @@ const fetch = async () => ({ok:false,status:403,json:async()=>({detail:'Source a
     assert 'session.authenticated && !frozenBoard ? fetchJson("/api/v1/agent-network")' in js
 
 
+def test_compact_sar_preserves_reconcilable_board_target_precision():
+    js = _static_executive_js()
+    function_source = "function formatSarCompact" + js.split(
+        "function formatSarCompact", 1
+    )[1].split("function wordSlice", 1)[0]
+    program = """
+const assert = require('assert');
+""" + function_source + """
+assert.strictEqual(formatSarCompact(2540000000), 'SAR 2.54B');
+assert.strictEqual(formatSarCompact(2500000000), 'SAR 2.5B');
+assert.strictEqual(formatSarCompact(1000000000), 'SAR 1B');
+assert.strictEqual(formatSarCompact(125000000), 'SAR 125M');
+"""
+    subprocess.run(["node", "-e", program], check=True, capture_output=True, text=True)
+
+
 def test_workspace_chat_defaults_to_auto_qa_mode():
     workspace_html = (Path(api_module.STATIC_DIR) / "index.html").read_text(encoding="utf-8")
     js = TestClient(api_module.app).get("/static/app.js").text

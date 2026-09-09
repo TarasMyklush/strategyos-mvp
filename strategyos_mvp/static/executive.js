@@ -1039,8 +1039,14 @@
     var number = Number(value || 0);
     if (!Number.isFinite(number)) return "SAR 0";
     var absolute = Math.abs(number);
-    if (absolute >= 1000000000) return "SAR " + (number / 1000000000).toFixed(1).replace(/\.0$/, "") + "B";
-    if (absolute >= 1000000) return "SAR " + (number / 1000000).toFixed(2).replace(/0$/, "").replace(/\.$/, "") + "M";
+    var compactDecimal = function (scaled) {
+      return scaled.toFixed(2).replace(/\.?0+$/, "");
+    };
+    // Board targets and reported totals need enough precision to reconcile to
+    // their governed source. Two decimal places keeps SAR 2.54B distinct from
+    // SAR 2.5B while still rendering whole and one-decimal values cleanly.
+    if (absolute >= 1000000000) return "SAR " + compactDecimal(number / 1000000000) + "B";
+    if (absolute >= 1000000) return "SAR " + compactDecimal(number / 1000000) + "M";
     if (absolute >= 1000) return "SAR " + (number / 1000).toFixed(0) + "K";
     return formatSar(number);
   }
