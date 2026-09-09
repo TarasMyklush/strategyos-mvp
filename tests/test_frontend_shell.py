@@ -3402,11 +3402,11 @@ def test_assistant_transport_failures_log_visible_diagnostics():
     assert 'pendingThread = threadStore()[threadKey]' in executive_js
 
 
-def test_hermes_browser_deadline_degrades_to_governed_local_answer_promptly():
-    """A language-service delay must not leave the executive waiting indefinitely."""
+def test_hermes_browser_deadline_allows_sol_medium_to_finish_but_remains_bounded():
+    """The UI remains cancellable without pre-empting the configured model."""
     executive_js = Path("strategyos_mvp/static/executive.js").read_text(encoding="utf-8")
 
-    assert "firstDefined(requestOptions.timeoutMs, 15000)" in executive_js
+    assert "firstDefined(requestOptions.timeoutMs, 60000)" in executive_js
 
 
 def test_assistant_network_count_is_labeled_not_presented_as_failed_requests():

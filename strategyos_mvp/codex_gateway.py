@@ -27,12 +27,17 @@ class Settings:
     model: str = ""  # Same as WebAgents: empty means the authenticated CLI default.
     reasoning_effort: str = "medium"
     timeout: float = 120
-    concurrency: int = 1
+    concurrency: int = 2
+    queue_timeout: float = 15
 
     def __post_init__(self):
         if len(self.token) < 32:
             raise ValueError("A private gateway token of at least 32 characters is required")
-        if not 1 <= self.concurrency <= 4 or not 1 <= self.timeout <= 300:
+        if (
+            not 1 <= self.concurrency <= 4
+            or not 1 <= self.timeout <= 300
+            or not 0.05 <= self.queue_timeout <= 60
+        ):
             raise ValueError("Invalid provider resource limits")
         if self.reasoning_effort not in {"low", "medium", "high"}:
             raise ValueError("Invalid provider reasoning effort")
@@ -171,7 +176,7 @@ def create_app(settings: Settings, runner=complete) -> FastAPI:
         if not isinstance(response_format, dict) or response_format.get("type", "text") not in {"text", "json_object"}:
             raise HTTPException(400, "Unsupported response format")
         try:
-            await asyncio.wait_for(slots.acquire(), timeout=0.05)
+            await asyncio.wait_for(slots.acquire(), timeout=settings.queue_timeout)
         except TimeoutError:
             raise HTTPException(429, "Codex is busy; retry shortly", headers={"Retry-After": "3"}) from None
         try:
@@ -194,5 +199,6 @@ def app_factory():
         model=os.environ.get("STRATEGYOS_CODEX_MODEL", ""),
         reasoning_effort=os.environ.get("STRATEGYOS_CODEX_REASONING_EFFORT", "medium"),
         timeout=float(os.environ.get("STRATEGYOS_CODEX_TIMEOUT", "120")),
-        concurrency=int(os.environ.get("STRATEGYOS_CODEX_CONCURRENCY", "1")),
+        concurrency=int(os.environ.get("STRATEGYOS_CODEX_CONCURRENCY", "2")),
+        queue_timeout=float(os.environ.get("STRATEGYOS_CODEX_QUEUE_TIMEOUT", "15")),
     ))

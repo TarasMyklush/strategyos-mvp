@@ -928,10 +928,10 @@
 
   function postJson(path, body, options) {
     var requestOptions = options || {};
-    // A live executive interaction must resolve promptly.  The governed local
-    // KPI record below is the fallback when the language service cannot return
-    // inside this boundary; the request is aborted so loading state is final.
-    var timeoutMs = Number(firstDefined(requestOptions.timeoutMs, 15000));
+    // Sol with medium reasoning can take longer than a short HTTP round trip.
+    // Keep the interaction cancellable while allowing the configured model to
+    // finish; the governed local KPI record below remains the final fallback.
+    var timeoutMs = Number(firstDefined(requestOptions.timeoutMs, 60000));
     var headers = authHeaders({ skipAuth: requestOptions.skipAuth === true });
     var usedBearerAuth = Boolean(headers.Authorization);
     headers["Content-Type"] = "application/json";
@@ -3187,7 +3187,7 @@
     var isPolicy = Boolean(policyPayload && policyPayload.policy_denied);
     var prefix = isPolicy
       ? "The external language service is not authorized for these sources. Here is the governed local answer."
-      : "The language service did not return within 15 seconds. Here is the governed local answer.";
+      : "The language service did not finish before the request deadline. Here is the governed local answer.";
     var facts = [
       "**" + label + ":** " + metric + ".",
       String(firstDefined(signal.readout, brief.readout, driver.detail, "")).trim(),

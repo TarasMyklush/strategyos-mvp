@@ -121,11 +121,12 @@ def main():
             "STRATEGYOS_CODEX_TOKEN_PATH=" + str(token_path),
             "STRATEGYOS_CODEX_AUTH_DIR=" + str(auth_dir),
             "STRATEGYOS_CODEX_IMAGE=" + args.image,
-            # Interactive Hermes has a 15-second browser service boundary.
-            # Pin the provider to the required Sol medium-reasoning profile; deployment
-            # acceptance exercises the complete evidence-grounded HTTP path.
+            # Pin the provider to the required Sol medium-reasoning profile and
+            # retain a small bounded queue for overlapping prototype users.
             "STRATEGYOS_CODEX_MODEL=gpt-5.6-sol",
             "STRATEGYOS_CODEX_REASONING_EFFORT=medium",
+            "STRATEGYOS_CODEX_CONCURRENCY=2",
+            "STRATEGYOS_CODEX_QUEUE_TIMEOUT=15",
             "",
         ]))
     configured = compose + ["--env-file", str(PROVIDER / "provider.env"), "-f", str(PROVIDER / "compose.yml"), "-f", str(PROVIDER / "activation-images.json")]

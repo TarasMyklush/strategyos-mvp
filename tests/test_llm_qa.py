@@ -90,37 +90,103 @@ def _bundle() -> DataBundle:
     )
 
 
-def test_social_turn_uses_hermes_without_fabricating_a_missing_fact(monkeypatch):
+@pytest.mark.parametrize(
+    ("question", "answer"),
+    [
+        ("What is the capital of Ukraine?", "Kyiv is the capital of Ukraine."),
+        ("What's GDP?", "GDP means gross domestic product."),
+        ("Hello", "Hello. How can I help?"),
+    ],
+)
+def test_semantic_router_answers_general_turn_without_company_evidence(
+    monkeypatch,
+    question,
+    answer,
+):
     calls = []
 
     def provider(**kwargs):
         calls.append(kwargs)
         return json.dumps({
-            "matched": True,
-            "answer": "Hello. What would you like to review?",
-            "basis": "General assistant response.",
-            "citations": [],
-            "suggestions": [],
+            "route": "llm",
+            "answer": answer,
         })
 
     monkeypatch.setattr(llm_qa, "_call_openai_compatible_chat", provider)
-    result = llm_qa.answer_question(
-        "hello",
-        bundle=SimpleNamespace(authorized_claim_records=({
-            "claim_revision_id": "private-fact",
-            "traceability": "present",
-        },)),
-        findings=[],
-        summary={"run_id": "governed-run"},
+    result = llm_qa.classify_question_route(
+        question,
         config=_config(),
         persona="ceo",
     )
 
-    assert result["answer"] == "Hello. What would you like to review?"
-    assert result["assistant_scope"] == "social"
+    assert result["route"] == "llm"
+    assert result["answer"] == answer
+    assert result["assistant_scope"] == "general"
     assert len(calls) == 1
-    assert "private-fact" not in json.dumps(calls[0]["messages"])
-    assert llm_qa._is_social_turn("hello, what is revenue?") is False
+    messages = json.dumps(calls[0]["messages"])
+    assert "private-fact" not in messages
+    assert "authorized_claim_records" not in messages
+    assert "findings" not in messages
+    assert "summary" not in messages
+
+
+def test_semantic_router_sends_organization_question_to_data(monkeypatch):
+    monkeypatch.setattr(
+        llm_qa,
+        "_call_openai_compatible_chat",
+        lambda **_kwargs: json.dumps({"route": "data", "answer": None}),
+    )
+
+    result = llm_qa.classify_question_route(
+        "How are we doing?",
+        config=_config(),
+        persona="ceo",
+    )
+
+    assert result["route"] == "data"
+    assert result["answer"] is None
+    assert result["classification_status"] == "classified"
+
+
+@pytest.mark.parametrize(
+    "provider_result",
+    [
+        "not json",
+        json.dumps({"route": "llm", "answer": "answer", "extra": True}),
+        json.dumps({"route": "data", "answer": "unsafe answer"}),
+    ],
+)
+def test_semantic_router_invalid_output_fails_closed_to_data(monkeypatch, provider_result):
+    monkeypatch.setattr(
+        llm_qa,
+        "_call_openai_compatible_chat",
+        lambda **_kwargs: provider_result,
+    )
+
+    result = llm_qa.classify_question_route(
+        "Please handle this",
+        config=_config(),
+        persona="ceo",
+    )
+
+    assert result["route"] == "data"
+    assert result["answer"] is None
+    assert result["classification_status"] == "fallback"
+
+
+def test_semantic_router_provider_failure_fails_closed_to_data(monkeypatch):
+    def provider(**_kwargs):
+        raise RuntimeError("timeout")
+
+    monkeypatch.setattr(llm_qa, "_call_openai_compatible_chat", provider)
+    result = llm_qa.classify_question_route(
+        "Please handle this",
+        config=_config(),
+        persona="ceo",
+    )
+
+    assert result["route"] == "data"
+    assert result["classification_reason"] == "provider_failure"
 
 
 @pytest.mark.parametrize('repaired,expected', [('SAR 120', True), ('SAR 999M', False)])

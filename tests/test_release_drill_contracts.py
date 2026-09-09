@@ -208,7 +208,7 @@ def test_build_note_executive_reliability_contracts_are_present():
     html = (root / 'executive.html').read_text()
     css = (root / 'executive.css').read_text()
 
-    assert 'firstDefined(requestOptions.timeoutMs, 15000)' in executive
+    assert 'firstDefined(requestOptions.timeoutMs, 60000)' in executive
     assert 'deterministicAssistantFallback' in executive
     assert 'data-kpi-data-request' in executive
     assert '/api/outreach/requests' in executive

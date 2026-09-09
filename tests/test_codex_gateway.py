@@ -101,7 +101,12 @@ def test_bounded_concurrency_and_recovery():
             started.set()
             await release.wait()
             return "done"
-        transport = httpx.ASGITransport(app=gateway.create_app(gateway.Settings(TOKEN), runner))
+        transport = httpx.ASGITransport(
+            app=gateway.create_app(
+                gateway.Settings(TOKEN, concurrency=1, queue_timeout=0.05),
+                runner,
+            )
+        )
         async with httpx.AsyncClient(transport=transport, base_url="http://test", headers={"Authorization": "Bearer " + TOKEN}) as c:
             first = asyncio.create_task(c.post("/v1/chat/completions", json=payload()))
             await started.wait()

@@ -26,6 +26,20 @@ def authorized_summary_boundary_for_routing_unit_tests(monkeypatch):
         api_module, "_summary_with_governed_claim_snapshot",
         lambda summary, *, principal: dict(summary),
     )
+    # Individual routing tests override this result. All other API tests are
+    # about the governed data path and must not call a network provider merely
+    # because the production router now classifies every auto-mode turn first.
+    monkeypatch.setattr(
+        api_module.llm_qa,
+        "classify_question_route",
+        lambda *_args, **_kwargs: {
+            "route": "data",
+            "answer": None,
+            "classification_status": "classified",
+            "classification_reason": "test_data_route",
+            "llm_status": {"enabled": True, "model": "gpt-test"},
+        },
+    )
 
 
 def _apply_env(env_updates: dict[str, str | None]):
@@ -1490,20 +1504,8 @@ def test_assistant_chat_llm_mode_sanitizes_raw_json_answer(monkeypatch):
         _restore_env(original)
 
 
-def test_authenticated_general_question_is_answered_by_the_governed_model(monkeypatch):
-    """With a run loaded, the one assistant answers -- including general questions.
-
-    This test previously asserted the opposite: that "What is the capital of
-    France?" must reach answer_general_question and that answer_question must
-    NOT be called. That contract is what shipped the reported failure --
-    answer_general_question is blind by construction (no bundle, findings or
-    summary), so any question routed there is answered by a model that cannot
-    see the company, and questions like "summarize the board packet" leaked to
-    it and came back "that is private company data I do not hold".
-
-    There is one assistant now. It always holds the evidence, uses it for
-    company claims, and answers plain general questions from its own knowledge.
-    """
+def test_semantic_llm_route_answers_before_company_data_is_loaded(monkeypatch):
+    """A general turn is answered by the classifier without loading evidence."""
     original = _apply_env(
         {
             "STRATEGYOS_API_AUTH_ENABLED": "true",
@@ -1521,32 +1523,22 @@ def test_authenticated_general_question_is_answered_by_the_governed_model(monkey
         monkeypatch.setattr(
             api_module,
             "_resolve_qa_context",
-            lambda run_id: {
-                "bundle": object(),
-                "findings": [],
-                "kg_nodes": [],
-                "kg_edges": [],
-                "summary": {"run_id": "run-1"},
-                "run_id": "run-1",
-                "run_mode": "full",
-            },
-        )
-        monkeypatch.setattr(
-            api_module.llm_qa,
-            "answer_general_question",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(
-                AssertionError("the blind general model must not be reachable while a run is loaded")
+            lambda _run_id: (_ for _ in ()).throw(
+                AssertionError("the LLM route must not load company data")
             ),
         )
         monkeypatch.setattr(
             api_module.llm_qa,
-            "answer_question",
+            "classify_question_route",
             lambda *_args, **_kwargs: {
+                "route": "llm",
                 "matched": True,
                 "answer": "Paris is the capital of France.",
-                "basis": "General knowledge; no company evidence was required.",
+                "basis": "General assistant response; no company evidence used.",
                 "citations": [],
                 "suggestions": [],
+                "assistant_scope": "general",
+                "classification_status": "classified",
                 "llm_status": {"enabled": True, "model": "gpt-test"},
             },
         )
@@ -1559,22 +1551,23 @@ def test_authenticated_general_question_is_answered_by_the_governed_model(monkey
 
         assert response.status_code == 200
         payload = response.json()
-        assert "Paris" in payload["answer"], (
-            "a plain general question must still be answered, by the assistant "
-            "that holds the evidence rather than one that cannot see it"
-        )
+        assert payload["answer"] == "Paris is the capital of France."
+        assert payload["assistant_scope"] == "general"
+        assert payload["determinism_tier"] == "general"
+        assert payload["response_sections"] == {}
+        assert payload["citations"] == []
     finally:
         _restore_env(original)
 
 
-def test_social_model_response_stays_plain_in_the_executive_contract():
+def test_semantic_llm_response_stays_plain_in_the_executive_contract():
     result = {
         "matched": True,
         "answer": "Hello. How can I help?",
         "basis": "General assistant response.",
         "citations": [],
         "suggestions": [],
-        "assistant_scope": "social",
+        "assistant_scope": "general",
         "llm_status": {"enabled": True, "provider": "codex_cli", "model": "gpt-5.6-sol"},
     }
 
@@ -1590,12 +1583,10 @@ def test_social_model_response_stays_plain_in_the_executive_contract():
     )
 
     assert payload["answer"] == "Hello. How can I help?"
-    assert payload["assistant_scope"] == "social"
-    assert payload["determinism_tier"] == "social"
+    assert payload["assistant_scope"] == "general"
+    assert payload["determinism_tier"] == "general"
     assert payload["response_sections"] == {}
     assert payload["human_review_required"] is False
-
-
 def test_authenticated_assistant_explains_file_processing_workflow(monkeypatch):
     original, client = _client_with_auth()
     try:
@@ -4812,166 +4803,46 @@ def test_unresolved_identifier_never_reaches_general_knowledge_model(monkeypatch
         _restore_env(original)
 
 
-def test_governed_scope_is_decided_by_engines_not_a_keyword_list():
-    """A question the engines can answer must never be classed out-of-scope.
+def test_auto_chat_uses_semantic_data_route_before_governed_resolution(monkeypatch):
+    original, client = _client_with_auth()
+    calls = []
+    try:
+        monkeypatch.setattr(
+            api_module.llm_qa,
+            "classify_question_route",
+            lambda question, **_kwargs: calls.append(question) or {
+                "route": "data",
+                "answer": None,
+                "classification_status": "classified",
+                "classification_reason": "semantic_classification",
+                "llm_status": {"enabled": True, "model": "gpt-test"},
+            },
+        )
+        _findings_context(monkeypatch)
 
-Scope used to be decided by a hand-maintained token tuple that carried
-    "recovery"/"recoverable" but not the verb "recover", so "If we recover SAR
-    400,000, what remains?" was declared not-business and handed to the
-    general-knowledge model -- while the scenario engine that owns the question
-    never saw it. The tuple is gone; the engines decide.
-    """
-    from strategyos_mvp.models import Finding
-
-    finding = Finding(
-        finding_id="F-006",
-        title="FX hedge not applied for INV-2026-0577",
-        pattern_type="fx_hedge_missing",
-        vendor_id="V-900",
-        vendor_name="Bordeaux Wines & Spirits SARL",
-        leakage_sar=46488.0,
-        recoverable_sar=46488.0,
-        recoverable_usd=12396.0,
-        confidence=0.9,
-        classification="confirmed",
-        rationale="r",
-        remediation="m",
-        citations=[],
-        calculation={},
-        status="open",
-        challenges=[],
-    )
-    context = {"findings": [finding], "summary": {}}
-
-    governed = [
-        "If we recover SAR 400,000, what remains?",
-        "If we collect SAR 250,000, what is left?",
-        "What happens if we realise half of it?",
-        "What is F-006?",
-        "Elaborate on SAR 109.9M",
-    ]
-    for question in governed:
-        assert api_module._question_is_governed_business_question(question, context=context) is True, (
-            f"{question!r} is answerable from the governed run and must not be "
-            "routed to the general-knowledge model"
+        response = client.post(
+            "/assistant/chat",
+            headers={"X-API-Key": "operator-key"},
+            json={"question": "What is INV-2026-0577?", "persona": "ceo", "mode": "auto"},
         )
 
-    # Genuinely general questions must still reach the general model.
-    for question in ("What is the capital of France?", "Write me a poem"):
-        assert api_module._question_is_governed_business_question(question, context=context) is False, (
-            f"{question!r} carries no governed reference and should stay general"
-        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert calls == ["What is INV-2026-0577?"]
+        assert payload["answered_by"] == "governed_reference"
+        assert "F-006" in payload["answer"]
+    finally:
+        _restore_env(original)
 
 
-def test_recover_verb_is_scoped_to_the_scenario_engine():
-    """The exact phrasing the engine itself tells users to ask must be governed.
+def test_chat_scope_has_no_general_question_vocabulary_router():
+    import strategyos_mvp.llm_qa as llm_qa_module
 
-    Asserted against the scope decision directly, not through the chat route:
-    the general-knowledge branch only runs when a provider key is configured,
-    so a route-level test passes vacuously in CI whether or not the bug exists.
-    """
-    question = "If we recover SAR 400,000, what remains?"
-
-    assert not hasattr(api_module, "_ASSISTANT_BUSINESS_TOKENS"), (
-        "scope must not be decided by a hardcoded token list; reintroducing one "
-        "restores the class of bug where any unlisted phrasing about the "
-        "customer's own data is handed to the general-knowledge model"
-    )
-    assert api_module._question_is_governed_business_question(question) is True, (
-        "the scenario engine claims this question, so scope resolution must "
-        "keep it away from the general-knowledge model"
-    )
-
-
-def test_governed_run_owns_the_question_unless_it_is_general_knowledge():
-    """A CEO question must never be handed to the general-knowledge model.
-
-    "Summarize the board packet in plain English" was answered "the board
-    packet is private company data and is not available in my general
-    knowledge" -- the assistant apparently unable to reach its own evidence.
-    Scope tried to PROVE a question was governed and leaked everything it could
-    not prove. Proving governance is unbounded; proving general knowledge is
-    narrow. The burden now runs the safe way round.
-
-    The context here carries the real chat summary shape, which does NOT hold
-    the board_portal/publication keys that /runs/latest returns -- deriving
-    subjects from those keys is what let this leak past a passing test.
-    """
-    from strategyos_mvp.models import Finding
-
-    finding = Finding(
-        finding_id="F-006",
-        title="FX hedge not applied for INV-2026-0577",
-        pattern_type="fx_hedge_missing",
-        vendor_id="V-900",
-        vendor_name="Bordeaux Wines & Spirits SARL",
-        leakage_sar=46488.0,
-        recoverable_sar=46488.0,
-        recoverable_usd=12396.0,
-        confidence=0.9,
-        classification="confirmed",
-        rationale="r",
-        remediation="m",
-        citations=[],
-        calculation={},
-        status="open",
-        challenges=[],
-    )
-    context = {
-        "run_id": "run-1",
-        "findings": [finding],
-        "summary": {"run_id": "run-1", "requires_human_review": True},
-    }
-
-    for question in (
-        "Summarize the board packet in plain English",
-        "What should I worry about before the board meeting?",
-        "Explain our margin position",
-        "How are we doing?",
-    ):
-        assert api_module._question_is_governed_business_question(question, context=context) is True, (
-            f"{question!r} is about this business and must reach the governed "
-            "model, which holds the evidence"
-        )
-
-    for question in ("What is the capital of France?", "Write me a poem about the sea"):
-        assert api_module._question_is_governed_business_question(question, context=context) is False, (
-            f"{question!r} names nothing in the run and may reach general knowledge"
-        )
-
-    # With no run loaded there is nothing governed to protect.
-    assert api_module._question_is_governed_business_question(
-        "Summarize the board packet", context={"run_id": None, "findings": []}
-    ) is False
-
-
-def test_general_model_is_unreachable_while_a_run_is_loaded():
-    """One assistant. It always holds the run's evidence.
-
-    answer_general_question is structurally blind -- its signature takes only
-    (question, config, persona), with no bundle, findings or summary -- so any
-    question routed there is answered by a model that cannot see the company.
-    That produced "the board packet is private company data and is not
-    available in my general knowledge". Proving a question "general" is not
-    something scope can do reliably, so the blind path is simply unreachable
-    once a run is loaded: the governed model answers everything, using the
-    evidence for company claims and its own knowledge for plain general ones.
-    """
-    import inspect
-
-    source = inspect.getsource(api_module._assistant_chat_response)
-    branch = source[source.index('mode == "auto"') - 200 : source.index("general_status = llm_qa.chat_status(CONFIG)")]
-
-    assert 'not context.get("run_id")' in branch and 'not context.get("findings")' in branch, (
-        "the general-knowledge model must not be reachable while a governed "
-        "run is loaded; it cannot see the company's data"
-    )
-
-    signature = inspect.signature(api_module.llm_qa.answer_general_question)
-    assert "bundle" not in signature.parameters and "findings" not in signature.parameters, (
-        "guard premise: answer_general_question is blind by construction. If it "
-        "ever gains evidence parameters, revisit whether this guard is still needed"
-    )
+    assert not hasattr(api_module, "_GENERAL_KNOWLEDGE_RE")
+    assert not hasattr(api_module, "_question_is_general_knowledge")
+    assert not hasattr(api_module, "_question_is_governed_business_question")
+    assert not hasattr(llm_qa_module, "_SOCIAL_TURN_RE")
+    assert not hasattr(llm_qa_module, "_is_social_turn")
 
 
 def test_hermes_prompt_states_it_is_the_only_assistant_and_holds_evidence():

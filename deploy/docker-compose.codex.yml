@@ -26,7 +26,8 @@ services:
       STRATEGYOS_CODEX_MODEL: ${STRATEGYOS_CODEX_MODEL:-}
       STRATEGYOS_CODEX_REASONING_EFFORT: ${STRATEGYOS_CODEX_REASONING_EFFORT:-medium}
       STRATEGYOS_CODEX_TIMEOUT: 120
-      STRATEGYOS_CODEX_CONCURRENCY: 1
+      STRATEGYOS_CODEX_CONCURRENCY: ${STRATEGYOS_CODEX_CONCURRENCY:-2}
+      STRATEGYOS_CODEX_QUEUE_TIMEOUT: ${STRATEGYOS_CODEX_QUEUE_TIMEOUT:-15}
     volumes:
       - ${STRATEGYOS_CODEX_AUTH_DIR:?Set dedicated Codex auth directory}:/var/lib/strategyos-codex
     secrets: [codex_gateway_token]
@@ -35,8 +36,8 @@ services:
     tmpfs: ["/tmp:size=128m,mode=1777"]
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
-    mem_limit: 1g
-    cpus: 1.0
+    mem_limit: 1536m
+    cpus: 2.0
     pids_limit: 96
     restart: unless-stopped
     healthcheck:

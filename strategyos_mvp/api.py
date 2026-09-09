@@ -12170,10 +12170,11 @@ def _assistant_response_payload(
                 "assistant_mode":"governed_fact","answered_by":"governed_fact_selection",
                 "determinism_tier":"governed_fact" if base_result.get("matched") else "needs_evidence",
                 "response_sections":{},"executive_blocks":[]}
-    if (base_result or {}).get("assistant_scope") == "social":
-        # A model-backed greeting is conversation plumbing, not business
-        # advice. Preserve its plain answer instead of manufacturing advisory
-        # sections about missing benchmarks or company evidence.
+    plain_model_scope = str((base_result or {}).get("assistant_scope") or "")
+    if plain_model_scope == "general":
+        # The semantic router completed this turn without company evidence.
+        # Preserve its plain answer instead of manufacturing evidence or
+        # advisory sections.
         return sanitize_executive_payload({
             "status": "ok",
             "run_id": context["run_id"],
@@ -12183,7 +12184,7 @@ def _assistant_response_payload(
             "persona": persona,
             "mode": "llm",
             "assistant_mode": "llm",
-            "assistant_scope": "social",
+            "assistant_scope": plain_model_scope,
             "answer_origin": "llm",
             "answered_by": "llm",
             "matched": bool(base_result.get("matched", True)),
@@ -12195,7 +12196,7 @@ def _assistant_response_payload(
             "calculation_status": "not_applicable",
             "review_status": "not_required",
             "human_review_required": False,
-            "determinism_tier": "social",
+            "determinism_tier": plain_model_scope,
             "response_sections": {},
             "executive_blocks": [],
             "external_consultation": {"requested": False, "used": False},
@@ -13151,6 +13152,26 @@ async def _llm_answer_question_async(*args: Any, **kwargs: Any) -> dict[str, Any
         )
 
 
+async def _classify_assistant_question_async(
+    question: str,
+    *,
+    persona: str | None,
+) -> dict[str, Any]:
+    """Run the no-evidence semantic router without blocking the API loop."""
+    loop = asyncio.get_running_loop()
+    request_context = copy_context()
+    async with _LLM_PROVIDER_SEMAPHORE:
+        return await loop.run_in_executor(
+            _LLM_PROVIDER_EXECUTOR,
+            lambda: request_context.run(
+                llm_qa.classify_question_route,
+                question,
+                config=CONFIG,
+                persona=persona,
+            ),
+        )
+
+
 def _assistant_question_is_challenge_closure(question: str) -> bool:
     norm = " ".join(str(question or "").lower().split())
     asks_for_audit_status = (
@@ -14054,111 +14075,6 @@ def _governed_entity_index(context: Mapping[str, Any]) -> list[dict[str, Any]]:
     return entities
 
 
-_GOVERNED_IDENTIFIER_RE = re.compile(r"(?<![\w-])[A-Za-z]{1,4}-[0-9]{2,4}-?[0-9]*(?![\w-])")
-
-
-def _question_is_governed_business_question(
-    question: str,
-    *,
-    context: Mapping[str, Any] | None = None,
-) -> bool:
-    """Should this question be answered from the customer's governed run?
-
-    The burden of proof runs the safe way round. An earlier version tried to
-    prove a question WAS governed -- by identifier, amount, engine claim, or
-    the run's own nouns -- and handed everything it could not prove to the
-    general-knowledge model, which holds no company data. That is unbounded:
-    an executive can phrase a question about their own business in endlessly
-    many ways, and every phrasing the checks missed produced "the board packet
-    is private company data and is not available in my general knowledge" --
-    read, correctly, as the assistant failing to reach its own evidence.
-
-    So: while a governed run is loaded, the governed model owns the question.
-    It has the evidence and can say honestly what it does not carry. Only a
-    question that is demonstrably general knowledge -- no run loaded, or an
-    engine-recognised general topic that names nothing in the business -- may
-    reach the general model.
-    """
-    text = str(question or "").strip()
-    if not text:
-        return False
-    if _question_looks_like_governed_identifier(text):
-        return True
-    if _parse_amount_references(text):
-        return True
-    try:
-        if scenario_has_intent(text):
-            return True
-    except Exception:  # pragma: no cover - scoping must never break a chat turn
-        pass
-    try:
-        if qa_engine.claims_question(text):
-            return True
-    except Exception:  # pragma: no cover - scoping must never break a chat turn
-        pass
-    if not isinstance(context, Mapping):
-        return False
-    # No run, nothing governed to protect: a general question is all it can be.
-    if not context.get("run_id") and not context.get("findings"):
-        return False
-    # A run is loaded. Anything that touches this business belongs to the
-    # governed model; only clearly external general knowledge may pass.
-    return not _question_is_general_knowledge(text)
-
-
-_GENERAL_KNOWLEDGE_RE = re.compile(
-    r"\b(?:capital of|population of|who (?:is|was|won|invented|wrote)|"
-    r"what year|when did|where is|translate|meaning of the word|"
-    r"weather|joke|poem|recipe|定义)\b",
-    re.IGNORECASE,
-)
-
-
-def _question_is_general_knowledge(question: str) -> bool:
-    """A question answerable from world knowledge, naming nothing in the run.
-
-    Deliberately narrow. A false positive here sends a question about the
-    customer's money to a model with no access to it, which is the failure this
-    guard exists to prevent; a false negative merely sends trivia to the
-    governed model, which answers it anyway.
-    """
-    text = " ".join(str(question or "").casefold().split())
-    if not text:
-        return False
-    return bool(_GENERAL_KNOWLEDGE_RE.search(text))
-
-
-def _question_is_about_the_loaded_run(question: str, context: Mapping[str, Any]) -> bool:
-    """True when the question names the governed artifacts this run exposes.
-
-    The subjects come from the run itself -- the artifact/section names the
-    context actually carries -- not from a list kept here. Asking about "the
-    run" or "the findings" while a run is loaded is a question about that run.
-    """
-    text = " ".join(str(question or "").casefold().split())
-    if not text:
-        return False
-    subjects: set[str] = set()
-    if context.get("run_id"):
-        subjects.add("run")
-    if context.get("findings"):
-        subjects.update({"finding", "findings", "case", "cases"})
-    for entity in _governed_entity_index_safe(context):
-        # Entity labels are the run's own nouns: KPI names ("Cash vs floor"),
-        # component rows, vendors. Their words are what this run is about.
-        for word in re.findall(r"[a-z]{3,}", str(entity.get("label") or "").casefold()):
-            subjects.add(word)
-    summary = context.get("summary")
-    if isinstance(summary, Mapping):
-        for key in summary.keys():
-            token = str(key).strip().casefold()
-            # Summary keys are the run's own section names (finance_kpi,
-            # publication, ...); their words are legitimate run subjects.
-            for word in re.findall(r"[a-z]{4,}", token):
-                subjects.add(word)
-    return any(re.search(r"\b" + re.escape(subject) + r"\b", text) for subject in subjects)
-
-
 def _question_asks_for_causation(question: str) -> bool:
     """Does the question ask WHY something moved, rather than WHAT it is?
 
@@ -14185,17 +14101,6 @@ def _governed_entity_index_safe(context: Mapping[str, Any]) -> list[dict[str, An
         return _governed_entity_index(context)
     except Exception:  # pragma: no cover - defensive
         return []
-
-
-def _question_looks_like_governed_identifier(question: str) -> bool:
-    """True when the question is about a record id (F-006, INV-2026-0577).
-
-    Such a question carries no finance keyword, so the business-scope check
-    routes it to the general-knowledge model, which has no governed evidence
-    and will invent plausible finance detail for the id. An identifier that did
-    not resolve in the run must fail closed instead.
-    """
-    return bool(_GOVERNED_IDENTIFIER_RE.search(str(question or "")))
 
 
 def _as_float_or_none(value: Any) -> float | None:
@@ -14636,7 +14541,6 @@ def _governed_subject_result(
         public_safe
         or _question_requires_analytical_result(question)
         or _assistant_question_requests_modelling(question)
-        or _question_is_general_knowledge(question)
         or _question_asks_what_to_do_about_cost(question)
     ):
         return None
@@ -15292,15 +15196,6 @@ def _free_text_ceo_kpi_key(
     # call sites because two separate branches consume this key.
     if _question_asks_for_causation(question):
         return None
-    # A compound question -- "what is revenue AND the capital of Japan?" -- names
-    # a KPI but also carries a second, unrelated ask. The KPI card answers the
-    # first half cleanly and silently drops the rest, so the executive never
-    # sees their second question acknowledged. When general-knowledge intent
-    # rides alongside the KPI term, defer to the reviewed LLM path, which
-    # answers every part. A plain "what is revenue?" carries no such intent and
-    # still routes here.
-    if _question_is_general_knowledge(question):
-        return None
     cards = _ceo_kpi_cards(context or {}, public_safe=public_safe)
     normalized_question = re.sub(
         r"[?.!]+$",
@@ -15402,6 +15297,36 @@ async def _assistant_chat_response(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Unsupported assistant persona '{persona}'.",
         )
+
+    # The authenticated conversational surface has one semantic routing
+    # boundary. It sees only the user's message. A general turn is answered in
+    # that same provider call; a data turn proceeds to the governed context
+    # below. Invalid or unavailable classification returns the data route, so
+    # model failure can never expose company evidence to the general path.
+    if not public_safe and mode == "auto":
+        route_result = await _classify_assistant_question_async(
+            question,
+            persona=persona,
+        )
+        if route_result.get("route") == "llm":
+            general_context = {
+                "run_id": request.run_id,
+                "run_mode": "general",
+            }
+            payload = _assistant_response_payload(
+                response_mode="llm",
+                question=question,
+                context=general_context,
+                requested_mode=mode,
+                persona=persona,
+                orchestrated=None,
+                base_result=route_result,
+                llm_status=route_result.get("llm_status"),
+                assistant_context=assistant_context,
+            )
+            payload["llm_fallback_attempted"] = False
+            payload["llm_general_answer"] = True
+            return payload
 
     from .assistant_scope import current_scope
     from .authority_matrix import DOMAINS
@@ -15946,54 +15871,6 @@ async def _assistant_chat_response(
         )
         payload["llm_fallback_attempted"] = False
         return payload
-
-    # mode="llm" is an explicit request for the governed model path (bundle +
-    # findings). Only mode="auto" may fall through to general knowledge, and
-    # only for a question no governed component claims.
-    if (
-        not public_safe
-        and mode == "auto"
-        and not context.get("run_id")
-        and not context.get("findings")
-        and not _question_is_governed_business_question(question, context=context)
-    ):
-        general_status = llm_qa.chat_status(CONFIG)
-        if general_status.get("enabled"):
-            authorized_context = copy_context()
-            general_result = await asyncio.get_running_loop().run_in_executor(
-                _LLM_PROVIDER_EXECUTOR,
-                lambda: authorized_context.run(llm_qa.answer_general_question,
-                    question,
-                    config=CONFIG,
-                    persona=persona,
-                ),
-            )
-            orchestrated = orchestrator.process(
-                question,
-                persona=persona,
-                llm_result={**general_result, "assistant_mode": "llm", "answered_by": "llm"},
-                driver_context=driver_context,
-            )
-            payload = _assistant_response_payload(
-                response_mode="llm",
-                question=question,
-                context=context,
-                requested_mode=mode,
-                persona=persona,
-                orchestrated=orchestrated,
-                base_result=general_result,
-                llm_status=general_result.get("llm_status") or general_status,
-                assistant_context=assistant_context,
-            )
-            payload["mode"] = "llm"
-            payload["llm_fallback_attempted"] = True
-            payload["llm_general_answer"] = True
-            return payload
-        if mode == "llm":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=general_status.get("reason") or "LLM chat is not configured.",
-            )
 
     scenario_result = None
     if mode in {"auto", "deterministic"} and not explicit_advisory_request:
