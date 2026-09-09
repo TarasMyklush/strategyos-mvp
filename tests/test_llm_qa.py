@@ -2158,3 +2158,27 @@ def test_claim_backed_qa_rejects_fabricated_citation_numbers(monkeypatch):
     assert result["matched"] is False
     assert result["claim_validation"] == "rejected"
     assert result["citations"] == []
+
+
+@pytest.mark.parametrize('intent', ['facts', 'scenario', 'context'])
+def test_semantic_retrieval_plan_preserves_question_and_uses_only_available_categories(monkeypatch, intent):
+    catalog = [{'metric_key': 'new.dataset.metric', 'record_count': 500}]
+    def provider(**kwargs):
+        request = json.loads(kwargs['messages'][-1]['content'])
+        assert request['question'] == 'Natural words, not metric names' and request['directory'] == catalog
+        return json.dumps({'intent': intent, 'metric_keys': ['new.dataset.metric']})
+    monkeypatch.setattr(llm_qa, '_call_openai_compatible_chat', provider)
+    result = llm_qa.plan_claim_retrieval('Natural words, not metric names', catalog=catalog, config=_config())
+    assert result == {'intent': intent, 'metric_keys': frozenset({'new.dataset.metric'})}
+
+
+@pytest.mark.parametrize('response', [
+    {'intent': 'facts', 'metric_keys': ['fabricated.metric']},
+    {'intent': 'invent', 'metric_keys': ['valid.metric']},
+    {'metric_keys': ['valid.metric']},
+    {'intent': 'facts', 'metric_keys': ['valid.metric'], 'answer': 'Invented company value'},
+])
+def test_semantic_retrieval_plan_rejects_unavailable_categories_and_extra_assertions(monkeypatch, response):
+    monkeypatch.setattr(llm_qa, '_call_openai_compatible_chat', lambda **kwargs: json.dumps(response))
+    with pytest.raises(RuntimeError):
+        llm_qa.plan_claim_retrieval('Question', catalog=[{'metric_key': 'valid.metric'}], config=_config())

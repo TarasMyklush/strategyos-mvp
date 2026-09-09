@@ -22,6 +22,13 @@ def test_twin_investigation_denies_restricted_question_before_saved_work(monkeyp
 
 
 def test_scoped_twin_cards_and_answers_use_only_immutable_facts(monkeypatch):
+    import json
+    from strategyos_mvp import llm_qa, model_policy
+    from tests.test_llm_qa import _config
+    monkeypatch.setattr(api, 'CONFIG', _config())
+    monkeypatch.setattr(model_policy, 'evidence_model_access', lambda _: True)
+    selections = iter([{'matched':True,'fact_refs':['r']}, {'matched':False,'fact_refs':[]}])
+    monkeypatch.setattr(llm_qa, '_call_openai_compatible_chat', lambda **kwargs: json.dumps(next(selections)))
     record={'claim_revision_id':'r','traceability':'present','value_type':'numeric','value':'120','scale':'1',
         'unit':'SAR','currency':'SAR','metric_key':'finance.revenue','subject':{'type':'client','key':'NUPCO'},
         'claim_kind':'actual','label':'Actual','sources':[]}
@@ -32,7 +39,7 @@ def test_scoped_twin_cards_and_answers_use_only_immutable_facts(monkeypatch):
     assert cards[0]['raw_value']=='120'
     assert cards[0]['health']=='unassessed' and cards[0]['threshold'] is None
     result=strategyos_data.compose_investigation_payload('cfo','Revenue for NUPCO?')
-    assert '120 SAR' in result['response']['summary']
+    assert 'SAR 120' in result['response']['summary']
     assert result['evidence'][0]['claim_revision_id']=='r'
     assert result['board']['status']=='unavailable'
     missing=strategyos_data.compose_investigation_payload('cfo','Unrelated topic?')

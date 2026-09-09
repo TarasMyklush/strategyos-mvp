@@ -2801,6 +2801,10 @@
 
   function qaAnswerMeta(payload) {
     if (!payload || typeof payload !== 'object') return "";
+    // These responses already have an explicit source/status badge. Governed
+    // facts also have their own resolvable citations, so no inferred confidence
+    // panel or second Evidence control belongs below them.
+    if (payload.fact_contract || payload.assistant_scope === 'general' || payload.answer_status === 'service_error') return "";
     var parts = [];
     var basis = cleanMetaText(firstDefined(payload.basis, payload.trace && payload.trace.basis));
     var calculations = safeArray(payload.calculations);

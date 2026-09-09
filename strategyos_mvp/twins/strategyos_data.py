@@ -432,12 +432,22 @@ def compose_investigation_payload(role: str, query: str) -> dict[str, Any]:
             "linked_finding_ids": [],
         }
     if 'fact_registry' in surface:
-        from ..fact_rendering import select_candidates, render_selection
-        facts = select_candidates(surface['fact_registry'], query, limit=3, require_match=True)
-        rendered = render_selection({'matched':bool(facts),'fact_refs':list(facts)},facts,
-            run_id=surface['summary'].get('run_id'))
+        from types import SimpleNamespace
+        from .. import llm_qa
+        try:
+            rendered = llm_qa.answer_question(query,
+                bundle=SimpleNamespace(authorized_claim_records=tuple(
+                    fact['record'] for fact in surface['fact_registry'].values())),
+                findings=[], summary=surface['summary'], config=_strategyos_api().CONFIG,
+                persona=_view_state(role)['persona'])
+            mode = 'policy' if rendered.get('policy_denied') else 'governed_fact' if rendered.get('matched') else 'needs_evidence'
+            if (rendered.get('llm_status') or {}).get('enabled') is False and mode != 'policy':
+                mode = 'service_error'
+        except RuntimeError:
+            rendered = {'answer':'The language service could not finish reading the evidence. Please retry.', 'citations':[]}
+            mode = 'service_error'
         return {'data_source':'authorized_claim_snapshot','source_status':'current_run','bounded_fallback':False,
-                'response':{'summary':rendered['answer'],'mode':'governed_fact',
+                'response':{'summary':rendered['answer'],'mode':mode, 'determinism_tier':mode,
                             'fact_cells':rendered.get('fact_cells',[])},
                 'run_context':build_run_context(surface),
                 'board':{'status':'unavailable','reason':'No domain-classified board projection supplied.'},

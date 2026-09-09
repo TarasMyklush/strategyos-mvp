@@ -5912,13 +5912,14 @@ def test_assistant_claim_hydration_has_no_literal_keyword_gate(monkeypatch):
     monkeypatch.setattr(model_policy, 'evidence_model_access', lambda _: True)
     def select(question, **kwargs):
         assert question == 'tell me about this in ordinary language' and kwargs['catalog'] == catalog
-        return frozenset({'newly_ingested.unexpected_metric'})
-    monkeypatch.setattr(api_module.llm_qa, 'select_claim_metrics', select)
+        return {'intent': 'facts', 'metric_keys': frozenset({'newly_ingested.unexpected_metric'})}
+    monkeypatch.setattr(api_module.llm_qa, 'plan_claim_retrieval', select)
     context = PolicyContext('tenant-a', 'reader', frozenset({'executive'}), UsePurpose.EXECUTIVE_BRIEFING,
         business_units=frozenset({'east'}))
-    selected = api_module._assistant_claim_metric_keys('tell me about this in ordinary language',
+    selected = api_module._assistant_claim_retrieval_plan('tell me about this in ordinary language',
         run_id='run', context=context, summary={})
-    assert 'newly_ingested.unexpected_metric' in selected
+    assert 'newly_ingested.unexpected_metric' in selected['metric_keys']
+    assert selected['intent'] == 'facts'
 
 
 @pytest.mark.parametrize('service_failure', [False, True])
@@ -5944,3 +5945,27 @@ def test_governed_chat_failures_never_become_source_backed_facts(monkeypatch, se
     assert payload['matched'] is False
     assert payload['determinism_tier'] == ('service_error' if service_failure else 'needs_evidence')
     assert payload['citations'] == []
+
+
+@pytest.mark.parametrize('question,matched', [
+    ('Show actual and budgeted EBITDA for January to June 2026', True),
+    ('What is our EBITDA for 2029?', False),
+])
+def test_semantic_fact_plan_cannot_be_overridden_by_legacy_scenario_words(monkeypatch, question, matched):
+    import asyncio
+    monkeypatch.setattr(api_module, '_resolve_qa_context', lambda _: {
+        'bundle': SimpleNamespace(authorized_claim_records=[]), 'findings': [],
+        'summary': {'run_id': 'run'}, 'run_id': 'run', 'run_mode': 'full',
+        'assistant_data_intent': 'facts', 'kg_nodes': [], 'kg_edges': []})
+    monkeypatch.setattr(api_module, 'parse_scenario', lambda *a, **k: pytest.fail('Fact lookup entered the legacy scenario parser'))
+    monkeypatch.setattr(api_module, '_ceo_kpi_inline_result', lambda *a, **k: pytest.fail('Fact lookup entered a KPI keyword override'))
+    answer = {'matched': matched, 'fact_contract': 'governed-fact-selection-v1',
+              'answer': 'Exact period-specific facts' if matched else 'Requested period is unavailable', 'citations': []}
+    async def provider(*a, **k):
+        assert a[0] == question
+        return answer
+    monkeypatch.setattr(api_module, '_llm_answer_question_async', provider)
+    payload = asyncio.run(api_module._assistant_chat_response(
+        api_module.AssistantChatRequest(question=question, persona='ceo', mode='auto')))
+    assert payload['answer'] == answer['answer'] and payload['matched'] == matched
+    assert payload['determinism_tier'] == ('governed_fact' if matched else 'needs_evidence')

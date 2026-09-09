@@ -11679,7 +11679,7 @@ def _hydrate_governed_qa_context(
         ),
     )
     try:
-        metric_keys = _assistant_claim_metric_keys(question, run_id=run_id, context=policy_context, summary=summary) if question is not None else None
+        retrieval_plan = _assistant_claim_retrieval_plan(question, run_id=run_id, context=policy_context, summary=summary) if question is not None else None
     except PermissionError as exc:
         raise HTTPException(403, str(exc)) from exc
     except RuntimeError as exc:
@@ -11688,7 +11688,7 @@ def _hydrate_governed_qa_context(
         snapshot = ClaimRepository().snapshot(
             f"run:{run_id}",
             context=policy_context,
-            metric_keys=metric_keys,
+            metric_keys=retrieval_plan["metric_keys"] if retrieval_plan is not None else None,
         )
     except (KeyError, RuntimeError):
         raise HTTPException(
@@ -11712,12 +11712,14 @@ def _hydrate_governed_qa_context(
     context["governed_claim_record_count"] = len(records)
     context["governed_claim_denied_count"] = int(snapshot.get("denied_count") or 0)
     context["data_boundary"] = "authorized_claim_snapshot"
+    if retrieval_plan is not None:
+        context["assistant_data_intent"] = retrieval_plan["intent"]
     return context
 
 
-def _assistant_claim_metric_keys(
+def _assistant_claim_retrieval_plan(
     question: str, *, run_id: str, context: PolicyContext, summary: Mapping[str, Any]
-) -> frozenset[str] | None:
+) -> dict[str, Any] | None:
     """Semantic category selection over the complete authorized run directory.
 
     Presentation claims are retained to reconstruct executive controls. They
@@ -11730,8 +11732,8 @@ def _assistant_claim_metric_keys(
         return None
     catalog = ClaimRepository().snapshot_metric_catalog(
         run_id, context=replace(context, purpose=UsePurpose.EXTERNAL_MODEL))
-    selected = llm_qa.select_claim_metrics(question, catalog=catalog, config=CONFIG)
-    return selected | FINANCE_HEADLINE_METRIC_KEYS | FINANCE_PRESENTATION_METRIC_KEYS
+    plan = llm_qa.plan_claim_retrieval(question, catalog=catalog, config=CONFIG)
+    return {**plan, "metric_keys": plan["metric_keys"] | FINANCE_HEADLINE_METRIC_KEYS | FINANCE_PRESENTATION_METRIC_KEYS}
 
 
 def _resolve_public_assistant_context(
@@ -15438,6 +15440,20 @@ async def _assistant_chat_response(
             context = await asyncio.to_thread(_hydrate_governed_qa_context, context,
                 principal=principal_context, question=question if mode != "deterministic" else None)
     llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
+
+    if not public_safe and mode != "deterministic" and context.get("assistant_data_intent") == "facts":
+        # The semantic planner owns free-form fact lookup. Legacy scenario/KPI
+        # keyword rules must not replace its requested metric or reporting period.
+        try:
+            result = await _llm_answer_question_async(question, bundle=context["bundle"],
+                findings=context["findings"], summary=context["summary"], config=CONFIG, persona=persona)
+        except RuntimeError:
+            result = {"answer_status": "service_error",
+                      "answer": "I could not finish reading the evidence because the language service failed. Please retry.",
+                      "basis": "Service failure; no conclusion about the available evidence was made."}
+        return _assistant_response_payload(response_mode="llm", question=question, context=context,
+            requested_mode=mode, persona=persona, orchestrated=None, base_result=result,
+            llm_status=result.get("llm_status") or llm_status, assistant_context=assistant_context)
 
     if _question_has_semantic_kpi_mismatch(question) or _question_has_semantic_self_reference(question):
         relevance_result = (
