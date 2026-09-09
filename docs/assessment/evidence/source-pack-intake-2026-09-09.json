@@ -1,6 +1,6 @@
 {
   "schema_version": "strategyos-source-pack-intake-evidence-v1",
-  "recorded_at": "2026-09-09T10:59:00Z",
+  "recorded_at": "2026-09-09T11:19:06Z",
   "source": {
     "path": "/Users/taras/Desktop/Taras/SPsoft/Enterprise OS/Input Folder/09.09.2026/StrategyOS POC",
     "source_key": "strategyos-poc-2026-09-09",
@@ -160,12 +160,12 @@
   "release_verification": {
     "preview_url": "https://new.strategyos.live",
     "production_changed": false,
-    "revision": "35079e9b9c51869ebb49fb36b94a3a0734f58609",
-    "image": "ghcr.io/tarasmyklush/strategyos-mvp@sha256:513c0525e4b09b988527e5c0a4650d26c49a0baf3c0fcd27b0eeb4d3fcf2d2bf",
-    "workflow_id": 34337184348,
-    "workflow_url": "https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34337184348",
+    "revision": "801364cb796eb3ee5354f3a035b15d6bb7b1230a",
+    "image": "ghcr.io/tarasmyklush/strategyos-mvp@sha256:55feccca8e0dcb0b7ed4b57d3a471df048ae53ba9d5711390839afd9984db382",
+    "workflow_id": 34343182494,
+    "workflow_url": "https://github.com/TarasMyklush/strategyos-mvp/actions/runs/34343182494",
     "workflow_status": "success",
-    "service_test_count": 2630,
+    "service_test_count": 2631,
     "service_test_skip_count": 0,
     "executive_chromium_walkthrough": "passed",
     "intent_lifecycle_chromium_walkthrough": "passed",
@@ -179,17 +179,24 @@
       "authorized_by": "user",
       "authorized_at": "2026-09-09T10:57:48.045809+00:00",
       "capture_method": "folder_import",
+      "database_policy_version": 2,
       "policy_fingerprint": "source-policy:a6a3222a4d40a5daeccf876947a84f97b81096ae8d5301df92533b7ecddecc2b",
       "export_allowed": false,
       "quote_allowed": false,
       "storage_allowed": true,
-      "index_allowed": true
+      "index_allowed": true,
+      "registration_run_id": "64d8a7af-5b21-476c-9691-a20ca92f223a",
+      "registration_job_id": "e1167dea-f0d1-4d1c-8346-08c49fc07d03",
+      "registration_hatchet_run_id": "9b571506-64fc-4eff-9dba-0b99d012667f",
+      "registration_run_summary_sha256": "58d9a1e5ac9cd634c56e4a65ed5bd30c4c718d0ecd41606073ea7f67496263b0",
+      "registration_run_status": "awaiting_review",
+      "registration_run_approval_status": "pending"
     },
     "approved_run_preserved_while_candidate_pending": {
       "route": "/runs/latest",
       "http_status": 200,
       "approved_run_id": "8627f532-b199-4278-b8ff-89dac2d5f5a3",
-      "candidate_run_id": "ff6bce51-f169-4acd-b58b-85a2864da2b6",
+      "candidate_run_id": "64d8a7af-5b21-476c-9691-a20ca92f223a",
       "candidate_status": "awaiting_review",
       "candidate_approval_status": "pending"
     },
