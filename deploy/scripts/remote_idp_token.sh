@@ -14,40 +14,33 @@ case "${ROLE}" in
     ;;
 esac
 
-ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && STRATEGYOS_IDP_TOKEN_ROLE='${ROLE}' python3 -" <<'PY'
+if [[ "${TARGET_DIR}" == /opt/strategyos-branch ]]; then
+  IDP_CONTAINER="strategyos-branch-strategyos-idp-1"
+else
+  IDP_CONTAINER="strategyos-strategyos-idp-1"
+fi
+
+ssh ${SSH_OPTS} "${TARGET_HOST}" \
+  "docker exec -i '${IDP_CONTAINER}' env STRATEGYOS_IDP_TOKEN_ROLE='${ROLE}' python -" <<'PY'
 from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
+import time
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+from urllib.error import URLError
 
-
-def load_env(path: Path) -> dict[str, str]:
-    values: dict[str, str] = {}
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        values[key] = value
-    return values
-
-
-config = load_env(Path("deploy/.env"))
-secrets = load_env(Path("deploy/.env.secrets"))
 role = os.environ["STRATEGYOS_IDP_TOKEN_ROLE"].upper()
-token_port = config.get("STRATEGYOS_IDP_HTTP_PORT", "8089")
-token_url = config.get("STRATEGYOS_IDP_HOST_TOKEN_URL", f"http://127.0.0.1:{token_port}/oauth/token")
+token_url = "http://127.0.0.1:9000/oauth/token"
 
 payload = urlencode(
     {
         "grant_type": "password",
-        "client_id": config["STRATEGYOS_IDP_CLIENT_ID"],
-        "client_secret": secrets["STRATEGYOS_IDP_CLIENT_SECRET"],
-        "username": config[f"STRATEGYOS_IDP_{role}_USERNAME"],
-        "password": secrets[f"STRATEGYOS_IDP_{role}_PASSWORD"],
+        "client_id": os.environ["STRATEGYOS_IDP_CLIENT_ID"],
+        "client_secret": os.environ["STRATEGYOS_IDP_CLIENT_SECRET"],
+        "username": os.environ[f"STRATEGYOS_IDP_{role}_USERNAME"],
+        "password": os.environ[f"STRATEGYOS_IDP_{role}_PASSWORD"],
     }
 ).encode("utf-8")
 
@@ -58,8 +51,15 @@ request = Request(
     method="POST",
 )
 
-with urlopen(request, timeout=10) as response:
-    body = json.loads(response.read().decode("utf-8"))
+for attempt in range(10):
+    try:
+        with urlopen(request, timeout=10) as response:
+            body = json.loads(response.read().decode("utf-8"))
+        break
+    except URLError:
+        if attempt == 9:
+            raise
+        time.sleep(1)
 
 print(body["access_token"])
 PY
