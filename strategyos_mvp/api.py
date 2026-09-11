@@ -15416,6 +15416,57 @@ async def _assistant_chat_response(
             detail=f"Unsupported assistant persona '{persona}'.",
         )
 
+    if explicit_advisory_request and not public_safe:
+        # Public research is deliberately independent of the private evidence
+        # plane. Compiling the closed catalogue request needs the user's local
+        # question, but it must not first load a run, claims, attachments, or a
+        # full briefing. Besides avoiding an unnecessary authorization failure,
+        # this makes it structurally impossible for retrieved client evidence
+        # to become part of the outbound research request.
+        context = {
+            "bundle": None,
+            "findings": [],
+            "kg_nodes": [],
+            "kg_edges": [],
+            "summary": {
+                "run_id": request.run_id,
+                "run_mode": "public-research",
+                "status": "not_loaded",
+            },
+            "run_id": request.run_id,
+            "run_mode": "public-research",
+        }
+        llm_status = llm_qa.chat_status(CONFIG)
+        from . import research
+        try:
+            research_result = await asyncio.to_thread(research.run, question)
+        except research.ResearchDenied as exc:
+            return _unavailable_public_research_payload(
+                question,
+                str(exc),
+                context=context,
+                persona=persona,
+                requested_mode=mode,
+                llm_status=llm_status,
+            )
+        except research.ResearchUnavailable as exc:
+            return _unavailable_public_research_payload(
+                question,
+                str(exc),
+                context=context,
+                persona=persona,
+                requested_mode=mode,
+                llm_status=llm_status,
+            )
+        return _public_research_payload(
+            question,
+            research_result,
+            context=context,
+            persona=persona,
+            requested_mode=mode,
+            llm_status=llm_status,
+        )
+
     # The authenticated conversational surface has one semantic routing
     # boundary. It sees only the user's message. A general turn is answered in
     # that same provider call; a data turn proceeds to the governed context
@@ -15551,37 +15602,6 @@ async def _assistant_chat_response(
             context = await asyncio.to_thread(_hydrate_governed_qa_context, context,
                 principal=principal_context, question=question if mode != "deterministic" else None)
     llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
-
-    if explicit_advisory_request and not public_safe:
-        from . import research
-        try:
-            research_result = await asyncio.to_thread(research.run, question)
-        except research.ResearchDenied as exc:
-            return _unavailable_public_research_payload(
-                question,
-                str(exc),
-                context=context,
-                persona=persona,
-                requested_mode=mode,
-                llm_status=llm_status,
-            )
-        except research.ResearchUnavailable as exc:
-            return _unavailable_public_research_payload(
-                question,
-                str(exc),
-                context=context,
-                persona=persona,
-                requested_mode=mode,
-                llm_status=llm_status,
-            )
-        return _public_research_payload(
-            question,
-            research_result,
-            context=context,
-            persona=persona,
-            requested_mode=mode,
-            llm_status=llm_status,
-        )
 
     if not public_safe and mode != "deterministic" and context.get("assistant_data_intent") == "facts":
         # The semantic planner owns free-form fact lookup. Legacy scenario/KPI

@@ -1,4 +1,5 @@
 import json
+import asyncio
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -214,3 +215,52 @@ def test_completed_research_is_the_only_path_marked_used():
         assistant_context={"allow_external_advisory": True},
     )
     assert generic["external_consultation"]["used"] is False
+
+
+def test_explicit_research_never_loads_private_briefing(monkeypatch):
+    from strategyos_mvp import api
+
+    def private_briefing_must_not_be_loaded(_run_id):
+        raise AssertionError("public research touched the private evidence plane")
+
+    monkeypatch.setattr(api, "_resolve_qa_context", private_briefing_must_not_be_loaded)
+    monkeypatch.setattr(research, "run", lambda _question: {
+        "audit_trail_id": "audit-1",
+        "gateway_request_id": "gateway-1",
+        "source_set_id": "wikipedia_public_v1",
+        "query": "market concentration Herfindahl distribution channels",
+        "outbound_contract": {
+            "topic_id": "channel_concentration",
+            "geography_id": "global",
+            "period_id": "current",
+            "language": "en",
+            "source_set_id": "wikipedia_public_v1",
+        },
+        "sources": [{
+            "title": "Herfindahl–Hirschman index",
+            "url": "https://en.wikipedia.org/wiki/Herfindahl%E2%80%93Hirschman_index",
+            "excerpt": "Public information.",
+        }],
+    })
+
+    payload = asyncio.run(api._assistant_chat_response(
+        api.AssistantChatRequest(
+            persona="ceo",
+            mode="auto",
+            question=(
+                "ProTec concentration is 87.4%, above the confidential board limit. "
+                "What does external benchmark practice suggest?"
+            ),
+            assistant_context={"allow_external_advisory": True},
+        ),
+        authenticated_role="operator",
+        authenticated_principal={
+            "authenticated": True,
+            "role": "operator",
+            "subject": "hosted-probe",
+            "tenant_id": "strategyos-live",
+        },
+    ))
+
+    assert payload["external_consultation"]["status"] == "completed"
+    assert payload["run_mode"] == "public-research"
