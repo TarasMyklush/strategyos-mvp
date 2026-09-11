@@ -450,7 +450,10 @@ services:
     restart: unless-stopped
 
   minio-create-bucket:
-    image: minio/mc:latest
+    # Docker Hub's minio/mc repository is archived and can intermittently
+    # reject pulls. MinIO publishes current client images on Quay; use an
+    # explicit release tag so deploys do not depend on a mutable latest tag.
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
     depends_on:
       - minio
     entrypoint: >

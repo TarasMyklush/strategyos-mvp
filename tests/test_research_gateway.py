@@ -167,6 +167,16 @@ def test_deployment_gives_only_gateway_external_egress():
     assert gateway["read_only"] is True
 
 
+def test_minio_bucket_client_uses_published_immutable_release():
+    from pathlib import Path
+    import yaml
+
+    compose = yaml.safe_load(Path("deploy/docker-compose.yml").read_text())
+    image = compose["services"]["minio-create-bucket"]["image"]
+    assert image.startswith("quay.io/minio/mc:RELEASE.")
+    assert not image.endswith(":latest")
+
+
 def test_completed_research_is_the_only_path_marked_used():
     from types import SimpleNamespace
     from strategyos_mvp import api
