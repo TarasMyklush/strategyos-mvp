@@ -72,8 +72,14 @@ def main() -> int:
             # binding. A visible static launcher is therefore not sufficient
             # proof that the application is interactive yet.
             expect(page.locator("#driver-row")).to_contain_text("Revenue", timeout=45_000)
-            page.locator("#chat-launcher").wait_for(state="visible", timeout=10_000)
-            page.locator("#chat-launcher").click()
+            # The fixed dock is intentionally replaced by the top-bar launcher
+            # between 981px and 1799px. Exercise whichever production control
+            # is visible at the configured viewport.
+            launcher = page.locator(
+                "#topbar-assistant-launch:visible, #chat-launcher:visible"
+            ).first
+            launcher.wait_for(state="visible", timeout=10_000)
+            launcher.click()
             page.locator("#assistant-drawer.is-open").wait_for(state="visible", timeout=10_000)
             page.locator("#assistant-input").fill(question)
             page.locator("#assistant-form button[type=submit]").click()
