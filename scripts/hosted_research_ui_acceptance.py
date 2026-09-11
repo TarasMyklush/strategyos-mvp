@@ -68,12 +68,26 @@ def main() -> int:
             passed("Authorized executive signs in through the hosted UI")
 
             page.goto(urljoin(base_url, "app?persona=ceo"), wait_until="domcontentloaded")
-            # DOMContentLoaded precedes the executive packet and event-handler
-            # binding. A visible static launcher is therefore not sufficient
-            # proof that the application is interactive yet.
-            page.locator(
-                '#driver-row [data-driver-key="revenue"]'
-            ).wait_for(state="visible", timeout=45_000)
+            # DOMContentLoaded precedes both the executive packet and Hermes
+            # binding. Research remains usable when an unapproved briefing is
+            # deliberately withheld, so accept either a rendered KPI or the
+            # explicit unavailable state, but only once Hermes is interactive.
+            page.wait_for_function(
+                """() => {
+                  const contentReady = Boolean(
+                    document.querySelector('#driver-row [data-driver-key="revenue"]') ||
+                    document.querySelector('#briefing-unavailable-state:not([hidden])')
+                  );
+                  const launcher = Array.from(document.querySelectorAll(
+                    '#topbar-assistant-launch, #chat-launcher'
+                  )).find(node => {
+                    const style = window.getComputedStyle(node);
+                    return style.display !== 'none' && style.visibility !== 'hidden';
+                  });
+                  return contentReady && launcher && typeof launcher.onclick === 'function';
+                }""",
+                timeout=45_000,
+            )
             # The fixed dock is intentionally replaced by the top-bar launcher
             # between 981px and 1799px. Exercise whichever production control
             # is visible at the configured viewport.

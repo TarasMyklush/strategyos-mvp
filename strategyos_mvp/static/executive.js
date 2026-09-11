@@ -7590,9 +7590,12 @@
       unavailablePanel.hidden = false;
       unavailablePanel.innerHTML = '<h1>Briefing unavailable</h1><p>'
         + escapeHtml(state.briefingUnavailable)
-        + '</p><p>No previous financial view is being presented as current.</p><p><a href="/claims">Inspect individually authorized claims</a></p><button type="button">Retry</button>';
+        + '</p><p>No previous financial view is being presented as current.</p><p>Hermes remains available for governed public research; it does not substitute for an approved briefing.</p><p><a href="/claims">Inspect individually authorized claims</a></p><button type="button">Retry briefing</button>';
       unavailablePanel.querySelector("button").onclick = function () { refresh(false); };
-      if ($("assistant-dock")) $("assistant-dock").hidden = true;
+      updateDocumentTitle();
+      renderTopbar();
+      if ($("assistant-dock")) $("assistant-dock").hidden = false;
+      renderAssistantStudio();
       return;
     }
     if (unavailablePanel) unavailablePanel.hidden = true;
@@ -7765,6 +7768,7 @@
         loadGranularIntentSummary();
       }
     } catch (error) {
+      state.session = session || state.session;
       state.latestPacket = {};
       state.agentNetwork = null;
       state.reviewFiles = null;

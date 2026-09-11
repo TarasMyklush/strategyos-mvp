@@ -120,6 +120,12 @@ const fetch = async () => ({ok:false,status:403,json:async()=>({detail:'Source a
     subprocess.run(["node", "-e", program], check=True, capture_output=True, text=True)
     assert 'state.latestPacket = {};' in js
     assert 'No previous financial view is being presented as current.' in js
+    assert 'Hermes remains available for governed public research' in js
+    assert 'state.session = session || state.session;' in js
+    unavailable_branch = js.split('if (state.briefingUnavailable)', 1)[1].split(
+        'if (unavailablePanel)', 1
+    )[0]
+    assert 'renderAssistantStudio();' in unavailable_branch
     assert 'session.authenticated && !frozenBoard ? fetchJson("/api/v1/agent-network")' in js
 
 
