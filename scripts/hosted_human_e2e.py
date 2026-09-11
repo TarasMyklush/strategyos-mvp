@@ -173,7 +173,16 @@ def main() -> int:
             page.locator('#driver-row [data-driver-key="revenue"]').wait_for(timeout=45_000)
             assert page.locator("#persona-label").inner_text() == "Group CEO"
             assert page.locator("#brand-org").inner_text() == "Executive workspace"
-            passed("Executive persona survives briefing, Vault and outreach navigation")
+            page.evaluate("localStorage.setItem('strategyos.executive.persona', 'group-cfo')")
+            page.goto(urljoin(base_url, "plan"), wait_until="domcontentloaded")
+            page.get_by_role("link", name="Executive view").click()
+            page.wait_for_url(re.compile(r"/app(?:\?.*)?$"), timeout=10_000)
+            page.locator('#driver-row [data-driver-key="revenue"]').wait_for(timeout=45_000)
+            assert page.locator("#persona-label").inner_text() == "Group CEO"
+            assert page.locator("#brand-org").inner_text() == "Executive workspace"
+            assert page.get_by_text("This persona workspace", exact=True).count() == 0
+            assert page.evaluate("localStorage.getItem('strategyos.executive.persona')") == "ceo"
+            passed("Executive persona survives navigation and stale browser state self-heals")
 
             page.get_by_role("tab", name="Diagnostics").click()
             context.route("**/assistant/chat", lambda route: route.abort())

@@ -34,16 +34,13 @@
   }
 
   function storedExecutivePersona() {
-    try {
-      var stored = String(window.localStorage.getItem(EXECUTIVE_PERSONA_STORAGE_KEY) || "").toLowerCase();
-      return /^[a-z][a-z0-9_-]{0,31}$/.test(stored) ? stored : "";
-    } catch (_error) { return ""; }
+    if (window.KyvernPersonaContext) return window.KyvernPersonaContext.read();
+    return "";
   }
 
   function persistExecutivePersona(persona) {
-    var normalized = String(persona || "ceo").toLowerCase();
-    try { window.localStorage.setItem(EXECUTIVE_PERSONA_STORAGE_KEY, normalized); } catch (_error) {}
-    return normalized;
+    if (window.KyvernPersonaContext) return window.KyvernPersonaContext.write(persona);
+    return "ceo";
   }
 
   function applyExecutiveTheme(theme) {
@@ -7717,6 +7714,15 @@
         } catch (_error) { /* Choices remain pending until durable storage responds. */ }
       }
       state.personas = safeArray((state.latestPacket.executive_modes || {}).personas);
+      var packetPersona = firstDefined((state.latestPacket.executive_modes || {}).active_persona_id, "ceo");
+      var selectedPersonaExists = state.personas.some(function (item) {
+        return item.persona_id === state.activePersona;
+      });
+      if (!selectedPersonaExists) {
+        state.activePersona = state.personas.some(function (item) { return item.persona_id === packetPersona; })
+          ? packetPersona
+          : "ceo";
+      }
       state.token = firstDefined(state.token, window.localStorage.getItem(_tokenKey));
       // The persona selected in the current browser is authoritative. The
       // packet value initializes old clients, but must never snap a user back

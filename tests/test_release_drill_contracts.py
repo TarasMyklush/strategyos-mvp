@@ -213,7 +213,10 @@ def test_build_note_executive_reliability_contracts_are_present():
     assert 'data-kpi-data-request' in executive
     assert '/api/outreach/requests' in executive
     assert 'EXECUTIVE_PERSONA_STORAGE_KEY' in executive
-    assert 'strategyos.executive.persona' in vault and 'strategyos.executive.persona' in outreach
+    persona_context = (root / 'persona_context.js').read_text()
+    assert 'KyvernPersonaContext.read()' in vault and 'KyvernPersonaContext.read()' in outreach
+    assert 'RESTORABLE_PERSONAS = ["ceo", "board"]' in persona_context
+    assert 'removeItem(STORAGE_KEY)' in persona_context
     assert 'kpi-scope-label' in executive and '.kpi-scope-label' in css
     assert 'driver-card--loading' in html and 'Cash vs floor' in html
     assert 'executiveMetricTokens(plain, 4)' not in executive
@@ -222,6 +225,29 @@ def test_build_note_executive_reliability_contracts_are_present():
     assert 'Open the strategic register context' in executive
     assert 'Owner · ' in executive
     assert 'Open register detail for ' not in executive
+
+
+def test_persona_context_rejects_stale_and_unreleased_browser_state():
+    source = Path('strategyos_mvp/static/persona_context.js').read_text()
+    program = '''const assert=require('node:assert/strict');
+const values=new Map();
+global.window={localStorage:{
+  getItem:key=>values.has(key)?values.get(key):null,
+  setItem:(key,value)=>values.set(key,String(value)),
+  removeItem:key=>values.delete(key)
+}};
+''' + source + '''
+values.set('strategyos.executive.persona','group-cfo');
+assert.equal(window.KyvernPersonaContext.read(),'');
+assert.equal(values.has('strategyos.executive.persona'),false);
+values.set('strategyos.executive.persona','cfo');
+assert.equal(window.KyvernPersonaContext.read(),'');
+assert.equal(values.has('strategyos.executive.persona'),false);
+assert.equal(window.KyvernPersonaContext.write('ceo'),'ceo');
+assert.equal(window.KyvernPersonaContext.read(),'ceo');
+assert.equal(window.KyvernPersonaContext.normalize('distribution'),'bucfo');
+'''
+    subprocess.run(['node', '-e', program], check=True, capture_output=True, text=True)
 
 
 def test_hosted_release_gate_exercises_customer_plan_and_deterministic_fallback():

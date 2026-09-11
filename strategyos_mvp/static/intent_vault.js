@@ -325,8 +325,7 @@
     }
   });
   action(async function () {
-    var persona = '';
-    try { persona = String(localStorage.getItem('strategyos.executive.persona') || ''); } catch (_error) {}
+    var persona = window.KyvernPersonaContext ? window.KyvernPersonaContext.read() : '';
     document.querySelectorAll('a[href="/app"]').forEach(function (link) {
       if (persona) link.href = '/app?persona=' + encodeURIComponent(persona);
     });
