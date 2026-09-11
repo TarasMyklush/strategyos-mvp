@@ -80,6 +80,17 @@ rsync -az --delete "${RSYNC_SSH_ARGS[@]}" \
 rsync -az "${RSYNC_SSH_ARGS[@]}" "${LOCAL_ENV}" "${TARGET_HOST}:${TARGET_DIR}/app/deploy/.env"
 rsync -az "${RSYNC_SSH_ARGS[@]}" "${LOCAL_SECRETS_ENV}" "${TARGET_HOST}:${TARGET_DIR}/app/deploy/.env.secrets"
 
+dump_remote_compose_diagnostics() {
+  ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && \
+    docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} \
+      --env-file deploy/.env --env-file deploy/.env.secrets${PROVIDER_ENV_ARGS}${RUNTIME_ENV_ARGS} ps --all && \
+    docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} \
+      --env-file deploy/.env --env-file deploy/.env.secrets${PROVIDER_ENV_ARGS}${RUNTIME_ENV_ARGS} \
+      logs --tail 150 hatchet-lite research-gateway strategyos-api" || true
+}
+
+trap dump_remote_compose_diagnostics ERR
+
 if [ -n "${STRATEGYOS_API_IMAGE:-}" ]; then
   ssh ${SSH_OPTS} "${TARGET_HOST}" "docker pull '${STRATEGYOS_API_IMAGE}'"
   if [[ "$TARGET_DIR" == /opt/strategyos-branch && "$COMPOSE_PROJECT_NAME" == strategyos-branch ]]; then
@@ -102,6 +113,8 @@ MIGRATE
 else
   ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets${PROVIDER_ENV_ARGS} pull --ignore-buildable && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets${PROVIDER_ENV_ARGS} up -d --build --wait --wait-timeout '${COMPOSE_WAIT_TIMEOUT_SECONDS}'"
 fi
+
+trap - ERR
 
 ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets${PROVIDER_ENV_ARGS}${RUNTIME_ENV_ARGS} up -d --no-deps --force-recreate caddy && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets${PROVIDER_ENV_ARGS}${RUNTIME_ENV_ARGS} exec -T caddy caddy reload --config /etc/caddy/Caddyfile"
 

@@ -388,6 +388,10 @@ services:
     ports:
       - "127.0.0.1:${HATCHET_DASHBOARD_PORT:-8888}:8888"
       - "127.0.0.1:${HATCHET_GRPC_PORT:-7077}:7077"
+    # Hatchet performs its own control-plane startup work. Keep that traffic on
+    # a dedicated network without granting the StrategyOS API a general egress
+    # route; the API remains attached only to the internal application network.
+    networks: [default, hatchet-egress]
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8888/api/ready"]
       interval: 10s
@@ -485,3 +489,4 @@ networks:
   default:
     internal: true
   research-egress: {}
+  hatchet-egress: {}
