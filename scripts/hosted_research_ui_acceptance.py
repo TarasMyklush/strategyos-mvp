@@ -71,7 +71,9 @@ def main() -> int:
             # DOMContentLoaded precedes the executive packet and event-handler
             # binding. A visible static launcher is therefore not sufficient
             # proof that the application is interactive yet.
-            expect(page.locator("#driver-row")).to_contain_text("Revenue", timeout=45_000)
+            page.locator(
+                '#driver-row [data-driver-key="revenue"]'
+            ).wait_for(state="visible", timeout=45_000)
             # The fixed dock is intentionally replaced by the top-bar launcher
             # between 981px and 1799px. Exercise whichever production control
             # is visible at the configured viewport.
@@ -87,7 +89,19 @@ def main() -> int:
             launcher.click()
             page.locator("#assistant-drawer.is-open").wait_for(state="visible", timeout=10_000)
             page.locator("#assistant-input").fill(question)
-            page.locator("#assistant-form button[type=submit]").click()
+            with page.expect_response(
+                lambda response: "/assistant/chat" in response.url,
+                timeout=75_000,
+            ) as pending_response:
+                page.locator("#assistant-form button[type=submit]").click()
+            chat_response = pending_response.value
+            assert chat_response.ok, f"assistant/chat returned HTTP {chat_response.status}"
+            chat_payload = chat_response.json()
+            consultation = chat_payload.get("external_consultation") or {}
+            assert consultation.get("used") is True, consultation
+            serialized_consultation = json.dumps(consultation, sort_keys=True)
+            for private_canary in ("ProTec", "87.4", "confidential", "board limit", "Modern Trade"):
+                assert private_canary.casefold() not in serialized_consultation.casefold(), consultation
 
             evidence = page.locator(".assistant-research-evidence").last
             evidence.wait_for(state="visible", timeout=45_000)
@@ -112,6 +126,8 @@ def main() -> int:
             passed("Hermes renders governed public research with audit evidence and approved citations", {
                 "citation_count": citation_links.count(),
                 "boundary_text": evidence_text,
+                "audit_trail_id": consultation.get("audit_trail_id"),
+                "gateway_request_id": consultation.get("gateway_request_id"),
             })
             report["status"] = "passed"
             report["summary"] = {
