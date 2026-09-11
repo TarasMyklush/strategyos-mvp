@@ -68,8 +68,12 @@ def main() -> int:
             passed("Authorized executive signs in through the hosted UI")
 
             page.goto(urljoin(base_url, "app?persona=ceo"), wait_until="domcontentloaded")
-            page.locator("#topbar-assistant-launch").wait_for(state="visible", timeout=45_000)
-            page.locator("#topbar-assistant-launch").click()
+            # DOMContentLoaded precedes the executive packet and event-handler
+            # binding. A visible static launcher is therefore not sufficient
+            # proof that the application is interactive yet.
+            expect(page.locator("#driver-row")).to_contain_text("Revenue", timeout=45_000)
+            page.locator("#chat-launcher").wait_for(state="visible", timeout=10_000)
+            page.locator("#chat-launcher").click()
             page.locator("#assistant-drawer.is-open").wait_for(state="visible", timeout=10_000)
             page.locator("#assistant-input").fill(question)
             page.locator("#assistant-form button[type=submit]").click()
