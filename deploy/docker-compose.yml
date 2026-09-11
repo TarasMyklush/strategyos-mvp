@@ -354,6 +354,11 @@ services:
       POSTGRES_PASSWORD: ${HATCHET_POSTGRES_PASSWORD:-hatchet}
     volumes:
       - hatchet-postgres-data:/var/lib/postgresql/data
+    # Share Hatchet's dedicated network so scheduler migrations cannot be
+    # routed through a stale/recreated application bridge during deployment.
+    # The database publishes no host port and remains reachable only by
+    # containers attached to this network.
+    networks: [default, hatchet-egress]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U hatchet -d hatchet"]
       interval: 10s
