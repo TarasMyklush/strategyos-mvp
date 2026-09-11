@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 
@@ -17,8 +18,16 @@ def call(base: str, path: str, *, auth: str, payload: dict | None = None) -> dic
         data = json.dumps(payload).encode()
         method = "POST"
     request = Request(base.rstrip("/") + path, headers=headers, data=data, method=method)
-    with urlopen(request, timeout=30) as response:
-        return json.loads(response.read().decode())
+    try:
+        with urlopen(request, timeout=30) as response:
+            return json.loads(response.read().decode())
+    except HTTPError as exc:
+        # Acceptance failures must identify the failing route and server detail
+        # without ever printing the bearer credential.
+        body = exc.read().decode("utf-8", errors="replace")[:1000]
+        raise RuntimeError(
+            f"{method} {path} returned HTTP {exc.code}: {body}"
+        ) from exc
 
 
 def main() -> int:
