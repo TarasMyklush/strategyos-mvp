@@ -7367,7 +7367,7 @@
         if (payload.policy_denied) failureMeta = '';
         var tier = payload.policy_denied ? 'policy' : String(firstDefined(payload.determinism_tier, '')).trim();
         var sections = payload.response_sections && typeof payload.response_sections === 'object' ? payload.response_sections : {};
-        var tierLabel = { policy: 'Permission required', governed_fact: 'Source-backed fact', needs_evidence: 'Evidence unavailable', service_error: 'Service unavailable', general: 'General AI answer', derived_insight: 'Derived insight', advisory: 'AI advice' }[tier] || '';
+        var tierLabel = { policy: 'Permission required', governed_fact: 'Source-backed fact', needs_evidence: 'Evidence unavailable', service_error: 'Service unavailable', general: 'General AI answer', derived_insight: 'Derived insight', advisory: (payload.external_consultation && payload.external_consultation.used ? 'Public research' : 'AI advice') }[tier] || '';
         var bodyHtml = role === 'assistant'
           ? renderAssistantMarkdownToHtml(firstDefined(message.text, ''))
           : escapeHtml(firstDefined(message.text, ''));
@@ -7376,10 +7376,18 @@
           : '<p>' + bodyHtml + '</p>';
         var citationMarkup = role === 'assistant' && safeArray(payload.citations).length
           ? '<details class="assistant-citation-list"><summary>Evidence · ' + escapeHtml(String(safeArray(payload.citations).length)) + ' source' + (safeArray(payload.citations).length === 1 ? '' : 's') + '</summary><div>' + safeArray(payload.citations).map(function (citation) {
-              var factLink = /^\/api\/claims\/snapshots\/[^/]+\/revisions\/[^/]+$/.test(String(citation.href || ''))
-                ? '<a href="' + escapeHtml(citation.href) + '" target="_blank" rel="noopener">Open approved fact</a>' : '';
-              return '<article><strong>' + escapeHtml(evidenceReferenceLabel(citation)) + '</strong>' + (citation.excerpt ? '<span>' + escapeHtml(wordSlice(citation.excerpt, 120)) + '</span>' : '') + factLink + '</article>';
+              var citationHref = String(citation.href || '');
+              var factLink = /^\/api\/claims\/snapshots\/[^/]+\/revisions\/[^/]+$/.test(citationHref)
+                ? '<a href="' + escapeHtml(citationHref) + '" target="_blank" rel="noopener">Open approved fact</a>' : '';
+              var publicLink = /^https:\/\/en\.wikipedia\.org\/wiki\/[A-Za-z0-9_%().,:-]+$/.test(citationHref)
+                ? '<a href="' + escapeHtml(citationHref) + '" target="_blank" rel="noopener noreferrer">Open public source ↗</a>' : '';
+              return '<article><strong>' + escapeHtml(evidenceReferenceLabel(citation)) + '</strong>' + (citation.excerpt ? '<span>' + escapeHtml(wordSlice(citation.excerpt, 120)) + '</span>' : '') + factLink + publicLink + '</article>';
             }).join('') + '</div></details>'
+          : '';
+        var consultation = payload.external_consultation && typeof payload.external_consultation === 'object'
+          ? payload.external_consultation : {};
+        var researchMarkup = role === 'assistant' && consultation.used
+          ? '<details class="assistant-message__evidence assistant-research-evidence"><summary>Research boundary · audited</summary><div>Approved public query: ' + escapeHtml(firstDefined(consultation.query, 'catalogue template')) + ' · No client evidence was sent · Audit ' + escapeHtml(firstDefined(consultation.audit_trail_id, 'recorded')) + '</div></details>'
           : '';
         var evidenceRefsMarkup = role === 'assistant' && safeArray(message.evidence_refs).length
           ? '<div class="assistant-message__actions">' + safeArray(message.evidence_refs).map(function (reference) {
@@ -7393,7 +7401,7 @@
             + (sections.general_practice_suggests ? '<section class="assistant-answer-block assistant-answer-block--advisory"><span>General practice suggests</span><p>' + renderAssistantMarkdownToHtml(sections.general_practice_suggests) + '</p></section>' : '')
             + '</div>';
         }
-        return '<div class="' + classes.join(' ') + '"><span class="assistant-message__role">' + escapeHtml(roleLabel) + roleSuffix + (tierLabel ? '<em class="assistant-tier assistant-tier--' + escapeHtml(tier) + '">' + escapeHtml(tierLabel) + '</em>' : '') + '</span>' + answerMarkup + evidenceRefsMarkup + citationMarkup + failureMeta + retryButton + permissionAction + caseLinks + '</div>';
+        return '<div class="' + classes.join(' ') + '"><span class="assistant-message__role">' + escapeHtml(roleLabel) + roleSuffix + (tierLabel ? '<em class="assistant-tier assistant-tier--' + escapeHtml(tier) + '">' + escapeHtml(tierLabel) + '</em>' : '') + '</span>' + answerMarkup + evidenceRefsMarkup + citationMarkup + researchMarkup + failureMeta + retryButton + permissionAction + caseLinks + '</div>';
       }).join("") : '<div class="assistant-message assistant-message--empty"><span class="assistant-message__role">No messages yet</span><p>Ask a question to begin.</p></div>';
       safeArray(messages.querySelectorAll('[data-assistant-retry-index]')).forEach(function (button) {
         button.onclick = function () {

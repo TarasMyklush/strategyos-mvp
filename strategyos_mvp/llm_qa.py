@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import socket
 import time
@@ -236,8 +237,19 @@ def chat_status(config: Any) -> dict[str, Any]:
             "enabled": False,
             "reason": "Run policy does not approve model-provider use.",
         }
-    if not getattr(config, "llm_api_key", None):
+    provider = str(getattr(config, "llm_provider", "") or "").strip().lower()
+    if provider != "bedrock" and not getattr(config, "llm_api_key", None):
         return {"enabled": False, "reason": "LLM API key is not configured."}
+    if provider == "bedrock":
+        region = os.getenv("AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "")).strip()
+        retention = os.getenv("STRATEGYOS_BEDROCK_DATA_RETENTION_MODE", "").strip()
+        routing = os.getenv("STRATEGYOS_BEDROCK_INFERENCE_PROFILE_TYPE", "").strip()
+        if not region:
+            return {"enabled": False, "reason": "Bedrock region is not configured."}
+        if retention != "none":
+            return {"enabled": False, "reason": "Bedrock zero-retention posture is not attested."}
+        if routing != "in-region":
+            return {"enabled": False, "reason": "Bedrock in-region routing is not attested."}
     if not getattr(config, "llm_model", None):
         return {"enabled": False, "reason": "LLM model is not configured."}
     return {
@@ -1461,6 +1473,15 @@ def _call_openai_compatible_chat_transport(
     response_format: dict[str, str] | None = None,
     transport_trace: list[dict[str, Any]] | None = None,
 ) -> str:
+    provider = str(getattr(config, "llm_provider", "") or "").strip().lower()
+    if provider == "bedrock":
+        return _call_bedrock_converse(
+            config=config,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            transport_trace=transport_trace,
+        )
     url = _chat_completions_url(str(config.llm_base_url))
     payload = {
         "model": config.llm_model,
@@ -1512,6 +1533,78 @@ def _call_openai_compatible_chat_transport(
         )
         raise _EmptyProviderResponseError("LLM provider returned an empty answer.")
     return content
+
+
+def _call_bedrock_converse(
+    *,
+    config: Any,
+    messages: list[dict[str, str]],
+    temperature: float,
+    max_tokens: int,
+    transport_trace: list[dict[str, Any]] | None = None,
+) -> str:
+    """Invoke one explicitly configured Bedrock model through the AWS SDK chain."""
+    import boto3
+    from botocore.exceptions import BotoCoreError, ClientError
+
+    region = os.environ["AWS_REGION"]
+    system = [
+        {"text": str(item.get("content") or "")}
+        for item in messages
+        if item.get("role") == "system" and str(item.get("content") or "")
+    ]
+    conversation = [
+        {
+            "role": str(item.get("role") or "user"),
+            "content": [{"text": str(item.get("content") or "")}],
+        }
+        for item in messages
+        if item.get("role") in {"user", "assistant"}
+        and str(item.get("content") or "")
+    ]
+    if not conversation:
+        raise RuntimeError("Bedrock request has no conversation content.")
+    client = boto3.client("bedrock-runtime", region_name=region)
+    retry = provider_retry_config(config)
+    attempts = max(1, min(int(retry["max_attempts"]), 5))
+    reasons: list[str] = []
+    for attempt in range(1, attempts + 1):
+        try:
+            response = client.converse(
+                modelId=str(config.llm_model),
+                system=system,
+                messages=conversation,
+                inferenceConfig={
+                    "maxTokens": int(max_tokens),
+                    "temperature": float(temperature),
+                },
+            )
+            content = ((response.get("output") or {}).get("message") or {}).get("content") or []
+            text = "".join(
+                str(block.get("text") or "")
+                for block in content
+                if isinstance(block, dict)
+            ).strip()
+            if not text:
+                raise _EmptyProviderResponseError("Bedrock returned an empty answer.")
+            if transport_trace is not None:
+                transport_trace.append({
+                    "provider": "bedrock",
+                    "attempts": attempt,
+                    "retries": attempt - 1,
+                    "retry_reasons": reasons,
+                    "region": region,
+                    "routing": "in-region",
+                    "retention": "none",
+                    "outcome": "success",
+                })
+            return text
+        except (BotoCoreError, ClientError) as exc:
+            reasons.append(type(exc).__name__)
+            if attempt == attempts:
+                raise RuntimeError("Bedrock provider is unavailable.") from exc
+            time.sleep(min(float(retry["max_backoff_seconds"]), float(retry["backoff_seconds"]) * (2 ** (attempt - 1))))
+    raise RuntimeError("Bedrock provider is unavailable.")
 
 
 def _post_with_retry(

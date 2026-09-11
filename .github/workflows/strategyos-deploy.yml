@@ -192,12 +192,18 @@ jobs:
       STRATEGYOS_RUN_EXECUTION_MODE: ${{ vars.STRATEGYOS_RUN_EXECUTION_MODE || 'sync' }}
       STRATEGYOS_RUN_POLICY: ${{ vars.STRATEGYOS_RUN_POLICY || 'sovereign' }}
       STRATEGYOS_APPROVED_EXTERNAL_MODES: ${{ vars.STRATEGYOS_APPROVED_EXTERNAL_MODES || '' }}
+      STRATEGYOS_RESEARCH_ENABLED: ${{ vars.STRATEGYOS_RESEARCH_ENABLED || 'false' }}
+      STRATEGYOS_RESEARCH_GEOGRAPHY_ID: ${{ vars.STRATEGYOS_RESEARCH_GEOGRAPHY_ID || 'global' }}
+      STRATEGYOS_RESEARCH_PERIOD_ID: ${{ vars.STRATEGYOS_RESEARCH_PERIOD_ID || 'current' }}
       STRATEGYOS_MODEL_PROVIDER_ENABLED: ${{ vars.STRATEGYOS_MODEL_PROVIDER_ENABLED || 'false' }}
       STRATEGYOS_LLM_CHAT_ENABLED: ${{ vars.STRATEGYOS_LLM_CHAT_ENABLED || 'false' }}
       STRATEGYOS_LLM_PROVIDER: ${{ vars.STRATEGYOS_LLM_PROVIDER || 'deepseek' }}
       STRATEGYOS_LLM_BASE_URL: ${{ vars.STRATEGYOS_LLM_BASE_URL || 'https://api.deepseek.com' }}
       STRATEGYOS_LLM_MODEL: ${{ vars.STRATEGYOS_LLM_MODEL || 'deepseek-v4-pro' }}
       STRATEGYOS_LLM_TIMEOUT_SECONDS: ${{ vars.STRATEGYOS_LLM_TIMEOUT_SECONDS || '30' }}
+      AWS_REGION: ${{ vars.AWS_REGION || '' }}
+      STRATEGYOS_BEDROCK_DATA_RETENTION_MODE: ${{ vars.STRATEGYOS_BEDROCK_DATA_RETENTION_MODE || '' }}
+      STRATEGYOS_BEDROCK_INFERENCE_PROFILE_TYPE: ${{ vars.STRATEGYOS_BEDROCK_INFERENCE_PROFILE_TYPE || '' }}
       STRATEGYOS_EMBEDDING_MODEL_PATH: ${{ vars.STRATEGYOS_EMBEDDING_MODEL_PATH || '' }}
       HATCHET_CLIENT_TLS_STRATEGY: ${{ vars.HATCHET_CLIENT_TLS_STRATEGY || 'none' }}
       HATCHET_CLIENT_HOST_PORT: ${{ vars.HATCHET_CLIENT_HOST_PORT || 'hatchet-lite:7077' }}
@@ -296,12 +302,18 @@ jobs:
                "STRATEGYOS_RUN_EXECUTION_MODE": os.environ["STRATEGYOS_RUN_EXECUTION_MODE"],
               "STRATEGYOS_RUN_POLICY": os.environ["STRATEGYOS_RUN_POLICY"],
               "STRATEGYOS_APPROVED_EXTERNAL_MODES": os.environ["STRATEGYOS_APPROVED_EXTERNAL_MODES"],
+              "STRATEGYOS_RESEARCH_ENABLED": os.environ["STRATEGYOS_RESEARCH_ENABLED"],
+              "STRATEGYOS_RESEARCH_GEOGRAPHY_ID": os.environ["STRATEGYOS_RESEARCH_GEOGRAPHY_ID"],
+              "STRATEGYOS_RESEARCH_PERIOD_ID": os.environ["STRATEGYOS_RESEARCH_PERIOD_ID"],
               "STRATEGYOS_MODEL_PROVIDER_ENABLED": os.environ["STRATEGYOS_MODEL_PROVIDER_ENABLED"],
               "STRATEGYOS_LLM_CHAT_ENABLED": os.environ["STRATEGYOS_LLM_CHAT_ENABLED"],
               "STRATEGYOS_LLM_PROVIDER": os.environ["STRATEGYOS_LLM_PROVIDER"],
               "STRATEGYOS_LLM_BASE_URL": os.environ["STRATEGYOS_LLM_BASE_URL"],
               "STRATEGYOS_LLM_MODEL": os.environ["STRATEGYOS_LLM_MODEL"],
               "STRATEGYOS_LLM_TIMEOUT_SECONDS": os.environ["STRATEGYOS_LLM_TIMEOUT_SECONDS"],
+              "AWS_REGION": os.environ["AWS_REGION"],
+              "STRATEGYOS_BEDROCK_DATA_RETENTION_MODE": os.environ["STRATEGYOS_BEDROCK_DATA_RETENTION_MODE"],
+              "STRATEGYOS_BEDROCK_INFERENCE_PROFILE_TYPE": os.environ["STRATEGYOS_BEDROCK_INFERENCE_PROFILE_TYPE"],
               "STRATEGYOS_EMBEDDING_MODEL_PATH": os.environ["STRATEGYOS_EMBEDDING_MODEL_PATH"],
               "HATCHET_CLIENT_TLS_STRATEGY": os.environ["HATCHET_CLIENT_TLS_STRATEGY"],
               "HATCHET_CLIENT_HOST_PORT": os.environ["HATCHET_CLIENT_HOST_PORT"],
@@ -379,6 +391,9 @@ jobs:
           upsert("OAUTH2_PROXY_COOKIE_SECRET", os.environ.get("OAUTH2_PROXY_COOKIE_SECRET", ""))
           upsert("STRATEGYOS_LLM_API_KEY", os.environ.get("STRATEGYOS_LLM_API_KEY", ""))
           upsert("STRATEGYOS_IDP_TEST_USERS", os.environ.get("STRATEGYOS_IDP_TEST_USERS", ""))
+          if not any(line.startswith("STRATEGYOS_RESEARCH_GATEWAY_TOKEN=") for line in lines):
+              import secrets
+              upsert("STRATEGYOS_RESEARCH_GATEWAY_TOKEN", secrets.token_urlsafe(48))
           path.write_text("\n".join(lines) + "\n", encoding="utf-8")
           PY
           if [ -n "${STRATEGYOS_LLM_API_KEY}" ]; then
@@ -516,6 +531,30 @@ jobs:
               --operator-auth-header "Authorization: Bearer ${operator_token}" \
               --reviewer-auth-header "Authorization: Bearer ${reviewer_token}"
           fi
+
+      - name: Verify governed research and egress boundary
+        env:
+          STRATEGYOS_OPERATOR_AUTH_HEADER: ${{ secrets.STRATEGYOS_OPERATOR_AUTH_HEADER }}
+        run: |
+          if [ "${STRATEGYOS_RESEARCH_ENABLED}" != "true" ]; then
+            echo "Research is disabled for this deployment; hosted research acceptance is not applicable."
+            exit 0
+          fi
+          if [ "${STRATEGYOS_AUTH_MODE}" = "proxy_oidc" ]; then
+            test -n "${STRATEGYOS_OPERATOR_AUTH_HEADER}"
+            research_auth="${STRATEGYOS_OPERATOR_AUTH_HEADER}"
+          else
+            token="$(TARGET_HOST="${TARGET_HOST}" TARGET_DIR="${TARGET_DIR}" SSH_OPTS="${SSH_OPTS}" ROLE=operator bash deploy/scripts/remote_idp_token.sh)"
+            echo "::add-mask::${token}"
+            research_auth="Authorization: Bearer ${token}"
+          fi
+          RESEARCH_AUTH_HEADER="${research_auth}" python deploy/scripts/verify_research_boundary.py \
+            --base-url "${STRATEGYOS_PUBLIC_URL}"
+          if ssh ${SSH_OPTS} "${TARGET_HOST}" "docker exec strategyos-strategyos-api-1 python -c 'import socket; socket.create_connection((\"1.1.1.1\",443),2)'"; then
+            echo "::error::Application container bypassed the dedicated egress gateway."
+            exit 1
+          fi
+          echo "Application direct egress is blocked; approved research completed through the gateway."
 
       - name: Verify anonymous login boundary
         run: |

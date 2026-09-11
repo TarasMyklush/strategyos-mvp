@@ -53,6 +53,11 @@ services:
       STRATEGYOS_TWINS_EXPOSE_REASONING_DIAGNOSTICS: ${STRATEGYOS_TWINS_EXPOSE_REASONING_DIAGNOSTICS:-false}
       STRATEGYOS_RUN_POLICY: ${STRATEGYOS_RUN_POLICY:-sovereign}
       STRATEGYOS_APPROVED_EXTERNAL_MODES: ${STRATEGYOS_APPROVED_EXTERNAL_MODES:-}
+      STRATEGYOS_RESEARCH_ENABLED: ${STRATEGYOS_RESEARCH_ENABLED:-false}
+      STRATEGYOS_RESEARCH_GATEWAY_URL: http://research-gateway:8092
+      STRATEGYOS_RESEARCH_GATEWAY_TOKEN: ${STRATEGYOS_RESEARCH_GATEWAY_TOKEN:?Set STRATEGYOS_RESEARCH_GATEWAY_TOKEN in deploy/.env.secrets}
+      STRATEGYOS_RESEARCH_GEOGRAPHY_ID: ${STRATEGYOS_RESEARCH_GEOGRAPHY_ID:-global}
+      STRATEGYOS_RESEARCH_PERIOD_ID: ${STRATEGYOS_RESEARCH_PERIOD_ID:-current}
       STRATEGYOS_DATA_REGION: ${STRATEGYOS_DATA_REGION:-Not attested}
       STRATEGYOS_MODEL_PROCESSING_REGION: ${STRATEGYOS_MODEL_PROCESSING_REGION:-External provider; residency not attested}
       STRATEGYOS_INFERENCE_AUDIT_REQUIRED: ${STRATEGYOS_INFERENCE_AUDIT_REQUIRED:-false}
@@ -67,6 +72,13 @@ services:
       STRATEGYOS_LLM_MODEL: ${STRATEGYOS_LLM_MODEL:-deepseek-v4-pro}
       STRATEGYOS_LLM_TIMEOUT_SECONDS: ${STRATEGYOS_LLM_TIMEOUT_SECONDS:-30}
       STRATEGYOS_LLM_API_KEY: ${STRATEGYOS_LLM_API_KEY:-}
+      AWS_REGION: ${AWS_REGION:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      AWS_BEARER_TOKEN_BEDROCK: ${AWS_BEARER_TOKEN_BEDROCK:-}
+      STRATEGYOS_BEDROCK_DATA_RETENTION_MODE: ${STRATEGYOS_BEDROCK_DATA_RETENTION_MODE:-}
+      STRATEGYOS_BEDROCK_INFERENCE_PROFILE_TYPE: ${STRATEGYOS_BEDROCK_INFERENCE_PROFILE_TYPE:-}
       STRATEGYOS_SYNC_ARTIFACTS: ${STRATEGYOS_SYNC_ARTIFACTS:-true}
       STRATEGYOS_OCR_ENGINE: ${STRATEGYOS_OCR_ENGINE:-tesseract}
       STRATEGYOS_RUNTIME_DEP_CA_CERTIFICATES_VERSION: ${STRATEGYOS_RUNTIME_DEP_CA_CERTIFICATES_VERSION:-20250419}
@@ -102,6 +114,8 @@ services:
         condition: service_started
       strategyos-idp:
         condition: service_started
+      research-gateway:
+        condition: service_healthy
       minio-create-bucket:
         condition: service_completed_successfully
     volumes:
@@ -112,6 +126,35 @@ services:
           "CMD-SHELL",
           "TOKEN=$$(curl -fsS -X POST \"$$STRATEGYOS_IDP_TOKEN_URL\" -H \"Content-Type: application/x-www-form-urlencoded\" --data \"grant_type=password&client_id=$$STRATEGYOS_IDP_CLIENT_ID&client_secret=$$STRATEGYOS_IDP_CLIENT_SECRET&username=$$STRATEGYOS_IDP_OPERATOR_USERNAME&password=$$STRATEGYOS_IDP_OPERATOR_PASSWORD\" | python -c \"import json,sys; print(json.load(sys.stdin)['access_token'])\") && curl -fsS http://127.0.0.1:8000/health/ready -H \"Authorization: Bearer $$TOKEN\" >/dev/null",
         ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  research-gateway:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        STRATEGYOS_RELEASE_SHA: ${STRATEGYOS_RELEASE_SHA:-unrecorded}
+        CA_CERTIFICATES_VERSION: ${STRATEGYOS_RUNTIME_DEP_CA_CERTIFICATES_VERSION:-20250419}
+        CURL_VERSION: ${STRATEGYOS_RUNTIME_DEP_CURL_VERSION:-8.14.1-2+deb13u4}
+        POPPLER_UTILS_VERSION: ${STRATEGYOS_RUNTIME_DEP_POPPLER_UTILS_VERSION:-25.03.0-5+deb13u4}
+        TESSERACT_OCR_VERSION: ${STRATEGYOS_RUNTIME_DEP_TESSERACT_VERSION:-5.5.0-1+b1}
+        TESSERACT_OCR_ENG_VERSION: ${STRATEGYOS_RUNTIME_DEP_TESSERACT_ENG_VERSION:-1:4.1.0-2}
+    command: ["uvicorn", "strategyos_mvp.research_gateway:app", "--host", "0.0.0.0", "--port", "8092"]
+    environment:
+      STRATEGYOS_RESEARCH_GATEWAY_TOKEN: ${STRATEGYOS_RESEARCH_GATEWAY_TOKEN:?Set STRATEGYOS_RESEARCH_GATEWAY_TOKEN in deploy/.env.secrets}
+    networks: [default, research-egress]
+    read_only: true
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 384m
+    cpus: 0.5
+    pids_limit: 64
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8092/healthz"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -437,3 +480,8 @@ volumes:
   hatchet-lite-config:
   caddy-data:
   caddy-config:
+
+networks:
+  default:
+    internal: true
+  research-egress: {}

@@ -62,6 +62,49 @@ def _config(**overrides):
     return SimpleNamespace(**values)
 
 
+def test_bedrock_requires_attested_zero_retention_and_in_region(monkeypatch):
+    config = _config(llm_provider="bedrock", llm_api_key=None)
+    monkeypatch.setenv("AWS_REGION", "eu-central-1")
+    monkeypatch.delenv("STRATEGYOS_BEDROCK_DATA_RETENTION_MODE", raising=False)
+    monkeypatch.delenv("STRATEGYOS_BEDROCK_INFERENCE_PROFILE_TYPE", raising=False)
+    assert "zero-retention" in llm_qa.chat_status(config)["reason"]
+    monkeypatch.setenv("STRATEGYOS_BEDROCK_DATA_RETENTION_MODE", "none")
+    assert "in-region" in llm_qa.chat_status(config)["reason"]
+    monkeypatch.setenv("STRATEGYOS_BEDROCK_INFERENCE_PROFILE_TYPE", "in-region")
+    assert llm_qa.chat_status(config)["enabled"]
+
+
+def test_bedrock_converse_uses_exact_model_and_region(monkeypatch):
+    import boto3
+    captured = {}
+
+    class Client:
+        def converse(self, **kwargs):
+            captured["request"] = kwargs
+            return {"output": {"message": {"content": [{"text": "ok"}]}}}
+
+    def client(service, *, region_name):
+        captured["service"] = service
+        captured["region"] = region_name
+        return Client()
+
+    monkeypatch.setenv("AWS_REGION", "eu-central-1")
+    monkeypatch.setattr(boto3, "client", client)
+    result = llm_qa._call_bedrock_converse(
+        config=_config(llm_provider="bedrock", llm_model="anthropic.claude-test"),
+        messages=[
+            {"role": "system", "content": "Policy"},
+            {"role": "user", "content": "Question"},
+        ],
+        temperature=0.1,
+        max_tokens=90,
+    )
+    assert result == "ok"
+    assert captured["service"] == "bedrock-runtime"
+    assert captured["region"] == "eu-central-1"
+    assert captured["request"]["modelId"] == "anthropic.claude-test"
+
+
 def _bundle() -> DataBundle:
     ap = pd.DataFrame(
         [

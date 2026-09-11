@@ -329,9 +329,9 @@ async def _app_lifespan(_: FastAPI):
                 raise RuntimeError("Database schema could not be verified before startup.")
             with handle as conn:
                 state_store.ensure_data_schema(conn)
-                from . import board_memory, decision_lifecycle, inference_audit, conversation_state
+                from . import board_memory, decision_lifecycle, inference_audit, conversation_state, research
                 board_memory.initialize(conn)
-                for script in (decision_lifecycle.SCHEMA, inference_audit.SCHEMA, conversation_state.SCHEMA):
+                for script in (decision_lifecycle.SCHEMA, inference_audit.SCHEMA, conversation_state.SCHEMA, research.AUDIT_SCHEMA):
                     state_store.ensure_auxiliary_schema(conn, script)
                 conn.commit()
         await asyncio.to_thread(migrate)
@@ -12368,8 +12368,10 @@ def _assistant_response_payload(
         }
     payload["external_consultation"] = {
         "requested": bool((assistant_context or {}).get("allow_external_advisory")),
-        "used": determinism_tier == "advisory",
-        "audit_trail_id": trace.get("audit_trail_id"),
+        # Only _public_research_payload may mark this true after a gateway
+        # completion and durable audit. Advisory model prose is not research.
+        "used": False,
+        "audit_trail_id": None,
     }
     # Last gate before the executive reads it: correct any premise the run
     # refutes, and never let a figure under review leave as a commitment.
@@ -15091,6 +15093,115 @@ def _question_requests_general_practice_advisory(question: str) -> bool:
     )
 
 
+def _public_research_payload(
+    question: str,
+    result: Mapping[str, Any],
+    *,
+    context: Mapping[str, Any],
+    persona: str | None,
+    requested_mode: str,
+    llm_status: Mapping[str, Any],
+) -> dict[str, Any]:
+    sources = [item for item in list(result.get("sources") or []) if isinstance(item, Mapping)]
+    titles = [str(item.get("title") or "").strip() for item in sources]
+    titles = [title for title in titles if title]
+    answer = (
+        "The governed public research returned "
+        + (", ".join(titles[:3]) if titles else "no named public sources")
+        + ". Review the cited public material before applying it to the company decision."
+    )
+    citations = [
+        {
+            "source_path": str(item.get("title") or "Public source"),
+            "locator": str(item.get("url") or ""),
+            "href": str(item.get("url") or ""),
+            "excerpt": str(item.get("excerpt") or "")[:700],
+            "origin_category": "public_web",
+            "resolved": True,
+        }
+        for item in sources
+        if str(item.get("url") or "").startswith("https://en.wikipedia.org/")
+    ]
+    research_meta = {
+        "requested": True,
+        "used": True,
+        "status": "completed",
+        "audit_trail_id": result.get("audit_trail_id"),
+        "gateway_request_id": result.get("gateway_request_id"),
+        "source_set_id": result.get("source_set_id"),
+        "outbound_contract": result.get("outbound_contract"),
+        "query": result.get("query"),
+    }
+    return sanitize_executive_payload({
+        "status": "ok",
+        "run_id": context.get("run_id"),
+        "run_mode": context.get("run_mode"),
+        "question": question,
+        "persona": persona,
+        "requested_mode": requested_mode,
+        "mode": "public_research",
+        "assistant_mode": "public_research",
+        "answered_by": "research_gateway",
+        "answer_origin": "public_research",
+        "answer_status": "answered",
+        "matched": bool(citations),
+        "answer": answer,
+        "basis": "Approved public-source research through the Kyvern Research Gateway.",
+        "citations": citations,
+        "suggestions": [],
+        "determinism_tier": "advisory",
+        "human_review_required": True,
+        "review_status": "required",
+        "calculation_status": "not_calculated",
+        "model_answer_disclosure": None,
+        "response_sections": {
+            "from_your_data": None,
+            "not_in_your_data": "No client data was sent to the external research provider.",
+            "general_practice_suggests": answer,
+        },
+        "external_consultation": research_meta,
+        "research": research_meta,
+        "llm_status": dict(llm_status),
+        "executive_blocks": [],
+    })
+
+
+def _unavailable_public_research_payload(
+    question: str,
+    reason: str,
+    *,
+    context: Mapping[str, Any],
+    persona: str | None,
+    requested_mode: str,
+    llm_status: Mapping[str, Any],
+) -> dict[str, Any]:
+    return sanitize_executive_payload({
+        "status": "ok",
+        "run_id": context.get("run_id"),
+        "run_mode": context.get("run_mode"),
+        "question": question,
+        "persona": persona,
+        "requested_mode": requested_mode,
+        "mode": "public_research",
+        "assistant_mode": "public_research",
+        "answered_by": "research_policy",
+        "answer_origin": "policy",
+        "answer_status": "research_unavailable",
+        "matched": False,
+        "answer": reason,
+        "basis": "Governed public-research boundary; no external result was used.",
+        "citations": [],
+        "suggestions": [],
+        "determinism_tier": "needs_evidence",
+        "human_review_required": False,
+        "response_sections": {},
+        "external_consultation": {"requested": True, "used": False, "status": "blocked"},
+        "research": {"requested": True, "used": False, "status": "blocked"},
+        "llm_status": dict(llm_status),
+        "executive_blocks": [],
+    })
+
+
 def _auto_question_is_narrow_tabular_lookup(question: str) -> bool:
     """Allow deterministic QA only for exact, single-purpose lookup grammar.
 
@@ -15310,7 +15421,7 @@ async def _assistant_chat_response(
     # that same provider call; a data turn proceeds to the governed context
     # below. Invalid or unavailable classification returns the data route, so
     # model failure can never expose company evidence to the general path.
-    if not public_safe and mode == "auto":
+    if not public_safe and mode == "auto" and not explicit_advisory_request:
         route_result = await _classify_assistant_question_async(
             question,
             persona=persona,
@@ -15440,6 +15551,37 @@ async def _assistant_chat_response(
             context = await asyncio.to_thread(_hydrate_governed_qa_context, context,
                 principal=principal_context, question=question if mode != "deterministic" else None)
     llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
+
+    if explicit_advisory_request and not public_safe:
+        from . import research
+        try:
+            research_result = await asyncio.to_thread(research.run, question)
+        except research.ResearchDenied as exc:
+            return _unavailable_public_research_payload(
+                question,
+                str(exc),
+                context=context,
+                persona=persona,
+                requested_mode=mode,
+                llm_status=llm_status,
+            )
+        except research.ResearchUnavailable as exc:
+            return _unavailable_public_research_payload(
+                question,
+                str(exc),
+                context=context,
+                persona=persona,
+                requested_mode=mode,
+                llm_status=llm_status,
+            )
+        return _public_research_payload(
+            question,
+            research_result,
+            context=context,
+            persona=persona,
+            requested_mode=mode,
+            llm_status=llm_status,
+        )
 
     if not public_safe and mode != "deterministic" and context.get("assistant_data_intent") == "facts":
         # The semantic planner owns free-form fact lookup. Legacy scenario/KPI
@@ -17143,6 +17285,14 @@ async def assistant_chat(
             return await _assistant_chat_response(request, public_safe=True)
         return await _assistant_chat_response(request, public_safe=False,
             authenticated_role=role, authenticated_principal=principal)
+
+
+@app.get("/research/status")
+def research_status(
+    _: dict[str, Any] = require_role(*PRODUCT_READ_ROLES),
+) -> dict[str, Any]:
+    from . import research
+    return {"status": "ok", "research": research.status()}
 
 
 @app.post("/inputs/prepare")
