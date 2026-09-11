@@ -79,6 +79,11 @@ def main() -> int:
                 "#topbar-assistant-launch:visible, #chat-launcher:visible"
             ).first
             launcher.wait_for(state="visible", timeout=10_000)
+            page.wait_for_function(
+                "node => typeof node.onclick === 'function'",
+                arg=launcher.element_handle(),
+                timeout=10_000,
+            )
             launcher.click()
             page.locator("#assistant-drawer.is-open").wait_for(state="visible", timeout=10_000)
             page.locator("#assistant-input").fill(question)
@@ -89,6 +94,12 @@ def main() -> int:
             message = page.locator("#assistant-messages .assistant-message--assistant").last
             expect(message).to_contain_text("Public research", timeout=10_000)
             expect(evidence).to_contain_text("Research boundary · audited")
+            evidence.locator("summary").click()
+            page.wait_for_function(
+                "node => node.open === true",
+                arg=evidence.element_handle(),
+                timeout=5_000,
+            )
             evidence_text = evidence.inner_text()
             assert "Approved public query:" in evidence_text
             assert "No client evidence was sent" in evidence_text
