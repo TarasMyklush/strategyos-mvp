@@ -62,3 +62,9 @@ def test_failed_attempt_does_not_automatically_retry(workflow):
     h=Host();h.history[workflow]=[{'conclusion':'failure'}]
     with pytest.raises(m.ReleaseBlocked):m.release(h,'branch',True)
     assert not h.calls
+
+
+def test_older_green_ci_does_not_override_latest_failed_attempt():
+    h=Host();h.history[m.CI]=[{'conclusion':'cancelled'},{'conclusion':'success'}]
+    with pytest.raises(m.ReleaseBlocked):m.release(h,'branch',True)
+    assert not h.calls

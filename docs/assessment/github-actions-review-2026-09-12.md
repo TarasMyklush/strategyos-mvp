@@ -31,4 +31,4 @@ A thread monitor runs every 30 minutes, remains quiet without actionable change,
 
 ## Validation status
 
-Release orchestration regression: 11 tests passed locally, including duplicate suppression, active-run refusal, failed CI, cancelled CI and branch movement. Workflow contract tests and the consolidated full suite are recorded after completion. The cleanup source changes have not yet been submitted to CI or deployed; the operational workflow disablement is already applied.
+Release orchestration regression: 11 tests passed locally, including duplicate suppression, active-run refusal, failed CI, cancelled CI and branch movement. Workflow contracts and orchestration: 18 passed. Consolidated full local suite: 2,709 passed, 164 service-dependent skips. A subsequent focused check verifies that an older green CI cannot override a newer failed/cancelled attempt; the deployment gate and release command agree on the latest attempt. The cleanup source changes have not yet been submitted to CI or deployed; the operational workflow disablement is already applied.

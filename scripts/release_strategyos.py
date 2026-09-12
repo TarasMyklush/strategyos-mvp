@@ -83,7 +83,8 @@ def release(github, ref, execute=False):
         return {'status':'already_accepted', 'sha':sha, 'dispatched':[],
                 'note':'A successful deployment acceptance exists for this commit; no duplicate was started. This does not independently attest the current server.'}
     ci = github.runs(CI, sha)
-    green = any(r.get('conclusion') == 'success' for r in ci)
+    # Match the deployment gate, which checks the latest CI attempt for this SHA.
+    green = bool(ci) and ci[0].get('conclusion') == 'success'
     if not green and ci:
         raise ReleaseBlocked('CI already attempted this commit without success. Resolve the failure; no automatic retry.')
     if deployments:
