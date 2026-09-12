@@ -6,6 +6,7 @@
     let record = null;
     let signature = null;
     let comment = "";
+    let analysisRequested = false;
     const path = `/reviewer/runs/${encodeURIComponent(runId)}`;
     const node = (tag, text, parent = element) => {
       const item = document.createElement(tag);
@@ -55,6 +56,28 @@
         target.textContent = error?.message || "Artifact unavailable.";
       }
     }
+    async function analyzeAgain(sourcePackId) {
+      if (busy || analysisRequested || !permissions().operate) return;
+      busy = true;
+      analysisRequested = true;
+      element.querySelectorAll("button,textarea").forEach(item => { item.disabled = true; });
+      status("Starting a separate analysis from this run’s registered source…");
+      try {
+        const receipt = await request('/runs', {method: 'POST',
+          body: JSON.stringify({source_pack_id: sourcePackId, sync_artifacts: true})});
+        busy = false;
+        render();
+        status("A separate analysis was requested. This run and its published reports are unchanged. Review and approval remain separate actions.");
+        const link = node('a', 'Open the new analysis');
+        link.href = typeof receipt.run_id === 'string' && receipt.run_id !== runId
+          ? '/runs/review?review_run=' + encodeURIComponent(receipt.run_id) : '/runs/review';
+      } catch (error) {
+        busy = false;
+        render();
+        status("The new analysis was not confirmed. Check run history before requesting another analysis. " + (error?.message || ''));
+        node('a', 'Check run history').href = '/runs/review';
+      }
+    }
     function render() {
       element.replaceChildren();
       node("h3", "Selected run review");
@@ -91,6 +114,10 @@
       [["case_file", "Case file"], ["working_capital", "Working capital"], ["qa", "Q&A"], ["audit_log", "Audit log"]]
         .forEach(([key, label]) => button(label, () => preview(key, previewText), artifacts));
       const rights = permissions();
+      if (rights.operate && record.status === 'completed' && !analysisRequested
+          && typeof summary.source_pack_id === 'string' && summary.source_pack_id) {
+        button("Analyze this source again", () => analyzeAgain(summary.source_pack_id));
+      }
       const waiting = record.current_stage === "awaiting_review" && record.status !== "completed";
       if (rights.review && waiting && !["approved", "rejected"].includes(approval)) {
         const label = node("label", "Reviewer comment");

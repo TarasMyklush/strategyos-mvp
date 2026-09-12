@@ -7,7 +7,8 @@ import subprocess
 import pytest
 
 
-def test_selected_review_never_substitutes_latest_run_or_repeats_pending_action():
+@pytest.mark.parametrize('creation_fails', [False, True])
+def test_selected_review_never_substitutes_latest_run_or_repeats_pending_action(creation_fails):
     node = shutil.which('node')
     if not node:
         pytest.skip('Node is required for the browser controller regression')
@@ -49,7 +50,13 @@ globalThis.document = {createElement: tag => new Element(tag)};
     calls.push([url, options.method || 'GET']);
     if (options.method === 'POST' && url.endsWith('/claim') && hold) await new Promise(resolve => {release = resolve;});
     if (url.endsWith('/approve')) current = {...current, approval: {approval_status: 'approved'}};
-    if (url.endsWith('/resume')) current = {...current, status: 'completed', current_stage: 'writer'};
+    if (url.endsWith('/resume')) current = {...current, status: 'completed', current_stage: 'writer', summary_json: {source_pack_id: 'original-source'}};
+    if (url === '/runs') {
+      assert.deepEqual(JSON.parse(options.body), {source_pack_id: 'original-source', sync_artifacts: true});
+      await new Promise(resolve => {release = resolve;});
+      if (CREATION_FAILS) throw new Error('Connection lost after submission');
+      return {run_id: 'new-analysis'};
+    }
     return current;
   };
   let rights = {review: true, operate: false};
@@ -59,6 +66,7 @@ globalThis.document = {createElement: tag => new Element(tag)};
   const find = text => buttons().find(item => item.textContent === text);
   assert(find('Approve selected run'));
   assert(!find('Resume selected run'));
+  assert(!find('Analyze this source again'));
   hold = true;
   const approval = find('Approve selected run').events.click();
   assert(buttons().every(item => item.disabled));
@@ -75,6 +83,14 @@ globalThis.document = {createElement: tag => new Element(tag)};
   await find('Resume selected run').events.click();
   assert.equal(calls.at(-2)[0], '/operator/runs/selected/resume');
   assert(!find('Resume selected run'));
+  const newRun = find('Analyze this source again').events.click();
+  assert(buttons().every(item => item.disabled));
+  await find('Analyze this source again').events.click();
+  assert.equal(calls.filter(([url]) => url === '/runs').length, 1);
+  release();
+  await newRun;
+  assert(!find('Analyze this source again'));
+  assert.equal(element.querySelectorAll('a').at(-1).href, CREATION_FAILS ? '/runs/review' : '/runs/review?review_run=new-analysis');
   current = {...current, run_id: 'different-latest'};
   await ui.refresh();
   assert(!find('Approve selected run') && !find('Resume selected run'));
@@ -82,6 +98,7 @@ globalThis.document = {createElement: tag => new Element(tag)};
   assert(calls.every(([url]) => !url.includes('latest')));
 })().catch(error => {console.error(error); process.exitCode = 1;});
 '''
+    checks = checks.replace('CREATION_FAILS', json.dumps(creation_fails))
     result = subprocess.run([node, '-e', harness + '\n' + source + '\n' + checks], capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
 

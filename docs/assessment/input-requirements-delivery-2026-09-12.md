@@ -15,6 +15,9 @@ This release follows the Input Folder audit. Completion requires deployed accept
 
 ### Additional verification on 12 September
 
+- Completed-run review now lets an operator request a separate analysis from that run's registered source pack. Existing reports remain immutable and reviewer approval/operator resume remain separate. The UI blocks repeated clicks while pending and requires checking run history after an uncertain response. Full local regression: 2,634 passed / 164 service-dependent skips; 52 focused review/controller tests passed. Production approval/publication acceptance remains pending.
+- Source-index release `afaab3c` passed CI 34700776347. A disposable Qdrant v1.9.7 proof confirmed obsolete-passage deletion retains the current passage and other tenant/run/type records; production collections were untouched. Deployment/reindex acceptance remains pending.
+
 - Auditor coverage now scales to at least half the finding set, retaining the four-finding minimum when enough findings exist. Only distinct challenges on findings in the reviewed set count. Tests cover small sets, odd/even larger sets, unrelated IDs and duplicates. Full local regression including the final source-index capacity changes: 2,633 passed / 164 service-dependent skips. This establishes challenge coverage, not independent numerical reproduction or final-answer auditor acceptance.
 - Retrieval release `2bb310e` passed CI 34700448178: 2,787 service tests, zero skips, plus Compose and Docker. Deployment 34701008310 is in progress.
 
