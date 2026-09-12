@@ -29,7 +29,7 @@ def _finding(index: int, *, citations: int = 3, calculation: bool = True) -> Fin
     )
 
 
-def test_finance_audit_runs_ping_pong_rounds_and_locks_findings():
+def test_finance_audit_locks_only_resolved_findings_and_retains_disputes():
     findings = [
         _finding(1, citations=2),
         _finding(2, calculation=False),
@@ -46,7 +46,7 @@ def test_finance_audit_runs_ping_pong_rounds_and_locks_findings():
 
     assert events
     assert {event.actor for event in events} >= {"Finance Auditor", "Finance Analyst"}
-    assert all(finding.status == "locked" for finding in findings)
+    assert [finding.status for finding in findings] == ["disputed"] * 3 + ["locked"] * 3
     challenged = {
         event.finding_id
         for event in events
@@ -57,7 +57,9 @@ def test_finance_audit_runs_ping_pong_rounds_and_locks_findings():
     last_response = max(
         event.round_no for event in events if event.actor == analyst.name and event.action == "response"
     )
-    assert first_lock.round_no > last_response
+    assert last_response == auditor.max_rounds
+    assert first_lock.finding_id in {"F-004", "F-005", "F-006"}
+    assert all(event.finding_id not in {"F-001", "F-002", "F-003"} for event in events if event.action == "lock")
     assert auditor.last_verification["passed"] is True
     assert auditor.last_verification["actual_challenged_findings"] >= 4
 
@@ -106,8 +108,8 @@ def test_audit_challenges_weak_findings_before_strong_sample_findings():
     assert {"F-002", "F-003", "F-004"}.issubset(set(challenged_in_round_one))
 
 
-@pytest.mark.parametrize('count,required', [(1, 1), (6, 4), (8, 4), (9, 5), (14, 7)])
-def test_auditor_reviews_at_least_half_of_larger_finding_sets(count, required):
+@pytest.mark.parametrize('count,required', [(1, 1), (6, 6), (8, 8), (9, 9), (14, 14)])
+def test_auditor_challenges_every_finding(count, required):
     findings = [_finding(i) for i in range(count)]
     auditor = FinanceAuditorAgent()
     events = auditor.run_review_rounds(findings)
@@ -126,3 +128,47 @@ def test_unrelated_and_repeated_challenge_events_cannot_satisfy_coverage():
     report = auditor.verify_acceptance_coverage(findings, events)
     assert report['actual_challenged_findings'] == 1
     assert not report['passed']
+
+
+def test_blocked_finding_cannot_be_unblocked_by_a_challenge_response():
+    finding = _finding(1)
+    finding.status = "blocked"
+    events = FinanceAuditorAgent().run_review_rounds([finding], max_rounds=2)
+    assert finding.status == "blocked"
+    assert not any(event.action == "lock" for event in events)
+    assert any(event.action == "max_rounds" and event.status == "blocked" for event in events)
+
+
+def test_evidence_repair_is_rechecked_and_can_lock_on_last_round():
+    class RepairingAnalyst(FinanceAnalystAgent):
+        def respond_to_challenges(self, findings, challenges, *, round_no):
+            events = super().respond_to_challenges(findings, challenges, round_no=round_no)
+            if round_no == 2:
+                findings[0].citations = _finding(1).citations
+            return events
+    finding = _finding(1, citations=1)
+    events = FinanceAuditorAgent().run_review_rounds([finding], analyst=RepairingAnalyst(), max_rounds=2)
+    assert finding.status == "locked"
+    locks = [event for event in events if event.action == "lock"]
+    assert len(locks) == 1 and locks[0].round_no == 2
+    assert not any(event.action == "max_rounds" for event in events)
+
+
+def test_duplicate_citation_locations_do_not_clear_evidence_challenge():
+    finding = _finding(1)
+    finding.citations = [finding.citations[0]] * 3
+    FinanceAuditorAgent().run_review_rounds([finding], max_rounds=1)
+    assert finding.status == "disputed"
+
+
+def test_duplicate_finding_identity_is_rejected_before_review():
+    findings = [_finding(1), _finding(1)]
+    with pytest.raises(ValueError, match="unique finding"):
+        FinanceAuditorAgent().run_review_rounds(findings)
+    assert all(finding.status == "draft" for finding in findings)
+
+
+@pytest.mark.parametrize("rounds", [0, -1, 11, True, 1.5])
+def test_invalid_round_limit_is_rejected(rounds):
+    with pytest.raises(ValueError, match="one and ten"):
+        FinanceAuditorAgent().run_review_rounds([_finding(1)], max_rounds=rounds)

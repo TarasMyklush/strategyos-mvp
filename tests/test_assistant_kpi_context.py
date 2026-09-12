@@ -37,6 +37,7 @@ def test_context_uses_only_authorized_contract_facts_and_retains_scope():
     assert 'Synthetic company' in result['answer'] and '2026-06-30' in result['answer']
     assert 'east' in result['answer']
     assert result['source_providers'] == ['Synthetic Treasury']
+    assert 'language answer to your question is not complete' in result['answer_caveat']
     assert {c['claim_revision_id'] for c in result['citations']} == {'cash-actual','floor'}
 
 
@@ -97,6 +98,7 @@ def test_disabled_language_layer_goes_directly_to_authorized_kpi_context(monkeyp
         driver_context={'metric':'SAR 999M'}), principal={'authenticated':True,
         'tenant_id':'tenant-a','subject':'reader','role':'executive'}))
     assert result['context_only'] and result['language_status']=='unavailable'
+    assert result['answer_caveat'].startswith('The language layer is unavailable.')
     assert '1,410,000,000' in result['answer'] and '999M' not in result['answer']
 
 

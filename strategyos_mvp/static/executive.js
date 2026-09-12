@@ -3452,11 +3452,14 @@
         // browser KPI cache must never be promoted into a fresh answer.
         var context = await readContext();
         if (context) {
+          context.answer_caveat = 'The language answer could not be completed. ' + (context.answer_caveat || 'These verified KPI figures provide context, not a complete answer to your question.');
           context.answer = 'The language answer could not be completed. ' + context.answer;
           context.language_status = policy ? 'permission_required' : 'unavailable';
           if (policy) {
             var providers = safeArray(context.source_providers);
             context.answer = result.answer + '\n\n' + context.answer +
+              (providers.length ? '\n\nAccountable source provider: ' + providers.join('; ') + '.' : '');
+            context.answer_caveat = result.answer + '\n\n' + context.answer_caveat +
               (providers.length ? '\n\nAccountable source provider: ' + providers.join('; ') + '.' : '');
             context.permission_request = {label:'Request source permission', kpi_label:key.replace(/_/g,' '),
               provider:providers.join('; ') || 'Source administrator — provider not recorded',

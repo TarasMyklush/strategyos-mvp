@@ -17408,6 +17408,7 @@ async def assistant_chat(
                     AssistantKpiContextRequest(run_id=request.run_id, kpi_key=key, persona=request_persona(request)),
                     principal=principal)
                 return {**local, 'question': request.question, 'language_status': 'unavailable',
+                        'answer_caveat': 'The language layer is unavailable. ' + local['answer_caveat'],
                         'answer': 'The language layer is unavailable. ' + local['answer'],
                         'llm_status': llm_qa.chat_status(CONFIG)}
         return await _assistant_chat_response_with_deadline(request, public_safe=False,

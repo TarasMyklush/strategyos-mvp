@@ -27,6 +27,7 @@ def read_context(repository, *, run_id, key, context):
                         for fact in registry.values()} - {''})
     return {**result, 'status': 'ok', 'run_id': run_id, 'context_only': True,
             'determinism_tier': 'governed_context', 'kpi_key': key,
+            'answer_caveat': 'Verified figures for the selected KPI. These provide context; the language answer to your question is not complete.',
             'answer': 'Verified figures for the selected KPI. These provide context; the language answer to your question is not complete.\n\n' + result['answer'],
             'analysis_as_of': snapshot.get('analysis_as_of'),
             'source_providers': providers,

@@ -80,9 +80,9 @@ class FinanceAnalystAgent:
                 "Calculation trace is "
                 + ("present in the finding payload." if finding.calculation else "not yet attached to the finding payload.")
             )
-        if "acceptance-sensitive verification sample" in lower:
+        if "evidence verification required" in lower:
             parts.append(
-                f"Analyst confirms {len(finding.citations)} citation(s), confidence {finding.confidence}, and recoverable SAR {finding.recoverable_sar:,.2f} for acceptance-sensitive review."
+                f"Analyst confirms {len(finding.citations)} citation(s), confidence {finding.confidence}, and recoverable SAR {finding.recoverable_sar:,.2f} for auditor review; this response alone does not resolve an evidence defect."
             )
         if not parts:
             parts.append(
@@ -110,7 +110,7 @@ class FinanceAuditorAgent:
     minimum_challenged_findings = 4
 
     def required_challenges(self, findings: list[Finding]) -> int:
-        return min(len(findings), max(self.minimum_challenged_findings, (len(findings) + 1) // 2))
+        return len({finding.finding_id for finding in findings})
 
     def challenge_findings(self, findings: list[Finding]) -> list[AuditEvent]:
         return self.run_review_rounds(findings)
@@ -124,7 +124,11 @@ class FinanceAuditorAgent:
     ) -> list[AuditEvent]:
         analyst = analyst or FinanceAnalystAgent()
         audit_events: list[AuditEvent] = []
-        max_rounds = max_rounds or self.max_rounds
+        max_rounds = self.max_rounds if max_rounds is None else max_rounds
+        if isinstance(max_rounds, bool) or not isinstance(max_rounds, int) or not 1 <= max_rounds <= self.max_rounds:
+            raise ValueError("Auditor review requires between one and ten rounds.")
+        if len({finding.finding_id for finding in findings}) != len(findings):
+            raise ValueError("Auditor review requires unique finding identities.")
         challenged_once: set[str] = set()
         responded_once: set[str] = set()
         round_no = 1
@@ -139,7 +143,8 @@ class FinanceAuditorAgent:
                 challenge = challenges.get(finding.finding_id)
                 if challenge is None:
                     continue
-                finding.status = "challenged"
+                if finding.status != "blocked":
+                    finding.status = "challenged"
                 finding.challenges.append(challenge)
                 challenged_once.add(finding.finding_id)
                 audit_events.append(
@@ -163,12 +168,15 @@ class FinanceAuditorAgent:
             )
             responded_once.update(event.finding_id for event in analyst_events)
             audit_events.extend(analyst_events)
+            self._lock_ready_findings(findings, audit_events, responded_once, round_no)
             round_no += 1
 
         if any(finding.status != "locked" for finding in findings):
             for finding in findings:
                 if finding.status == "locked":
                     continue
+                if finding.status != "blocked":
+                    finding.status = "disputed"
                 audit_events.append(
                     _audit_event(
                         round_no=max_rounds,
@@ -216,7 +224,7 @@ class FinanceAuditorAgent:
         challenge_map: dict[str, str] = {}
         required = self.required_challenges(findings)
         for finding in self._sorted_review_candidates(findings):
-            if finding.status == "locked" or finding.finding_id in challenged_once:
+            if finding.status == "locked":
                 continue
             issues = self._issues_for_finding(finding)
             if issues:
@@ -231,7 +239,7 @@ class FinanceAuditorAgent:
             if finding.finding_id in challenged_once or finding.finding_id in challenge_map:
                 continue
             challenge_map[finding.finding_id] = (
-                "Acceptance-sensitive verification sample required before lock. "
+                "Evidence verification required for every finding before lock. "
                 f"Confirm citation sufficiency ({len(finding.citations)} citation(s)) and recoverable logic."
             )
             if len(challenged_once) + len(challenge_map) >= required:
@@ -253,8 +261,9 @@ class FinanceAuditorAgent:
 
     def _issues_for_finding(self, finding: Finding) -> list[str]:
         issues: list[str] = []
-        if len(finding.citations) < 3:
-            issues.append("Finding has fewer than three citations.")
+        distinct_citations = {(citation.source_path, citation.locator) for citation in finding.citations}
+        if len(distinct_citations) < 3:
+            issues.append("Finding has fewer than three citations to distinct source locations.")
         if finding.status == "blocked":
             issues.append("Finding is blocked by fail-closed evidence verification.")
         if finding.recoverable_sar > finding.leakage_sar + 0.01:
@@ -287,8 +296,10 @@ class FinanceAuditorAgent:
                     )
                 )
                 continue
+            if finding.finding_id not in responded_once or self._issues_for_finding(finding):
+                continue
             detail = (
-                "Finding locked after analyst response."
+                "Finding locked after analyst response and evidence checks."
                 if finding.finding_id in responded_once
                 else "Finding locked without additional challenge."
             )

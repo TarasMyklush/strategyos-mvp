@@ -115,6 +115,8 @@ const postJson=async(path,body,options)=>{
   const final=await pending;
   assert.equal(reads,2,'The failure boundary must reauthorize, not reuse progress context');
   assert(final.answer.includes('server read 2'));
+  assert(final.responsePayload.answer_caveat.includes('The language answer could not be completed.'));
+  assert(final.responsePayload.answer_caveat.includes('not a complete answer'));
   assert(final.retryable && final.retryPrompt==='question');
   for(const statusCode of [401,403]){
     buildAssistantReply=async()=>({ok:false,statusCode});
@@ -122,6 +124,11 @@ const postJson=async(path,body,options)=>{
     assert.equal(denied.ok,false);
     assert.equal(reads,2,'Authentication denial must not trigger context substitution');
   }
+  buildAssistantReply=async()=>({ok:false,answer:'Source permission is required.',responsePayload:{policy_denied:true}});
+  const policy=await buildAssistantReplyWithContext('question');
+  assert(policy.responsePayload.answer_caveat.includes('Source permission is required.'));
+  assert(policy.responsePayload.answer_caveat.includes('language answer could not be completed'));
+  assert(policy.responsePayload.permission_request);
 })().catch(e=>{console.error(e);process.exit(1)});
 '''
     subprocess.run(['node','-e',program],check=True,capture_output=True,text=True)
