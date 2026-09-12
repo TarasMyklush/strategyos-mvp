@@ -70,12 +70,14 @@ def fact_registry(records):
         metric_name = str(dimensions.get('component') or dimensions.get('driver_key') or record['metric_key'].split('.')[-1]).replace('_', ' ').upper()
         label = str(record.get('label') or record.get('claim_kind') or '')
         display_scope = [when, str(subject['key'])]
-        if record.get('business_unit'):
+        if record.get('business_unit') and not (str(subject['key']) == str(record['business_unit'])
+                or str(subject['key']).startswith(str(record['business_unit']) + ':')):
             display_scope.append(str(record['business_unit']))
         if record.get('scenario'):
             display_scope.append(str(record['scenario']))
         display_scope.extend(f'{key.replace("_", " ")}: {value}' for key, value in identity_dimensions.items()
                              if key not in {'driver_key', 'component_key', 'presentation_component'}
+                             and not (key == 'label' and str(value) in {str(subject['key']), str(record.get('business_unit') or '')})
                              and not (key == 'series' and str(value).casefold() in {
                                  label.casefold(), str(record.get('claim_kind') or '').casefold()}))
         displayed_value = f'{unit} {Decimal(normalized):,f}' if value_type == 'numeric' else normalized
@@ -86,7 +88,10 @@ def fact_registry(records):
         # hand-picked subset of dimension names. It remains untrusted evidence.
         context_text = json.dumps(dimensions, ensure_ascii=False, sort_keys=True, default=str)
         result[ref] = {'ref':ref, 'text':' · '.join(parts) + f': {normalized} {unit}\nRecorded context: {context_text}',
-                       'display_text':display_text, 'record':record, 'value':normalized, 'unit':unit}
+                       'display_text':display_text, 'display_name':metric_name,
+                       'display_value':displayed_value, 'scope_text':' · '.join(display_scope),
+                       'source_commentary':dimensions.get('driver') if isinstance(dimensions.get('driver'), str) else '',
+                       'record':record, 'value':normalized, 'unit':unit}
     return result
 
 
@@ -126,6 +131,8 @@ def render_selection(selection, registry, *, run_id):
         citations.append({'source_path':'claim://'+ref,'locator':'immutable revision '+ref,
                           'excerpt':fact['display_text'],'claim_revision_id':ref,'href':href,'resolved':True})
         facts.append({'claim_revision_id':ref,'metric_key':record['metric_key'],
+                      'display_name':fact['display_name'], 'display_value':fact['display_value'],
+                      'scope_text':fact['scope_text'], 'source_commentary':fact['source_commentary'],
                       'subject':record['subject'],'period':record.get('period'),
                       'value':fact['value'],'value_type':record['value_type'],
                       'unit':fact['unit'],'claim_kind':record.get('claim_kind'),

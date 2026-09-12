@@ -228,9 +228,41 @@
     return '<table class="assistant-md-table">' + head + body + '</table>';
   }
 
+  function renderGovernedFactAnswer(rawText, payload) {
+    var cells = safeArray(payload.fact_cells);
+    if (!cells.length || cells.some(function (cell) { return typeof cell.display_value !== 'string'; })) {
+      // Retained conversation history may predate structured display fields.
+      // Preserve every paragraph rather than applying the prose summarizer.
+      return '<div class="assistant-governed-answer">' + String(rawText || '').split(/\n\s*\n/).map(function (paragraph) {
+        return '<p class="assistant-fact-paragraph">' + escapeHtml(paragraph) + '</p>';
+      }).join('') + '</div>';
+    }
+    var commentary = [];
+    var seen = new Set();
+    var rows = cells.map(function (cell) {
+      var label = String(cell.display_name || cell.metric_key || 'Recorded measure');
+      var note = String(cell.source_commentary || '');
+      var key = JSON.stringify([label, cell.scope_text, note]);
+      if (note && !seen.has(key)) {
+        seen.add(key);
+        commentary.push('<p><strong>' + escapeHtml(label) + '</strong> — ' + escapeHtml(note) + '</p>');
+      }
+      return '<tr><th scope="row">' + escapeHtml(label) + '<small>' + escapeHtml(cell.scope_text || '') + '</small></th>'
+        + '<td>' + escapeHtml(cell.claim_kind || 'Recorded') + '</td><td>' + escapeHtml(cell.display_value) + '</td></tr>';
+    }).join('');
+    var comparisons = safeArray(payload.calculated_comparisons).map(function (item) {
+      return '<li>' + escapeHtml(item.display_text || '') + '</li>';
+    }).join('');
+    return '<div class="assistant-governed-answer"><div class="assistant-fact-table-scroll"><table class="assistant-fact-table">'
+      + '<caption>Source-backed facts</caption><thead><tr><th scope="col">Measure and scope</th><th scope="col">Status</th><th scope="col">Value</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+      + (comparisons ? '<section><h4>Calculated comparisons</h4><ul>' + comparisons + '</ul></section>' : '')
+      + (commentary.length ? '<section><h4>Recorded source commentary</h4>' + commentary.join('') + '</section>' : '') + '</div>';
+  }
+
   function renderAssistantStructuredAnswer(rawText, payload) {
     var text = String(rawText || "").trim();
     if (payload && payload.policy_denied) return '<div class="assistant-answer-dashboard"><p>' + escapeHtml(text) + '</p></div>';
+    if (payload && payload.fact_contract === 'governed-fact-selection-v1') return renderGovernedFactAnswer(text, payload);
     if (!text) return '<div class="assistant-answer-dashboard"><p class="assistant-answer-verdict">No answer was returned.</p></div>';
     var blocks = payload && payload.executive_blocks && typeof payload.executive_blocks === "object" ? payload.executive_blocks : {};
     var plain = text.replace(/^#+\s*/gm, "").replace(/\*\*/g, "").replace(/\s+/g, " ").trim();

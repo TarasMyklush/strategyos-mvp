@@ -4620,6 +4620,19 @@ html[data-theme="dark"] .pill-inline.danger { color: #efaaaa; }
 .assistant-thread-new-button:hover { background: var(--accent-soft); }
 
 .assistant-answer-dashboard { display: grid; gap: 10px; }
+.assistant-governed-answer { display: grid; gap: 16px; min-width: 0; }
+.assistant-fact-table-scroll { overflow-x: auto; max-width: 100%; }
+.assistant-fact-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+.assistant-fact-table caption { text-align: left; font-weight: 600; margin-bottom: 8px; }
+.assistant-fact-table th, .assistant-fact-table td { padding: 10px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.assistant-fact-table tbody th { font-weight: 600; min-width: 130px; }
+.assistant-fact-table th:nth-child(2), .assistant-fact-table td:nth-child(2) { min-width: 64px; white-space: nowrap; text-transform: capitalize; }
+.assistant-fact-table small { display: block; font-weight: 400; color: var(--ink-2); margin-top: 4px; line-height: 1.45; }
+.assistant-fact-table td:last-child { font-variant-numeric: tabular-nums; min-width: 160px; white-space: nowrap; }
+.assistant-governed-answer h4 { margin: 0 0 8px; font-size: 13px; }
+.assistant-governed-answer ul { margin: 0; padding-left: 20px; }
+.assistant-governed-answer li { margin-bottom: 8px; line-height: 1.5; }
+.assistant-fact-paragraph { white-space: pre-wrap; font-weight: 400; }
 .assistant-answer-verdict { margin: 0; color: var(--ink); font-size: 16px; font-weight: 650; line-height: 1.42; }
 .assistant-answer-stats { display: flex; flex-wrap: wrap; gap: 7px; }
 .assistant-answer-stats span {
