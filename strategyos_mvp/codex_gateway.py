@@ -49,7 +49,10 @@ DISABLED_FEATURES = (
     "computer_use", "in_app_browser", "image_generation", "view_image",
     "code_mode", "code_mode_host", "memories", "goals", "workspace_dependencies",
 )
-WEB_SEARCH_FEATURES = {"browser_use", "browser_use_external"}
+# Codex 0.149 routes hosted search through its internal code-mode host even
+# when the public code-mode feature itself is disabled. Keep only that host and
+# the browser search adapters available for an explicitly live-search request.
+WEB_SEARCH_FEATURES = {"browser_use", "browser_use_external", "code_mode_host"}
 MAX_BODY = 1_048_576
 MAX_OUTPUT = 131_072
 

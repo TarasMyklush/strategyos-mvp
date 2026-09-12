@@ -86,6 +86,7 @@ def test_live_search_is_explicit_and_keeps_action_tools_disabled(tmp_path):
     assert 'web_search="live"' in command
     assert "browser_use" not in command
     assert "browser_use_external" not in command
+    assert "code_mode_host" not in command
     for feature in set(gateway.DISABLED_FEATURES) - gateway.WEB_SEARCH_FEATURES:
         assert command[command.index(feature) - 1] == "--disable"
 
