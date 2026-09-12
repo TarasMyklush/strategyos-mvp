@@ -2229,20 +2229,48 @@ def test_kpi_panel_free_text_ask_carries_the_active_figure_as_context():
         "a typed question must be distinguishable from the preset intents"
     )
 
-    form_start = js.index("__strategyosKpiAskContext")
-    handler = js[form_start:form_start + 2200]
-    assert "key: key" in handler and "label: label" in handler, (
-        "the typed question must carry the active KPI as context, so the "
-        "figure on screen is answered first"
-    )
-    assert "kpi_key: askContext.key" in handler and "kpi_label: askContext.label" in handler
-    assert 'entrypoint: "ceo_kpi_inline"' in handler
-    assert 'drillCard.addEventListener("submit"' in handler, (
-        "the handler must survive live drill-content replacement"
-    )
-    assert "event.preventDefault()" in handler, (
-        "a refresh race must not turn the KPI question into native form navigation"
-    )
+    # Execute the delegated handler. A fixed character window around the first
+    # context read cannot prove what context a refreshed form actually submits.
+    import subprocess
+
+    start = js.index('    drillCard.__strategyosKpiAskContext = {')
+    end = js.index('  function renderDriverDrillFidelity()', start)
+    binding = 'function bind() {\n' + js[start:end]
+    program = '''
+const assert = require('node:assert/strict');
+const handlers = {}, calls = [];
+let key = 'revenue', label = 'Revenue', driver = {}, availability = 'available';
+const state = {kpiQuestionDrafts: {}};
+const kpiAssistantSubject = () => ({metric_key: key});
+const input = {value: '', matches: () => true};
+const form = {querySelector: selector => selector === '[data-kpi-ask-input]' ? input : null};
+const drillCard = {
+  contains: node => node === form,
+  addEventListener: (name, handler) => {assert(!handlers[name]); handlers[name] = handler;}
+};
+const askAssistant = (question, button, context) => calls.push({question, context});
+''' + binding + '''
+bind();
+input.value = 'Draft about revenue'; handlers.input({target: input});
+key = 'cash_vs_floor'; label = 'Cash vs floor'; bind();
+input.value = 'Do I need to intervene?'; handlers.input({target: input});
+let prevented = false;
+handlers.submit({target: {closest: () => form}, preventDefault: () => {prevented = true;}});
+assert(prevented, 'Submission must not navigate the page');
+assert.equal(calls.length, 1);
+assert.equal(calls[0].question, 'Do I need to intervene?');
+assert.equal(calls[0].context.kpi_key, 'cash_vs_floor');
+assert.equal(calls[0].context.kpi_label, 'Cash vs floor');
+assert.equal(calls[0].context.subject.metric_key, 'cash_vs_floor');
+assert.equal(calls[0].context.kpi_question_intent, 'free_text');
+assert.equal(calls[0].context.entrypoint, 'ceo_kpi_inline');
+assert.equal(state.kpiQuestionDrafts.revenue, 'Draft about revenue');
+assert.equal(state.kpiQuestionDrafts.cash_vs_floor, '');
+assert.equal(input.value, '');
+handlers.submit({target: {closest: () => form}, preventDefault: () => {}});
+assert.equal(calls.length, 1, 'Empty input must not create another request');
+'''
+    subprocess.run(['node', '-e', program], check=True, capture_output=True, text=True)
 
     assert ".kpi-inline-ask" in css, "the free-text ask must be styled with the panel"
 
