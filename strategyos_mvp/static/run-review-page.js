@@ -21,7 +21,22 @@
       list.appendChild(link);
     });
     status.textContent = runs.store_status === 'failed' ? 'The run list is currently unavailable.' : 'Select a run to inspect its evidence and available actions.';
-    const runId = new URLSearchParams(location.search).get('review_run');
+    const params = new URLSearchParams(location.search);
+    let runId = params.get('review_run');
+    const jobId = params.get('job_id');
+    while (!runId && jobId) {
+      const job = await request('/runs/jobs/' + encodeURIComponent(jobId));
+      runId = job.strategyos_run_id || (job.run || {}).run_id;
+      if (runId) {
+        history.replaceState(null, '', '/runs/review?review_run=' + encodeURIComponent(runId));
+        break;
+      }
+      if (['failed', 'cancelled', 'completed', 'succeeded'].includes(job.status)) {
+        throw new Error('This analysis has no available review. Check its operator run status before submitting again.');
+      }
+      status.textContent = 'This analysis is queued or starting. Its own review will open here when available.';
+      await new Promise(resolve => window.setTimeout(resolve, 5000));
+    }
     if (runId) {
       const review = window.KyvernRunReview.create({element: document.getElementById('selected-run-review'),
         runId, request, permissions: () => rights});

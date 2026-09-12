@@ -84,6 +84,12 @@
       const run = await request('/runs', {method:'POST', headers:{'Content-Type':'application/json'},
         body:JSON.stringify({source_pack_id:staged.source_pack_id, sync_artifacts:true})});
       status.textContent = 'Analysis requested: ' + (run.run_id || run.job_id || run.status || 'pending') + '. No approval or publication was performed.';
+      const link = document.createElement('a');
+      const createdRun = run.strategyos_run_id || run.run_id;
+      link.href = createdRun ? '/runs/review?review_run=' + encodeURIComponent(createdRun)
+        : run.job_id ? '/runs/review?job_id=' + encodeURIComponent(run.job_id) : '/runs/review';
+      link.textContent = ' Track this analysis';
+      status.appendChild(link);
       staged = null;
     } catch (error) { status.textContent = 'Analysis not confirmed: ' + error.message + ' Check run history before retrying.'; }
     finally { busy = false; register.disabled = !staged; }

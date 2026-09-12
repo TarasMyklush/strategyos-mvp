@@ -8,7 +8,9 @@ import pytest
 
 
 @pytest.mark.parametrize('creation_fails', [False, True])
-def test_selected_review_never_substitutes_latest_run_or_repeats_pending_action(creation_fails):
+@pytest.mark.parametrize('receipt,expected_link', [({'run_id': 'new-analysis'}, '/runs/review?review_run=new-analysis'),
+    ({'job_id': 'queued-analysis', 'strategyos_run_id': None}, '/runs/review?job_id=queued-analysis')])
+def test_selected_review_never_substitutes_latest_run_or_repeats_pending_action(creation_fails, receipt, expected_link):
     node = shutil.which('node')
     if not node:
         pytest.skip('Node is required for the browser controller regression')
@@ -55,7 +57,7 @@ globalThis.document = {createElement: tag => new Element(tag)};
       assert.deepEqual(JSON.parse(options.body), {source_pack_id: 'original-source', sync_artifacts: true});
       await new Promise(resolve => {release = resolve;});
       if (CREATION_FAILS) throw new Error('Connection lost after submission');
-      return {run_id: 'new-analysis'};
+      return RECEIPT;
     }
     return current;
   };
@@ -90,7 +92,7 @@ globalThis.document = {createElement: tag => new Element(tag)};
   release();
   await newRun;
   assert(!find('Analyze this source again'));
-  assert.equal(element.querySelectorAll('a').at(-1).href, CREATION_FAILS ? '/runs/review' : '/runs/review?review_run=new-analysis');
+  assert.equal(element.querySelectorAll('a').at(-1).href, CREATION_FAILS ? '/runs/review' : EXPECTED_LINK);
   current = {...current, run_id: 'different-latest'};
   await ui.refresh();
   assert(!find('Approve selected run') && !find('Resume selected run'));
@@ -99,6 +101,7 @@ globalThis.document = {createElement: tag => new Element(tag)};
 })().catch(error => {console.error(error); process.exitCode = 1;});
 '''
     checks = checks.replace('CREATION_FAILS', json.dumps(creation_fails))
+    checks = checks.replace('RECEIPT', json.dumps(receipt)).replace('EXPECTED_LINK', json.dumps(expected_link))
     result = subprocess.run([node, '-e', harness + '\n' + source + '\n' + checks], capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
 

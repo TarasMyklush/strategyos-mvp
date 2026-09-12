@@ -69,8 +69,10 @@
         render();
         status("A separate analysis was requested. This run and its published reports are unchanged. Review and approval remain separate actions.");
         const link = node('a', 'Open the new analysis');
-        link.href = typeof receipt.run_id === 'string' && receipt.run_id !== runId
-          ? '/runs/review?review_run=' + encodeURIComponent(receipt.run_id) : '/runs/review';
+        const createdRun = receipt.strategyos_run_id || receipt.run_id;
+        link.href = typeof createdRun === 'string' && createdRun !== runId
+          ? '/runs/review?review_run=' + encodeURIComponent(createdRun)
+          : receipt.job_id ? '/runs/review?job_id=' + encodeURIComponent(receipt.job_id) : '/runs/review';
       } catch (error) {
         busy = false;
         render();
