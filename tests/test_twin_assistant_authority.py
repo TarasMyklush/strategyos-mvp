@@ -27,7 +27,8 @@ def test_scoped_twin_cards_and_answers_use_only_immutable_facts(monkeypatch):
     from tests.test_llm_qa import _config
     monkeypatch.setattr(api, 'CONFIG', _config())
     monkeypatch.setattr(model_policy, 'evidence_model_access', lambda _: True)
-    selections = iter([{'matched':True,'fact_refs':['r'],'answer_supported':True}, {'matched':False,'fact_refs':[],'answer_supported':False}])
+    selections = iter([{'matched':True,'fact_refs':['r'],'answer_supported':True}, {'matched':False,'fact_refs':[],'answer_supported':False},
+                       {'matched':True,'fact_refs':['r'],'answer_supported':False}])
     monkeypatch.setattr(llm_qa, '_call_openai_compatible_chat', lambda **kwargs: json.dumps(next(selections)))
     record={'claim_revision_id':'r','traceability':'present','value_type':'numeric','value':'120','scale':'1',
         'unit':'SAR','currency':'SAR','metric_key':'finance.revenue','subject':{'type':'client','key':'NUPCO'},
@@ -45,3 +46,8 @@ def test_scoped_twin_cards_and_answers_use_only_immutable_facts(monkeypatch):
     missing=strategyos_data.compose_investigation_payload('cfo','Unrelated topic?')
     assert '120' not in missing['response']['summary']
     assert missing['evidence']==[]
+    partial=strategyos_data.compose_investigation_payload('cfo','Who consistently forecasts best?')
+    assert partial['response']['determinism_tier']=='context_only'
+    assert partial['response']['answer_coverage']=='context_only'
+    assert 'do not establish a complete answer' in partial['response']['summary']
+    assert partial['evidence'][0]['claim_revision_id']=='r'

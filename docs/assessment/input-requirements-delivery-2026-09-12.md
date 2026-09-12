@@ -15,6 +15,8 @@ This release follows the Input Folder audit. Completion requires deployed accept
 
 ### Additional verification on 12 September
 
+- Combined answer-coverage and queued-review regression: 2,651 passed / 164 service-dependent skips. The first coverage suite exposed an old twin-provider fixture; its schema was updated and the twin surface now preserves Context only explicitly. The final combined suite passed. Deadline CI 34703161399 is green; the combined release still requires its own CI and deployment acceptance.
+
 - Answer coverage is now assessed separately from fact selection. Related authorized facts remain visible with unchanged values and citations, but an incomplete answer is labelled Context only and does not count as matched. Multi-batch results receive a union-level completeness assessment. The model supplies only a validated boolean; it cannot author factual prose or figures through this contract. Focused checks: 124 passed. Full regression, CI and deployed semantic acceptance remain pending. This is not independent factual evaluation and does not close G10 or document retrieval coverage.
 - Queued analysis receipts now link to their exact job, then open only its assigned run; source intake uses the same navigation. Failed or forbidden jobs do not substitute a different run or display raw diagnostics. Full local regression: 2,644 passed / 164 service-dependent skips. Eight focused UI controller cases passed. CI and deployed start/review acceptance remain pending.
 

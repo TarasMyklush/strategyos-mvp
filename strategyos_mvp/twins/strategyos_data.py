@@ -440,7 +440,8 @@ def compose_investigation_payload(role: str, query: str) -> dict[str, Any]:
                     fact['record'] for fact in surface['fact_registry'].values())),
                 findings=[], summary=surface['summary'], config=_strategyos_api().CONFIG,
                 persona=_view_state(role)['persona'])
-            mode = 'policy' if rendered.get('policy_denied') else 'governed_fact' if rendered.get('matched') else 'needs_evidence'
+            mode = ('policy' if rendered.get('policy_denied') else 'governed_fact' if rendered.get('matched')
+                    else 'context_only' if rendered.get('answer_coverage') == 'context_only' else 'needs_evidence')
             if (rendered.get('llm_status') or {}).get('enabled') is False and mode != 'policy':
                 mode = 'service_error'
         except RuntimeError:
@@ -448,6 +449,7 @@ def compose_investigation_payload(role: str, query: str) -> dict[str, Any]:
             mode = 'service_error'
         return {'data_source':'authorized_claim_snapshot','source_status':'current_run','bounded_fallback':False,
                 'response':{'summary':rendered['answer'],'mode':mode, 'determinism_tier':mode,
+                            'answer_coverage':rendered.get('answer_coverage'),
                             'fact_cells':rendered.get('fact_cells',[])},
                 'run_context':build_run_context(surface),
                 'board':{'status':'unavailable','reason':'No domain-classified board projection supplied.'},
