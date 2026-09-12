@@ -8,7 +8,7 @@ import json, os, time
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
-base = os.environ.get('HERMES_BASE_URL', 'https://new.strategyos.live').rstrip('/')
+base = os.environ.get('HERMES_BASE_URL', 'https://strategyos.live').rstrip('/')
 username = 'executive.tester'
 password = next(item.partition('=')[2] for item in os.environ['STRATEGYOS_IDP_TEST_USERS'].split(',') if item.partition('=')[0].strip() == username)
 out = Path(os.environ.get('HERMES_UI_OUTPUT_DIR', 'artifacts/hermes-ui-2026-09-10'))
@@ -104,9 +104,9 @@ with sync_playwright() as p:
                     evidence_text=evidence.locator('body').inner_text()
                     item['citation_url']=evidence.url
                     (out/'ebitda-citation.txt').write_text(evidence_text)
-                    assert '64327cbb-e7cb-42d7-b6c7-5e915dafe2fa' in evidence_text,evidence_text[:1000]
                     from decimal import Decimal
                     citation_record = json.loads(evidence_text)['record']
+                    assert citation_record['claim_revision_id'] in {c['claim_revision_id'] for c in payload['citations']}
                     assert citation_record['metric_key'] == 'ceo.ebitda'
                     assert Decimal(str(citation_record['value'])) * Decimal(str(citation_record['scale'])) == Decimal('617000000')
                     evidence.close()

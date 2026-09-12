@@ -35,31 +35,30 @@ def save_private(path, content):
 def runtime_env_args(root, target):
     """Return the database-role environment used by the selected deployment.
 
-    Preview releases generate separate request, worker, and projector database
+    Governed releases generate separate request, worker, and projector database
     credentials during migration. Any later Compose recreation must load that
-    same file or the branch override deliberately resolves to an unusable
+    same file or the deployment override deliberately resolves to an unusable
     `unconfigured` identity.
     """
-    if target != "preview":
-        return []
     path = root / "runtime-database/runtime.env"
     if not path.is_file():
-        raise SystemExit("Preview runtime database credentials are missing; run the governed deployment first")
+        raise SystemExit("Runtime database credentials are missing; run the governed deployment first")
     entries = {}
     for line in path.read_text(encoding="utf-8").splitlines():
         if line and not line.startswith("#") and "=" in line:
             key, value = line.split("=", 1)
             entries[key] = value
+    prefix = "strategyos_preview" if target == "preview" else "strategyos_production"
     expected = {
-        "STRATEGYOS_RUNTIME_DATABASE_URL": "strategyos_preview_runtime",
-        "STRATEGYOS_WORKER_DATABASE_URL": "strategyos_preview_worker",
-        "STRATEGYOS_PROJECTOR_DATABASE_URL": "strategyos_preview_projector",
+        "STRATEGYOS_RUNTIME_DATABASE_URL": prefix + "_runtime",
+        "STRATEGYOS_WORKER_DATABASE_URL": prefix + "_worker",
+        "STRATEGYOS_PROJECTOR_DATABASE_URL": prefix + "_projector",
     }
     for key, username in expected.items():
         value = entries.get(key, "")
         parsed = urlsplit(value)
         if parsed.username != username or not parsed.password or parsed.hostname != "postgres":
-            raise SystemExit(f"Preview runtime database credentials are invalid for {key}")
+            raise SystemExit(f"Runtime database credentials are invalid for {key}")
     return ["--env-file", str(path)]
 
 

@@ -18,6 +18,17 @@ if [[ "$TARGET_DIR" == /opt/strategyos-branch || "$COMPOSE_PROJECT_NAME" == stra
   fi
 fi
 
+if [[ "$TARGET_DIR" == /opt/strategyos ]]; then
+  if [[ -z "${STRATEGYOS_API_IMAGE:-}" || "$COMPOSE_PROJECT_NAME" != strategyos ]]; then
+    echo "Production requires the exact strategyos project and a verified release image." >&2
+    exit 1
+  fi
+  case " ${COMPOSE_FILES} " in
+    *" deploy/docker-compose.production.yml "*) ;;
+    *) COMPOSE_FILES="${COMPOSE_FILES} deploy/docker-compose.production.yml" ;;
+  esac
+fi
+
 COMPOSE_FILE_ARGS=""
 for compose_file in ${COMPOSE_FILES}; do
   COMPOSE_FILE_ARGS="${COMPOSE_FILE_ARGS} -f ${compose_file}"
@@ -93,6 +104,23 @@ trap dump_remote_compose_diagnostics ERR
 
 if [ -n "${STRATEGYOS_API_IMAGE:-}" ]; then
   ssh ${SSH_OPTS} "${TARGET_HOST}" "docker pull '${STRATEGYOS_API_IMAGE}'"
+  if [[ "$TARGET_DIR" == /opt/strategyos ]]; then
+    ssh ${SSH_OPTS} "${TARGET_HOST}" "COMPOSE_FILE_ARGS='${COMPOSE_FILE_ARGS}' COMPOSE_PROFILE_ARGS='${COMPOSE_PROFILE_ARGS}' PROJECT_NAME_ARG='${PROJECT_NAME_ARG}' PROVIDER_ENV_ARGS='${PROVIDER_ENV_ARGS}' bash -s" <<'PRODUCTION_MIGRATE'
+set -euo pipefail
+umask 077
+mkdir -p /opt/strategyos/runtime-database /opt/strategyos/backups
+chmod 700 /opt/strategyos/runtime-database
+backup_dir=$(mktemp -d /opt/strategyos/backups/release-db-XXXXXXXX)
+docker exec strategyos-postgres-1 sh -c 'exec pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom' > "$backup_dir/database.dump"
+test -s "$backup_dir/database.dump"
+docker exec -i strategyos-postgres-1 pg_restore --list < "$backup_dir/database.dump" >/dev/null
+cd /opt/strategyos/app
+docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS}${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets${PROVIDER_ENV_ARGS} run --rm --no-deps strategyos-migrate
+test -s /opt/strategyos/runtime-database/runtime.env
+PRODUCTION_MIGRATE
+    RUNTIME_ENV_ARGS=" --env-file /opt/strategyos/runtime-database/runtime.env"
+    ssh ${SSH_OPTS} "${TARGET_HOST}" "set -o pipefail; cd '${TARGET_DIR}/app' && docker compose${COMPOSE_FILE_ARGS}${COMPOSE_PROFILE_ARGS} --profile hatchet --profile governed-claims --profile schema-migration${PROJECT_NAME_ARG} --env-file deploy/.env --env-file deploy/.env.secrets${PROVIDER_ENV_ARGS}${RUNTIME_ENV_ARGS} config --format json | python3 deploy/scripts/validate_preview_runtime_config.py --target production"
+  fi
   if [[ "$TARGET_DIR" == /opt/strategyos-branch && "$COMPOSE_PROJECT_NAME" == strategyos-branch ]]; then
     ssh ${SSH_OPTS} "${TARGET_HOST}" "TARGET_DIR='${TARGET_DIR}' COMPOSE_FILE_ARGS='${COMPOSE_FILE_ARGS}' COMPOSE_PROFILE_ARGS='${COMPOSE_PROFILE_ARGS}' PROJECT_NAME_ARG='${PROJECT_NAME_ARG}' PROVIDER_ENV_ARGS='${PROVIDER_ENV_ARGS}' bash -s" <<'MIGRATE'
 set -euo pipefail

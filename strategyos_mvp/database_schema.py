@@ -1,7 +1,7 @@
 """Explicit migration command and read-only, unprivileged runtime verification.
 
 Migration credentials belong to the deployment job, never the API configuration.
-Preview role provisioning requires an explicit deployment boundary and CLI flag.
+Role provisioning requires an explicit deployment boundary and CLI flag.
 This module does not choose tenant policies or enable RLS.
 """
 import argparse
@@ -15,9 +15,9 @@ from . import state_store
 
 
 def auxiliary_scripts():
-    from . import board_memory, conversation_state, decision_lifecycle, inference_audit
+    from . import board_memory, conversation_state, decision_lifecycle, inference_audit, research
     return [board_memory.SCHEMA, conversation_state.SCHEMA,
-            decision_lifecycle.SCHEMA, inference_audit.SCHEMA,
+            decision_lifecycle.SCHEMA, inference_audit.SCHEMA, research.AUDIT_SCHEMA,
             Path(__file__).with_name('sql').joinpath('dimensional_intent.sql').read_text()]
 
 
@@ -128,6 +128,9 @@ def prepare_schema(conn):
     conn.commit()
 
 
+# These versioned capability names originated in preview and are referenced by
+# SQL policies. Keep the contract stable; production has distinct login roles
+# and its own database, not a different set of evidence access rules.
 _RUNTIME_MARKERS = {
     'request': 'strategyos-preview-runtime:1',
     'worker': 'strategyos-preview-worker:1',
@@ -252,8 +255,6 @@ def verify_runtime_schema(conn, *, expected_scope=None):
 
 def provision_preview_runtime(conn, destination: Path, *, role='strategyos_preview_runtime'):
     """Provision separate request, workflow and projection identities."""
-    import psycopg
-    from psycopg import sql
     if os.environ.get('STRATEGYOS_DEPLOYMENT_BOUNDARY') != 'preview':
         raise RuntimeError('Runtime provisioning is restricted to the explicit preview deployment boundary.')
     if not role.startswith('strategyos_preview_runtime'):
@@ -264,6 +265,23 @@ def provision_preview_runtime(conn, destination: Path, *, role='strategyos_previ
         'worker':('strategyos_preview_worker'+suffix,'STRATEGYOS_WORKER_DATABASE_URL'),
         'projector':('strategyos_preview_projector'+suffix,'STRATEGYOS_PROJECTOR_DATABASE_URL'),
     }
+    _provision_runtime(conn, destination, role_specs)
+
+
+def provision_production_runtime(conn, destination: Path):
+    """Use the same enforced privileges with distinct production login names."""
+    if os.environ.get('STRATEGYOS_DEPLOYMENT_BOUNDARY') != 'production':
+        raise RuntimeError('Production runtime provisioning requires the explicit production boundary.')
+    _provision_runtime(conn, destination, {
+        'request': ('strategyos_production_runtime', 'STRATEGYOS_RUNTIME_DATABASE_URL'),
+        'worker': ('strategyos_production_worker', 'STRATEGYOS_WORKER_DATABASE_URL'),
+        'projector': ('strategyos_production_projector', 'STRATEGYOS_PROJECTOR_DATABASE_URL'),
+    })
+
+
+def _provision_runtime(conn, destination, role_specs):
+    import psycopg
+    from psycopg import sql
     owner_url=urlsplit(state_store.CONFIG.database_url or '')
     if owner_url.scheme not in {'postgres','postgresql'} or not owner_url.hostname:
         raise ValueError('Runtime provisioning requires an explicit PostgreSQL URL.')
@@ -367,7 +385,10 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--apply',action='store_true',help='Prepare schema using deployment-only credentials.')
     parser.add_argument('--preview-runtime-env',type=Path,help='Provision the preview-only runtime role and write a private connection file.')
+    parser.add_argument('--production-runtime-env', type=Path, help='Provision isolated production database roles.')
     args=parser.parse_args()
+    if args.preview_runtime_env and args.production_runtime_env:
+        parser.error('Choose exactly one deployment boundary.')
     handle,failure=state_store.database_connection()
     if failure or handle is None:
         raise RuntimeError('Database unavailable.')
@@ -376,9 +397,11 @@ def main():
             prepare_schema(conn)
             if args.preview_runtime_env:
                 provision_preview_runtime(conn,args.preview_runtime_env)
+            if args.production_runtime_env:
+                provision_production_runtime(conn,args.production_runtime_env)
             print('Database schema prepared; no business claims were reclassified.')
         else:
-            if args.preview_runtime_env:
+            if args.preview_runtime_env or args.production_runtime_env:
                 raise ValueError('Runtime provisioning requires the explicit --apply deployment operation.')
             verify_runtime_schema(conn)
             print('Unprivileged runtime schema verification passed.')

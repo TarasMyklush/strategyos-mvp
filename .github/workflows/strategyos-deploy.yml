@@ -139,6 +139,7 @@ jobs:
     env:
       TARGET_HOST: ${{ vars.HETZNER_USER }}@${{ vars.HETZNER_HOST }}
       TARGET_DIR: ${{ vars.TARGET_DIR || '/opt/strategyos' }}
+      COMPOSE_PROJECT_NAME: strategyos
       # Readiness and smoke steps read $STRATEGYOS_PUBLIC_URL as TARGET_URL to hit
       # the deployed host over HTTPS. Without this export the variable is empty and
       # both steps silently fall back to an SSH-nested localhost curl, which mangles
@@ -328,6 +329,7 @@ jobs:
            }
 
           public_url = os.environ.get("STRATEGYOS_PUBLIC_URL", "").strip()
+          overrides["STRATEGYOS_PUBLIC_URL"] = public_url
           site_address = str(overrides.get("STRATEGYOS_SITE_ADDRESS") or "").strip()
           edge_tls = os.environ.get("STRATEGYOS_EDGE_TLS_TERMINATION", "").strip().lower() in {"1", "true", "yes"}
           parsed_public_url = urlparse(public_url)
@@ -419,6 +421,7 @@ jobs:
       - name: Validate release compose config
         run: |
           compose_files="${STRATEGYOS_COMPOSE_FILES:-deploy/docker-compose.yml deploy/docker-compose.release.yml deploy/docker-compose.hetzner-qa.yml}"
+          compose_files="${compose_files} deploy/docker-compose.production.yml"
           compose_args=()
           for compose_file in ${compose_files}; do
             compose_args+=(-f "${compose_file}")
@@ -447,18 +450,13 @@ jobs:
           GHCR_TOKEN: ${{ github.token }}
         run: printf '%s' "${GHCR_TOKEN}" | ssh ${SSH_OPTS} "${TARGET_HOST}" "docker login ghcr.io -u '${GITHUB_ACTOR}' --password-stdin"
 
-      - name: Pre-deploy host repair
+      - name: Check host capacity
         run: |
           echo "=== Host disk usage ==="
           ssh ${SSH_OPTS} "${TARGET_HOST}" "df -h / && echo '---' && du -sh /var/lib/docker/* 2>/dev/null | sort -rh | head -20 || true"
 
-          echo "=== Docker system prune (unused images, containers, networks, build cache) ==="
-          ssh ${SSH_OPTS} "${TARGET_HOST}" "docker system prune -af || true"
-
-          echo "=== Disk usage after cleanup ==="
-          ssh ${SSH_OPTS} "${TARGET_HOST}" "df -h /"
-
-          echo "Hatchet named volumes are preserved. Destructive recovery is never part of a normal deploy."
+          echo "Release images and other projects are preserved; shared-host cleanup is a separate operation."
+          echo "Destructive recovery is never part of a normal deploy."
 
       - name: Deploy compose stack
         id: deploy
@@ -614,10 +612,10 @@ jobs:
           bash deploy/scripts/rollback_stack.sh
 
   research-ui:
-    name: Governed research Chromium walkthrough
+    name: Executive, Intent and Hermes Chromium walkthroughs
     needs: deploy
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     environment: ${{ inputs.target_environment }}
     env:
       STRATEGYOS_PUBLIC_URL: ${{ vars.STRATEGYOS_PUBLIC_URL }}
@@ -643,11 +641,25 @@ jobs:
       - name: Exercise governed research through the hosted UI
         run: python scripts/hosted_research_ui_acceptance.py --output-dir hosted-research-ui-acceptance
 
+      - name: Exercise the live briefing and customer Intent through the UI
+        if: ${{ !cancelled() }}
+        run: python scripts/hosted_human_e2e.py --output-dir hosted-human-e2e
+
+      - name: Verify real Hermes answers, source labels and linked evidence
+        if: ${{ !cancelled() }}
+        env:
+          HERMES_BASE_URL: ${{ vars.STRATEGYOS_PUBLIC_URL }}
+          HERMES_UI_OUTPUT_DIR: hosted-hermes-ui
+        run: python deploy/scripts/verify_hermes_poc_browser.py
+
       - name: Upload screenshot and report
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: hosted-research-ui-acceptance-${{ github.run_id }}
-          path: hosted-research-ui-acceptance/
+          path: |
+            hosted-research-ui-acceptance/
+            hosted-human-e2e/
+            hosted-hermes-ui/
           if-no-files-found: error
           retention-days: 30

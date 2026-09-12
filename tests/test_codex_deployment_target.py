@@ -43,7 +43,12 @@ def test_preview_provider_reuses_governed_runtime_database_credentials(tmp_path)
     )
 
     assert module.runtime_env_args(tmp_path, "preview") == ["--env-file", str(runtime)]
-    assert module.runtime_env_args(tmp_path, "production") == []
+    with pytest.raises(SystemExit, match="credentials are invalid"):
+        module.runtime_env_args(tmp_path, "production")
+    runtime.write_text(runtime.read_text().replace("strategyos_preview_", "strategyos_production_"))
+    assert module.runtime_env_args(tmp_path, "production") == ["--env-file", str(runtime)]
+    with pytest.raises(SystemExit, match="credentials are invalid"):
+        module.runtime_env_args(tmp_path, "preview")
 
 
 def test_preview_provider_rejects_missing_or_unscoped_runtime_database_credentials(tmp_path):

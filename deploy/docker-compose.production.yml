@@ -1,0 +1,32 @@
+# Production schema is installed explicitly before application containers start.
+services:
+  strategyos-api:
+    environment:
+      DATABASE_URL: ${STRATEGYOS_RUNTIME_DATABASE_URL:-postgresql://unconfigured@postgres/strategyos}
+      STRATEGYOS_DATABASE_SCHEMA_MODE: verify
+      STRATEGYOS_DATABASE_RUNTIME_SCOPE: request
+  strategyos-worker:
+    environment:
+      DATABASE_URL: ${STRATEGYOS_WORKER_DATABASE_URL:-postgresql://unconfigured@postgres/strategyos}
+      STRATEGYOS_DATABASE_SCHEMA_MODE: verify
+      STRATEGYOS_DATABASE_RUNTIME_SCOPE: worker
+  strategyos-claim-projector:
+    environment:
+      DATABASE_URL: ${STRATEGYOS_PROJECTOR_DATABASE_URL:-postgresql://unconfigured@postgres/strategyos}
+      STRATEGYOS_DATABASE_SCHEMA_MODE: verify
+      STRATEGYOS_DATABASE_RUNTIME_SCOPE: projector
+  strategyos-migrate:
+    profiles: [schema-migration]
+    image: ${STRATEGYOS_API_IMAGE:?Set the verified release image}
+    user: '0:0'
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-strategyos}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-strategyos}
+      STRATEGYOS_DATABASE_SCHEMA_MODE: auto
+      STRATEGYOS_DEPLOYMENT_BOUNDARY: production
+    volumes:
+      - /opt/strategyos/runtime-database:/runtime-database
+    command: [python, -m, strategyos_mvp.database_schema, --apply, --production-runtime-env, /runtime-database/runtime.env]

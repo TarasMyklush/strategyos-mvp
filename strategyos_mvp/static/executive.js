@@ -7678,7 +7678,7 @@
       var frozenBoard = params.persona === "board" && params.board === "closed";
       var packetAndNetwork = await Promise.all([
         fetchJson(latestRunRouteForSession(session) + buildQuery(params), true),
-        session.authenticated && !frozenBoard ? fetchJson("/api/v1/agent-network") : Promise.resolve(null),
+        session.authenticated && session.agent_network_enabled && !frozenBoard ? fetchJson("/api/v1/agent-network") : Promise.resolve(null),
         session.authenticated && !frozenBoard ? fetchJson("/executive/files") : Promise.resolve(null),
         session.authenticated && !frozenBoard ? fetchJson("/executive/decisions") : Promise.resolve(null),
         fetchJson("/authority-matrix")

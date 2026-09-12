@@ -9198,6 +9198,7 @@ def ui_session(
         "altitude": _role_altitude(role),
         "capabilities": _principal_capabilities(role),
         "tenant_context": _summary_tenant_context(None, principal),
+        "agent_network_enabled": bool(CONFIG.agent_live_ui_enabled),
         "company_switcher": _company_switcher_payload(principal),
         "portfolio_switcher": _portfolio_switcher_payload(principal),
         "auth_disabled": bool(principal.get("auth_disabled", False)),

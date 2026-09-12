@@ -126,7 +126,7 @@ const fetch = async () => ({ok:false,status:403,json:async()=>({detail:'Source a
         'if (unavailablePanel)', 1
     )[0]
     assert 'renderAssistantStudio();' in unavailable_branch
-    assert 'session.authenticated && !frozenBoard ? fetchJson("/api/v1/agent-network")' in js
+    assert 'session.authenticated && session.agent_network_enabled && !frozenBoard ? fetchJson("/api/v1/agent-network")' in js
 
 
 def test_compact_sar_preserves_reconcilable_board_target_precision():

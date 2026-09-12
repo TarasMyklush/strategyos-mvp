@@ -82,19 +82,25 @@ def test_nonowner_runtime_reads_and_appends_but_cannot_rewrite_schema(ledger,mon
                 owner.execute(sql.SQL('DROP ROLE {}').format(sql.Identifier(role)))
 
 
-def test_preview_role_provisioning_preserves_secret_on_retry(ledger,monkeypatch,tmp_path):
+@pytest.mark.parametrize('boundary', ['preview', 'production'])
+def test_preview_role_provisioning_preserves_secret_on_retry(ledger,monkeypatch,tmp_path,boundary):
     import psycopg
     from psycopg import sql
     role='strategyos_preview_runtime_'+uuid4().hex[:12]
     suffix=role.removeprefix('strategyos_preview_runtime')
     roles=(role,'strategyos_preview_worker'+suffix,'strategyos_preview_projector'+suffix)
+    if boundary == 'production':
+        roles = ('strategyos_production_runtime', 'strategyos_production_worker', 'strategyos_production_projector')
+        provision = database_schema.provision_production_runtime
+    else:
+        provision = lambda conn, path: database_schema.provision_preview_runtime(conn, path, role=role)
     path=tmp_path/'private'/'runtime.env'
-    monkeypatch.setenv('STRATEGYOS_DEPLOYMENT_BOUNDARY','preview')
+    monkeypatch.setenv('STRATEGYOS_DEPLOYMENT_BOUNDARY',boundary)
     monkeypatch.setattr(state_store,'CONFIG',replace(state_store.CONFIG,database_url=ledger[1]))
     try:
         with psycopg.connect(ledger[1]) as owner:
             database_schema.prepare_schema(owner)
-            database_schema.provision_preview_runtime(owner,path,role=role)
+            provision(owner,path)
             initial=path.read_text()
             assert path.stat().st_mode & 0o777 == 0o600
             assert [line.split('=',1)[0] for line in initial.splitlines()]==[
@@ -102,11 +108,11 @@ def test_preview_role_provisioning_preserves_secret_on_retry(ledger,monkeypatch,
                 'STRATEGYOS_WORKER_DATABASE_URL',
                 'STRATEGYOS_PROJECTOR_DATABASE_URL',
             ]
-            database_schema.provision_preview_runtime(owner,path,role=role)
+            provision(owner,path)
             assert path.read_text()==initial
             monkeypatch.delenv('STRATEGYOS_DEPLOYMENT_BOUNDARY')
-            with pytest.raises(RuntimeError,match='preview deployment boundary'):
-                database_schema.provision_preview_runtime(owner,path,role=role)
+            with pytest.raises(RuntimeError,match='boundary'):
+                provision(owner,path)
     finally:
         with psycopg.connect(ledger[1]) as owner:
             for login in roles:

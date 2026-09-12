@@ -60,8 +60,24 @@ def test_preview_deploy_prepares_role_before_starting_new_application():
     assert script.index('run --rm --no-deps strategyos-migrate') < script.index('validate_preview_runtime_config.py') < script.index('up -d --no-build --wait')
     assert '/opt/strategyos-branch/runtime-database/runtime.env' in script
     lines=[line for line in script.splitlines() if '--profile schema-migration' in line]
-    assert len(lines)==1 and 'config --format json' in lines[0]
-    assert 'up -d' not in lines[0]
+    assert len(lines)==2
+    assert all('config --format json' in line and 'up -d' not in line for line in lines)
+
+
+def test_production_rejects_preview_identity_and_hostname():
+    config = fixture()
+    with pytest.raises(ValueError):
+        module.validate(config, target='production')
+    config['name'] = 'strategyos'
+    with pytest.raises(ValueError):
+        module.validate(config, target='production')
+    for service in config['services'].values():
+        env = service['environment']
+        env['DATABASE_URL'] = env['DATABASE_URL'].replace('strategyos_preview_', 'strategyos_production_')
+    with pytest.raises(ValueError, match='strategyos.live'):
+        module.validate(config, target='production')
+    config['services']['strategyos-api']['environment']['STRATEGYOS_PUBLIC_URL'] = 'https://strategyos.live'
+    module.validate(config, target='production')
 
 
 def test_real_compose_inactive_migration_profile_is_included_only_for_inspection(tmp_path):
