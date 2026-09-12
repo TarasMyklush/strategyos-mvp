@@ -13,6 +13,16 @@ This release follows the Input Folder audit. Completion requires deployed accept
 
 ## Remaining scope to reconcile
 
+### Additional verification on 12 September
+
+- WP10 full H1 export is deployed at `bd9dc74`: production EN/AR/bilingual UI exports each retained 288 cells and 576 references. Corrected research disclosure acceptance passed after the old selector matched two nested summaries. The historical deploy run itself remains red; its supplemental acceptance is recorded separately.
+- Four KPI formula/scope walkthroughs passed using candidate JavaScript against production data. A remaining F9 defect in the KPI calculation disclosure was corrected: identifiers and source hashes now have a separate collapsed Technical details control. This candidate result is not yet deployed acceptance.
+- The published POC run `fcf139fe-2acc-43ac-bb59-1cfd9cdd3bc5` contains all four requested files: case-file PDF, working-capital memo, Q&A transcript and audit log. Its eight locked findings total SAR 794,108; the audit log records challenges on four distinct findings. Files were copied read-only for inspection.
+- Task 2 is **not closed**: the delivered memo explicitly reports settlement-day proxies, not balance-based DSO/DPO. The existing calculation averages the latest 13 invoice weeks and compares weeks within that same window; it does not implement the requested preceding 13-week baseline. A proper historical-balance/data-window implementation and numerical regression remain required.
+- Task 3 contains the requested three topics and detailed citations, but the two-paragraph answer constraint and auditor review of each final answer still require verification/correction.
+- Acceptance checks now reject absent auditor challenges, unrelated finding IDs, less than half challenged when more than eight findings exist, directories and empty files presented as deliverables. These checks establish minimum evidence presence, not the substantive validity of every artifact.
+- Existing v2 document artifacts were located under `deliverables/kyvern-presentations`: all four technical DOCX files, three HTML decks and five SVG diagrams. Text inspection confirms Intent substrate, Business Intent Discovery, cadence monitoring, persona/write-back and local-model roadmap content. Several current-state descriptions still say read-only Vault; updating those descriptions and final artifact review remain separate from application test results.
+
 - F6/F7/F13: complete formula/provider/request, answer-label and chart-scope walkthrough.
 - WP7: final production seasonality acceptance, plan-version navigation and sector-pack removal proof.
 - WP10: current-data bilingual exports, stale/regenerate lifecycle and persona/issue permissions in production.

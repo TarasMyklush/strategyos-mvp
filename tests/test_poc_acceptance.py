@@ -1,4 +1,7 @@
 from pathlib import Path
+from types import SimpleNamespace
+import pytest
+import strategyos_mvp.poc_acceptance as acceptance_module
 
 from strategyos_mvp.models import AuditEvent, Citation, Finding
 from strategyos_mvp.paths import SOURCE_DATASET
@@ -7,6 +10,34 @@ from strategyos_mvp.run_poc import _execute_strategyos_workflow
 from strategyos_mvp.ingestion import load_dataset
 from strategyos_mvp.skills.finance_controls import run_all_finance_skills
 import strategyos_mvp.skills.finance_controls as finance_controls_module
+
+
+@pytest.mark.parametrize('count,challenged,expected', [(8,0,False),(8,4,True),(10,4,False),(10,5,True)])
+def test_acceptance_requires_actual_auditor_challenges_for_half_the_findings(tmp_path,monkeypatch,count,challenged,expected):
+    monkeypatch.setattr(acceptance_module,'resolve_findings',lambda *_: [])
+    monkeypatch.setattr(acceptance_module,'build_data_quality_report',lambda *_: {'pdf_sources':[],'status':'ok'})
+    findings=[SimpleNamespace(finding_id=f'F-{i}',pattern_type=f'pattern-{i}',confidence='HIGH',recoverable_sar=1) for i in range(count)]
+    events=[AuditEvent(1,'Finance Auditor',f'F-{i}','challenge','Reproduce the source calculation') for i in range(challenged)]
+    # Unrelated IDs cannot manufacture challenge coverage.
+    events += [AuditEvent(1,'Finance Auditor','unrelated','challenge','Not in this case file')]
+    report=evaluate_poc_acceptance(summary={},findings=findings,bundle=None,audit_events=events)
+    check=next(c for c in report['checks'] if c['name']=='challenged_findings_when_ping_pong_active')
+    assert check['passed'] is expected
+    if challenged==0:
+        empty=evaluate_poc_acceptance(summary={},findings=findings,bundle=None,audit_events=[])
+        assert not next(c for c in empty['checks'] if c['name']=='challenged_findings_when_ping_pong_active')['passed']
+
+
+@pytest.mark.parametrize('kind',['directory','empty','file'])
+def test_acceptance_deliverables_must_be_nonempty_files(tmp_path,monkeypatch,kind):
+    monkeypatch.setattr(acceptance_module,'resolve_findings',lambda *_: [])
+    monkeypatch.setattr(acceptance_module,'build_data_quality_report',lambda *_: {'pdf_sources':[],'status':'ok'})
+    artifact=tmp_path/'artifact'
+    if kind=='directory': artifact.mkdir()
+    else: artifact.write_text('reviewed output' if kind=='file' else '')
+    report=evaluate_poc_acceptance(summary={'artifacts':{k:str(artifact) for k in acceptance_module.REQUIRED_DELIVERABLE_KEYS}},findings=[],bundle=None,audit_events=[])
+    check=next(c for c in report['checks'] if c['name']=='deliverable_presence')
+    assert check['passed'] is (kind=='file')
 
 
 def test_poc_acceptance_full_writer_run_fails_closed_when_required_ocr_is_unavailable(

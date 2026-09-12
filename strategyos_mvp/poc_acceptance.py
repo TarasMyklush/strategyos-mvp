@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
@@ -139,16 +140,17 @@ def evaluate_poc_acceptance(
             event.finding_id
             for event in audit_events
             if event.actor == "Finance Auditor" and event.action == "challenge"
+            and event.finding_id in {finding.finding_id for finding in findings}
         }
     )
     ping_pong_active = bool(audit_events)
+    required_challenges = max(MINIMUM_CHALLENGED_FINDINGS, math.ceil(len(findings) / 2))
     challenge_check = {
         "name": "challenged_findings_when_ping_pong_active",
-        "passed": (not ping_pong_active)
-        or len(challenged_finding_ids) >= MINIMUM_CHALLENGED_FINDINGS,
+        "passed": ping_pong_active and len(challenged_finding_ids) >= required_challenges,
         "detail": (
             f"ping_pong_active={ping_pong_active} challenged={len(challenged_finding_ids)} "
-            f"required={MINIMUM_CHALLENGED_FINDINGS} ids={challenged_finding_ids}"
+            f"required={required_challenges} ids={challenged_finding_ids}"
         ),
     }
 
@@ -156,7 +158,8 @@ def evaluate_poc_acceptance(
     missing_deliverables = sorted(
         key
         for key in REQUIRED_DELIVERABLE_KEYS
-        if not artifacts.get(key) or not Path(str(artifacts[key])).exists()
+        if not artifacts.get(key) or not Path(str(artifacts[key])).is_file()
+        or Path(str(artifacts[key])).stat().st_size == 0
     )
     deliverable_check = {
         "name": "deliverable_presence",

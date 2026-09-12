@@ -5092,14 +5092,19 @@
         + '</strong></div>';
     }
 
+    var reportedPeriod = actual && actual.period || {};
     return [
+      '<div><span>Reconciliation</span><strong>' + escapeHtml(String(firstDefined(item.reconciliation_status, 'Not recorded')).replace(/_/g, ' ')) + '</strong></div>',
+      reportedPeriod.start || reportedPeriod.end
+        ? '<div><span>Reporting period</span><strong>' + escapeHtml(String(firstDefined(reportedPeriod.start, '—')) + ' to ' + String(firstDefined(reportedPeriod.end, '—'))) + '</strong></div>' : '',
+      '<details class="kpi-technical-provenance"><summary>Technical details</summary><div>',
       '<div><span>Analysis snapshot</span><strong>',
       escapeHtml(firstDefined(item.snapshot_id, 'Unavailable')),
       item.analysis_as_of ? '<small>As of ' + escapeHtml(item.analysis_as_of) + ' · policy ' + escapeHtml(firstDefined(item.policy_version, 'not recorded')) + '</small>' : '',
       '</strong></div>',
-      '<div><span>Reconciliation</span><strong>' + escapeHtml(firstDefined(item.reconciliation_status, 'Not recorded')) + '</strong></div>',
       claimRow('Actual claim', actual),
-      claimRow('Comparison claim', comparison)
+      claimRow('Comparison claim', comparison),
+      '</div></details>'
     ].join('');
   }
 
@@ -5574,7 +5579,7 @@
           headers: Object.assign(authHeaders({}), {'Content-Type': 'application/json'}),
           body: JSON.stringify({
             kpi_label: label,
-            provider: accountableProvider,
+            provider: namedProvider || accountableProvider,
             formula: String(firstDefined(calculation.formula, driver.formula, 'Calculation definition unavailable')),
             missing_inputs: missingInputs,
             source_contract_id: firstDefined(sourceContract.registry_id, null)
