@@ -2256,6 +2256,18 @@ def test_semantic_retrieval_plan_preserves_question_and_uses_only_available_cate
     assert result == {'intent': intent, 'metric_keys': frozenset({'new.dataset.metric'})}
 
 
+def test_semantic_retrieval_plan_distinguishes_existing_comparators_from_arithmetic(monkeypatch):
+    def provider(**kwargs):
+        instruction = kwargs['messages'][0]['content']
+        assert 'Showing actual and budget values side by side is a fact lookup.' in instruction
+        assert 'Calculating how far actual is above or below budget is a calculation.' in instruction
+        return json.dumps({'intent': 'facts', 'metric_keys': ['finance.ebitda']})
+    monkeypatch.setattr(llm_qa, '_call_openai_compatible_chat', provider)
+    result = llm_qa.plan_claim_retrieval('Show actual and budget EBITDA',
+        catalog=[{'metric_key': 'finance.ebitda', 'record_count': 2}], config=_config())
+    assert result['intent'] == 'facts'
+
+
 @pytest.mark.parametrize('response', [
     {'intent': 'facts', 'metric_keys': ['fabricated.metric']},
     {'intent': 'invent', 'metric_keys': ['valid.metric']},
