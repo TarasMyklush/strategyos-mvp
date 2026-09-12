@@ -36,6 +36,19 @@ def test_case_file_writer_emits_phase5_deliverables(tmp_path: Path):
         "# Final consolidated case file"
     )
     assert artifacts["case_file_pdf"].read_bytes().startswith(b"%PDF")
+    from pypdf import PdfReader
+    pdf = PdfReader(artifacts['case_file_pdf'])
+    summary_page = pdf.pages[0].extract_text()
+    assert 'Top three recovery opportunities' in summary_page
+    assert 'Pattern type:' not in summary_page
+    assert 'Pattern type:' in pdf.pages[1].extract_text()
+    for page in pdf.pages:
+        lines = page.extract_text().strip().splitlines()
+        assert not (lines[-1].startswith('F-') and ' - ' in lines[-1]), 'Finding heading stranded at page end'
+    assert 'UNTRUSTED DOCUMENT CONTENT:' not in '\n'.join(page.extract_text() for page in pdf.pages)
+    assert 'Methodology and source coverage' in artifacts['case_file'].read_text()
+    assert 'Disputed findings' in artifacts['case_file'].read_text()
+    assert any(c.excerpt.startswith('UNTRUSTED DOCUMENT CONTENT:') for f in findings for c in f.citations)
     working_capital = artifacts["working_capital"].read_text(encoding="utf-8")
     assert working_capital.startswith("# 13-week settlement-day proxy drift analysis")
     assert "exclude unpaid balances" in working_capital
@@ -87,3 +100,22 @@ def test_case_file_writer_blocks_polished_outputs_when_citation_verification_is_
         assert duplicate.finding_id in str(exc)
     else:
         raise AssertionError("Expected weak citation evidence to block polished output generation.")
+
+
+def test_case_pdf_quotes_untrusted_markup_and_embeds_arabic(tmp_path: Path):
+    from strategyos_mvp.agents.finance_agents import _escape_pdf_text, write_markdown_pdf
+    from pypdf import PdfReader
+
+    excerpt = 'فاتورة ضريبية <script>alert(1)</script> SAR 177,188.00'
+    markup = _escape_pdf_text(excerpt)
+    assert 'BoardArabic' in markup
+    assert '&lt;script&gt;alert(1)&lt;/script&gt;' in markup
+    output = write_markdown_pdf('# Evidence\n\n> ' + excerpt, tmp_path / 'quoted.pdf', title='Evidence')
+    page = PdfReader(output).pages[0]
+    text = page.extract_text()
+    assert '177,188.00' in text
+    # pypdf reorders punctuation beside RTL spans; the escaped literal is
+    # checked above, and the rendered mixed-language page is visually checked.
+    assert 'script>alert(1)</script>' in text
+    assert any('NotoSansArabic' in str(font.get_object().get('/BaseFont'))
+               for font in page['/Resources']['/Font'].get_object().values())

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, PageBreak
 
 from ..citation_resolver import save_citation_audit
 from ..ingestion import DataBundle
@@ -20,6 +21,7 @@ from ..quality import (
     save_data_quality_report,
 )
 from ..runtime_artifacts import AUDIT_LOG_FILENAME
+from ..prompt_injection import document_excerpt_for_display
 from ..skills.finance_controls import compute_working_capital_drifts, run_all_finance_skills
 
 
@@ -428,6 +430,7 @@ class CaseFileWriter:
 
 
 def render_case_file(findings: list[Finding], bundle: DataBundle) -> str:
+    findings = sorted(findings, key=lambda finding: (-finding.recoverable_sar, finding.finding_id))
     total_leakage = sum(f.leakage_sar for f in findings)
     total_recoverable = sum(f.recoverable_sar for f in findings)
     lines = [
@@ -442,13 +445,16 @@ def render_case_file(findings: list[Finding], bundle: DataBundle) -> str:
         "- Methodology: deterministic source ingestion, evidence hashing, finance-control skills, Analyst draft, Auditor challenge, and cited case-file generation.",
         "",
     ]
-    lines.extend(_render_detector_coverage(bundle))
+    lines.extend(['### Top three recovery opportunities', ''])
+    for finding in findings[:3]:
+        lines.append(f'- {finding.title}: SAR {finding.recoverable_sar:,.2f} recoverable ({finding.confidence.lower()} confidence).')
+    lines.extend(['', '<!-- pagebreak -->', '', '## Findings', ''])
     for finding in findings:
         lines.extend(
             [
                 f"## {finding.finding_id} - {finding.title}",
                 "",
-                f"- Pattern type: {finding.pattern_type}",
+                f"- Pattern type: {finding.pattern_type.replace('_', ' ')}",
                 f"- Vendor/entity: {finding.vendor_name} ({finding.vendor_id})",
                 f"- Classification: {finding.classification}",
                 f"- Leakage: SAR {finding.leakage_sar:,.2f}",
@@ -462,13 +468,26 @@ def render_case_file(findings: list[Finding], bundle: DataBundle) -> str:
             ]
         )
         for citation in finding.citations:
-            excerpt = f" - {citation.excerpt}" if citation.excerpt else ""
-            lines.append(f"- {citation.label()}{excerpt}")
+            lines.append(f"- {citation.label()}")
+            if citation.excerpt:
+                lines.extend('> ' + line for line in document_excerpt_for_display(citation.excerpt).splitlines())
         if finding.challenges:
             lines.append("")
             lines.append("### Auditor Challenges")
             lines.extend(f"- {challenge}" for challenge in finding.challenges)
         lines.append("")
+    disputed = [finding for finding in findings if finding.status == 'disputed']
+    lines.extend(['## Disputed findings', ''])
+    if not disputed:
+        lines.append('No findings are recorded as disputed in this reviewed case file.')
+    for finding in disputed:
+        lines.append(f'- {finding.finding_id}: {finding.title}. Unresolved auditor challenges remain listed with the finding for human resolution.')
+    sources = sorted({citation.source_path for finding in findings for citation in finding.citations})
+    lines.extend(['', '## Methodology and source coverage', '',
+        f'- Findings cite {len(sources)} distinct source documents and {len({finding.vendor_id for finding in findings})} vendor identifiers.',
+        '- Vendor identities and recovery calculations are retained with each finding and its row-level evidence. Identified leakage and recoverable value are separate measures; control-dependent and going-forward amounts are not booked cash receipts.',
+        '- The source manifest records inspected file identities. Registering a file does not establish that every possible pattern in it was tested.', ''])
+    lines.extend(_render_detector_coverage(bundle))
     if bundle.quality_issues:
         lines.extend(["## Data Quality Notes", ""])
         for issue in bundle.quality_issues:
@@ -772,6 +791,8 @@ def _format_ebitda_citations(ebitda: dict[str, float | bool | list[int]]) -> str
 
 
 def write_markdown_pdf(markdown_text: str, output_path: Path, *, title: str) -> Path:
+    from ..board_layout import fonts
+    fonts()
     styles = getSampleStyleSheet()
     heading_1 = ParagraphStyle(
         "StrategyOSHeading1",
@@ -779,6 +800,7 @@ def write_markdown_pdf(markdown_text: str, output_path: Path, *, title: str) -> 
         fontName="Helvetica-Bold",
         fontSize=18,
         leading=22,
+        keepWithNext=True,
         spaceAfter=10,
     )
     heading_2 = ParagraphStyle(
@@ -787,6 +809,7 @@ def write_markdown_pdf(markdown_text: str, output_path: Path, *, title: str) -> 
         fontName="Helvetica-Bold",
         fontSize=13,
         leading=16,
+        keepWithNext=True,
         spaceBefore=6,
         spaceAfter=6,
     )
@@ -796,6 +819,7 @@ def write_markdown_pdf(markdown_text: str, output_path: Path, *, title: str) -> 
         fontName="Helvetica-Bold",
         fontSize=11,
         leading=14,
+        keepWithNext=True,
         spaceBefore=4,
         spaceAfter=4,
     )
@@ -818,7 +842,13 @@ def write_markdown_pdf(markdown_text: str, output_path: Path, *, title: str) -> 
     for raw_line in markdown_text.splitlines():
         line = raw_line.strip()
         if not line:
-            story.append(Spacer(1, 6))
+            # Heading styles already provide spacing. An intervening Spacer
+            # breaks ReportLab's keepWithNext link to the first content line.
+            if not story or not isinstance(story[-1], Paragraph) or not getattr(story[-1].style, 'keepWithNext', False):
+                story.append(Spacer(1, 6))
+            continue
+        if line == '<!-- pagebreak -->':
+            story.append(PageBreak())
             continue
         if line.startswith("# "):
             story.append(Paragraph(_escape_pdf_text(line[2:]), heading_1))
@@ -830,7 +860,10 @@ def write_markdown_pdf(markdown_text: str, output_path: Path, *, title: str) -> 
             story.append(Paragraph(_escape_pdf_text(line[4:]), heading_3))
             continue
         if line.startswith("- "):
-            story.append(Paragraph(f"• {_escape_pdf_text(line[2:])}", bullet))
+            story.append(Paragraph(_escape_pdf_text(line[2:]), bullet, bulletText='•'))
+            continue
+        if line.startswith('> '):
+            story.append(Paragraph(_escape_pdf_text(line[2:]), bullet))
             continue
         story.append(Paragraph(_escape_pdf_text(line), body))
 
@@ -848,8 +881,24 @@ def write_markdown_pdf(markdown_text: str, output_path: Path, *, title: str) -> 
 
 
 def _escape_pdf_text(value: str) -> str:
-    return (
-        value.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-    )
+    from ..board_layout import fonts
+    from ..board_pack import visual
+    arabic = fonts().getFont('BoardArabic').face.charToGlyph
+    # Source excerpts can contain Arabic even in an English case file. Embed
+    # the same licensed fonts used by board packs instead of losing glyphs.
+    runs: list[tuple[str | None, str]] = []
+    # Shape Arabic spans without moving surrounding source punctuation or
+    # identifiers across a paragraph's Latin text.
+    display_value = re.sub(r'[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]+(?:\s+[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]+)*',
+                           lambda match: visual(match.group()), value)
+    for char in display_value:
+        font = ('BoardArabic' if ord(char) in arabic else 'BoardLatin') if ord(char) > 255 else None
+        if runs and runs[-1][0] == font:
+            runs[-1] = (font, runs[-1][1] + char)
+        else:
+            runs.append((font, char))
+    result = []
+    for font, text in runs:
+        escaped = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        result.append(f'<font name="{font}">{escaped}</font>' if font else escaped)
+    return ''.join(result)

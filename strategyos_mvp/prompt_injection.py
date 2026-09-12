@@ -59,3 +59,17 @@ def raw_document_text(payload: dict[str, Any] | None) -> str:
     if not isinstance(payload, dict):
         return ""
     return str(payload.get("raw_text") or payload.get("extracted_text") or "")
+
+
+def document_excerpt_for_display(value: str) -> str:
+    """Remove only our outer prompt envelope for a human-readable report.
+
+    The stored citation and model-facing text remain guarded. This function
+    does not interpret or remove instructions contained in source evidence.
+    """
+    text = str(value or '')
+    marker = '\nBEGIN_UNTRUSTED_EVIDENCE\n'
+    ending = '\nEND_UNTRUSTED_EVIDENCE'
+    if text.startswith(_GUARD_PREFIX + '\n') and marker in text and text.endswith(ending):
+        return text.split(marker, 1)[1][:-len(ending)]
+    return text

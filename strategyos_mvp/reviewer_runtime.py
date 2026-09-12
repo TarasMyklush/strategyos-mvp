@@ -80,7 +80,20 @@ def resume_reviewed_run(run_id: str, checkpoint: dict[str, Any]) -> dict[str, An
     audit_events = [
         audit_event_from_payload(item) for item in state.get("audit_events", [])
     ]
+    approval = approval_status_for_run(run_id)
+    checkpoint_summary = checkpoint.get("summary_json") or {}
+    prior_summary = dict(checkpoint_summary) if isinstance(checkpoint_summary, dict) else {}
+    if isinstance(approval, dict) and isinstance(approval.get("summary_json"), dict):
+        prior_summary.update(approval["summary_json"])
     bundle = load_dataset(dataset_root)
+    # The resumed writer must describe the reviewed detector execution, not a
+    # freshly loaded bundle with no execution history. Never rerun detectors
+    # while rendering an already reviewed case file.
+    bundle.detector_report = deepcopy(prior_summary.get('detector_report') or {})
+    bundle.run_metadata = dict(getattr(bundle, 'run_metadata', {}) or {})
+    for key in ('run_mode', 'available_roles', 'missing_roles'):
+        if key in prior_summary:
+            bundle.run_metadata[key] = deepcopy(prior_summary[key])
     artifacts = {
         str(key): Path(str(value))
         for key, value in (state.get("artifact_paths") or {}).items()
@@ -111,15 +124,6 @@ def resume_reviewed_run(run_id: str, checkpoint: dict[str, Any]) -> dict[str, An
         "approval_status": "approved",
         "checkpoints": [],
     }
-    approval = approval_status_for_run(run_id)
-    checkpoint_summary = checkpoint.get("summary_json") or {}
-    prior_summary = dict(checkpoint_summary) if isinstance(checkpoint_summary, dict) else {}
-    if isinstance(approval, dict) and isinstance(approval.get("summary_json"), dict):
-        # Hosted checkpoints are written inside the workflow before run_poc
-        # attaches finance, calendar, history, and source-pack governance to
-        # the persisted run summary.  The approved run record is therefore the
-        # authoritative superset; it must win over the earlier checkpoint copy.
-        prior_summary.update(approval["summary_json"])
     summary = build_run_summary(resumed_state)
     _preserve_approved_context(summary, prior_summary)
     summary["checkpoint_count"] = int(prior_summary.get("checkpoint_count") or 0) + 1

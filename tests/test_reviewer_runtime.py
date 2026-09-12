@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import strategyos_mvp.reviewer_runtime as reviewer_runtime
 
@@ -15,10 +16,12 @@ def test_resume_preserves_the_approved_finance_calendar_signal_and_source_contex
     class FakeWriter:
         def write_all(self, bundle, findings, audit_events, target_dir):
             assert target_dir == run_dir
+            assert bundle.detector_report == {'status':'complete'}
+            assert bundle.run_metadata['run_mode'] == 'full'
             return {}
 
     monkeypatch.setattr(reviewer_runtime, "_validate_checkpoint_for_resume", lambda *args: None)
-    monkeypatch.setattr(reviewer_runtime, "load_dataset", lambda path: object())
+    monkeypatch.setattr(reviewer_runtime, "load_dataset", lambda path: SimpleNamespace())
     monkeypatch.setattr(reviewer_runtime, "CaseFileWriter", FakeWriter)
     monkeypatch.setattr(reviewer_runtime, "remove_legacy_artifacts", lambda path: None)
     monkeypatch.setattr(
