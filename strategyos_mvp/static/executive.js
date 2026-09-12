@@ -2646,32 +2646,19 @@
   }
 
   function driverTrendSeries(driver) {
-    var trend = safeArray((state.latestPacket && state.latestPacket.trend && state.latestPacket.trend.points) || []);
-    var key = String(firstDefined(driver.driver_key, driver.key, "")).toLowerCase();
-    if (!trend.length) return { actual: [], plan: [] };
-    var actual = trend.slice(-6).map(function (point) {
-      if (/cash|liq/.test(key)) return Number(firstDefined(point.cash_on_hand_sar, point.recoverable_sar, point.findings, 0)) || 0;
-      if (/cost/.test(key)) return Number(firstDefined(point.invoice_amount_sar, point.recoverable_sar, point.findings, 0)) || 0;
-      if (/margin|ebitda|bridge/.test(key)) return Number(firstDefined(point.recoverable_sar, point.locked_findings, point.findings, 0)) || 0;
-      return Number(firstDefined(point.findings, point.locked_findings, point.recoverable_sar, 0)) || 0;
-    });
-    var pct = Math.max(1, Number(firstDefined(driver.pct, 100)) || 100);
-    var denominator = pct / 100;
-    var plan = actual.map(function (value) {
-      return denominator ? value / denominator : value;
-    });
-    return { actual: actual, plan: plan };
+    var trend = driver && driver.trend && typeof driver.trend === 'object' ? driver.trend : {};
+    var actual = safeArray(trend.actual);
+    var plan = safeArray(trend.plan);
+    var valid = function (value) { return typeof value === 'number' && Number.isFinite(value); };
+    if (!actual.every(valid)) actual = [];
+    if (plan.length !== actual.length || !plan.every(valid)) plan = [];
+    return { actual: actual, plan: plan, labels: safeArray(trend.labels) };
   }
 
   function buildDriverSparkline(driver, index) {
     var series = driverTrendSeries(driver);
     var values = safeArray(series.actual).slice();
-    if (!values.length) {
-      var base = Number(firstDefined(driver.pct, 0)) || 0;
-      var lift = safeArray((driver.movers || {}).lifting).length * 2;
-      var drag = safeArray((driver.movers || {}).dragging).length;
-      values = [base - drag - 4, base - drag, base, base + lift - 1, base + lift, base + lift + (index || 0)];
-    }
+    if (values.length < 2) return '';
     var min = Math.min.apply(null, values);
     var max = Math.max.apply(null, values);
     var span = Math.max(1, max - min);
@@ -5697,11 +5684,13 @@
     if (driver.kpi_contract && drillCard) {
       renderInlineKpiDrill(driver, drillCard);
     } else if (drillCard) {
-      var trendSeries = driver.trend || driverTrendSeries(driver);
-      var actualSeries = safeArray(trendSeries.actual).length ? safeArray(trendSeries.actual) : [92, 96, 99, 101, 100, 102];
-      var planSeries = safeArray(trendSeries.plan).length ? safeArray(trendSeries.plan) : actualSeries.map(function (value) { return value * 0.98; });
-      var minSeries = Math.min.apply(null, actualSeries.concat(planSeries));
-      var maxSeries = Math.max.apply(null, actualSeries.concat(planSeries));
+      var trendSeries = driverTrendSeries(driver);
+      var actualSeries = safeArray(trendSeries.actual);
+      var planSeries = safeArray(trendSeries.plan);
+      if (!actualSeries.every(function (value) { return typeof value === 'number' && Number.isFinite(value); })) actualSeries = [];
+      if (planSeries.length !== actualSeries.length || !planSeries.every(function (value) { return typeof value === 'number' && Number.isFinite(value); })) planSeries = [];
+      var minSeries = actualSeries.length ? Math.min.apply(null, actualSeries.concat(planSeries)) : 0;
+      var maxSeries = actualSeries.length ? Math.max.apply(null, actualSeries.concat(planSeries)) : 0;
       var spanSeries = Math.max(1, maxSeries - minSeries);
       var chartWidth = 320;
       var chartHeight = 156;
@@ -5722,7 +5711,7 @@
       }).join(" ");
       var yTicks = [maxSeries, (maxSeries + minSeries) / 2, minSeries];
       var xLabels = actualSeries.map(function (_value, idx) {
-        return 'W' + String(actualSeries.length - idx);
+        return firstDefined(safeArray(trendSeries.labels)[idx], 'Period ' + String(idx + 1));
       });
       var moverRows = lifting.map(function (item) { return { tone: 'up', glyph: '↗', item: item }; })
         .concat(dragging.map(function (item) { return { tone: 'down', glyph: '↘', item: item }; }));
@@ -5730,7 +5719,7 @@
         '<div class="drill-surface">',
         '<div class="drill-headline"><div><h3 class="detail-title">What\'s driving ' + escapeHtml(firstDefined(driver.label, 'it')) + '</h3><p class="section-note">' + escapeHtml(driverMeasureLabel(driver) + ' · ' + driverSubLabel(driver)) + '</p></div><button class="assistant-tool-chip assistant-tool-chip--button" type="button" data-driver-show-work="true">Show the work</button></div>',
         '<p class="detail-copy">' + escapeHtml(firstDefined(driver.detail, 'Awaiting drill detail.')) + '</p>',
-        '<div class="drill-grid-v2"><div class="drill-trend-panel"><div class="mini-head">' + escapeHtml(firstDefined(driver.trendLabel, 'Trend')) + '<span class="trend-legend"><span class="lg actual"></span> actual <span class="lg plan"></span> plan</span></div><svg class="drill-trend-chart" viewBox="0 0 320 156" role="img" aria-label="' + escapeHtml(firstDefined(driver.label, 'Driver')) + ' trend: actual versus plan over the last ' + String(actualSeries.length) + ' weeks">' + yTicks.map(function (tick) { var y = chartHeight - (((tick - minSeries) / spanSeries) * 120 + 18); return '<line class="trend-gridline" x1="0" x2="320" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1) + '"></line><text class="trend-axis" x="4" y="' + Math.max(10, y - 4).toFixed(1) + '">' + escapeHtml(String(Math.round(tick * 10) / 10)) + '</text>'; }).join('') + '<path class="trend-chain__plan" d="' + escapeHtml(planPath) + '"></path><path class="trend-chain__actual" d="' + escapeHtml(actualPath) + '"></path>' + actualPoints.map(function (pair, idx) { return '<circle class="trend-point actual" cx="' + pair[0].toFixed(1) + '" cy="' + pair[1].toFixed(1) + '" r="3"><title>Actual ' + escapeHtml(xLabels[idx]) + ': ' + escapeHtml(String(actualSeries[idx])) + ' ' + escapeHtml(firstDefined(driver.unit, '')) + '</title></circle>'; }).join('') + planPoints.map(function (pair, idx) { return '<circle class="trend-point plan" cx="' + pair[0].toFixed(1) + '" cy="' + pair[1].toFixed(1) + '" r="2.5"><title>Plan ' + escapeHtml(xLabels[idx]) + ': ' + escapeHtml(String(planSeries[idx])) + ' ' + escapeHtml(firstDefined(driver.unit, '')) + '</title></circle>'; }).join('') + xLabels.map(function (label, idx) { var point = actualPoints[idx]; return '<text class="trend-axis" x="' + point[0].toFixed(1) + '" y="150" text-anchor="middle">' + escapeHtml(label) + '</text>'; }).join('') + '</svg><div class="trend-unit">' + escapeHtml(firstDefined(driver.unit, '')) + '</div></div><div class="drill-movers-panel"><div class="mini-head">What moved it</div><div class="movers-flat">' + (moverRows.length ? moverRows.map(function (entry) {
+        '<div class="drill-grid-v2">' + (actualSeries.length >= 2 ? '<div class="drill-trend-panel"><div class="mini-head">' + escapeHtml(firstDefined(driver.trendLabel, 'Trend')) + '<span class="trend-legend"><span class="lg actual"></span> actual ' + (planSeries.length ? '<span class="lg plan"></span> plan' : '') + '</span></div><svg class="drill-trend-chart" viewBox="0 0 320 156" role="img" aria-label="' + escapeHtml(firstDefined(driver.label, 'Driver')) + ' trajectory across ' + String(actualSeries.length) + ' reporting periods">' + yTicks.map(function (tick) { var y = chartHeight - (((tick - minSeries) / spanSeries) * 120 + 18); return '<line class="trend-gridline" x1="0" x2="320" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1) + '"></line><text class="trend-axis" x="4" y="' + Math.max(10, y - 4).toFixed(1) + '">' + escapeHtml(String(Math.round(tick * 10) / 10)) + '</text>'; }).join('') + '<path class="trend-chain__plan" d="' + escapeHtml(planPath) + '"></path><path class="trend-chain__actual" d="' + escapeHtml(actualPath) + '"></path>' + actualPoints.map(function (pair, idx) { return '<circle class="trend-point actual" cx="' + pair[0].toFixed(1) + '" cy="' + pair[1].toFixed(1) + '" r="3"><title>Actual ' + escapeHtml(xLabels[idx]) + ': ' + escapeHtml(String(actualSeries[idx])) + ' ' + escapeHtml(firstDefined(driver.unit, '')) + '</title></circle>'; }).join('') + planPoints.map(function (pair, idx) { return '<circle class="trend-point plan" cx="' + pair[0].toFixed(1) + '" cy="' + pair[1].toFixed(1) + '" r="2.5"><title>Plan ' + escapeHtml(xLabels[idx]) + ': ' + escapeHtml(String(planSeries[idx])) + ' ' + escapeHtml(firstDefined(driver.unit, '')) + '</title></circle>'; }).join('') + xLabels.map(function (label, idx) { var point = actualPoints[idx]; return '<text class="trend-axis" x="' + point[0].toFixed(1) + '" y="150" text-anchor="middle">' + escapeHtml(label) + '</text>'; }).join('') + '</svg><div class="trend-unit">' + escapeHtml(firstDefined(driver.unit, '')) + '</div></div>' : '<div class="drill-trend-panel"><p>At least two sourced reporting periods are needed to show a trajectory.</p></div>') + '<div class="drill-movers-panel"><div class="mini-head">What moved it</div><div class="movers-flat">' + (moverRows.length ? moverRows.map(function (entry) {
           var item = entry.item || {};
           var noteKey = firstDefined(driver.driver_key, driver.key, '') + ':' + firstDefined(item.name, 'mover');
           var noteOpen = state.openDriverNoteKey === noteKey;
@@ -5740,7 +5729,7 @@
         '<div class="chips">' + safeArray(driver.chips).map(function (chip) { return '<button class="chip" type="button" data-driver-chip="' + escapeHtml(chip) + '">' + escapeHtml(chip) + '</button>'; }).join('') + '</div>',
         '<form class="chips-own" id="driver-composer"><label class="sr-only" for="driver-input">Ask Hermes about ' + escapeHtml(String(firstDefined(driver.label, 'this driver')).toLowerCase()) + '</label><input id="driver-input" class="driver-input" type="text" placeholder="Ask Hermes about ' + escapeHtml(String(firstDefined(driver.label, 'this driver')).toLowerCase()) + '…" /><button type="submit">Send</button></form>',
         '<!-- openAssistantDrawer() is triggered by the driver composer submit handler below. -->',
-        '<div class="drill-evidence" hidden><span class="evidence-label">Evidence chain</span><span class="evidence-step">Board-approved plan v4</span><span class="evidence-arrow">→</span><span class="evidence-step">Knowledge graph · 8 BU ledgers</span><span class="evidence-arrow">→</span><span class="evidence-step">S/4HANA + BI connectors</span><span class="evidence-arrow">→</span><span class="evidence-step">computed today 06:14</span></div>',
+        '<div class="drill-evidence" hidden><span class="evidence-label">Evidence</span>' + (governedClaimAuditMarkup(driver.provenance) || '<p>No governed evidence record is attached to this driver. Ask the accountable data owner to supply the calculation and its source.</p>') + '</div>',
         '</div>'
       ].join('');
       safeArray(drillCard.querySelectorAll('[data-driver-note]')).forEach(function (button) {

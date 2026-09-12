@@ -145,6 +145,23 @@ assert.strictEqual(formatSarCompact(125000000), 'SAR 125M');
     subprocess.run(["node", "-e", program], check=True, capture_output=True, text=True)
 
 
+def test_driver_trend_requires_its_own_sourced_values_and_never_infers_plan():
+    js = _static_executive_js()
+    function_source = 'function driverTrendSeries' + js.split('function driverTrendSeries',1)[1].split('function buildDriverSparkline',1)[0]
+    program = '''
+const assert=require('assert');
+const safeArray=value=>Array.isArray(value)?value:[];
+const state={latestPacket:{trend:{points:[{recoverable_sar:999,findings:8}]}}};
+''' + function_source + '''
+assert.deepStrictEqual(driverTrendSeries({key:'cash',pct:80}),{actual:[],plan:[],labels:[]});
+assert.deepStrictEqual(driverTrendSeries({trend:{actual:[10,20]}}).plan,[]);
+assert.deepStrictEqual(driverTrendSeries({trend:{actual:[10,null],plan:[8,9]}}).actual,[]);
+assert.deepStrictEqual(driverTrendSeries({trend:{actual:[10,20],plan:[8]}}).plan,[]);
+assert.deepStrictEqual(driverTrendSeries({trend:{actual:[10,20],plan:[8,9],labels:['Jan','Feb']}}),{actual:[10,20],plan:[8,9],labels:['Jan','Feb']});
+'''
+    subprocess.run(['node','-e',program],check=True,capture_output=True,text=True)
+
+
 def test_workspace_chat_defaults_to_auto_qa_mode():
     workspace_html = (Path(api_module.STATIC_DIR) / "index.html").read_text(encoding="utf-8")
     js = TestClient(api_module.app).get("/static/app.js").text
