@@ -14,6 +14,59 @@ from strategyos_mvp.source_claims import (
 pytestmark = pytest.mark.integration
 
 
+def test_reimported_blob_uses_current_occurrence_policy_without_granting_old_source(ledger):
+    import psycopg
+
+    repo, url, tenant = ledger
+    registered = []
+    for key, allowed in [('original-restricted', False), ('approved-reimport', True)]:
+        source = SourceRegistration(tenant_id=tenant, source_key=key,
+            display_name=key, origin_category='internal_system', capture_method='file_upload')
+        policy = SourceAccessPolicy(source_key=key, storage_allowed=True, index_allowed=True,
+            allowed_roles=frozenset({'executive'}),
+            allowed_purposes=frozenset({UsePurpose.EXECUTIVE_BRIEFING, UsePurpose.EXTERNAL_MODEL}),
+            external_model_allowed=allowed)
+        result = repo.register_source(source, policy=policy, recorded_by='fixture', rationale='Synthetic consent')
+        registered.append((source, policy, result['source_system_id']))
+    digest = 'd' * 64
+    batches = []
+    with psycopg.connect(url) as conn, conn.cursor() as cur:
+        cur.execute('''insert into strategyos_evidence_documents
+            (tenant_id,source_system_id,source_path,source_group,file_name,media_type,size_bytes,source_hash)
+            values (%s,%s,'same.json','fixture','same.json','application/json',2,%s) returning id''',
+            (tenant, registered[0][2], digest))
+        document = str(cur.fetchone()[0])
+        for _, _, source_id in registered:
+            cur.execute('''insert into strategyos_runs
+                (run_dir,dataset_root,finding_count,locked_finding_count,total_recoverable_sar,summary_json)
+                values ('dedup-proof','fixture',0,0,0,'{}') returning id''')
+            run = str(cur.fetchone()[0])
+            cur.execute('''insert into strategyos_ingestion_batches
+                (tenant_id,source_system_id,run_id,batch_label,dataset_root)
+                values (%s,%s,%s,'dedup-proof','fixture') returning id''', (tenant, source_id, run))
+            batch = str(cur.fetchone()[0])
+            cur.execute('''insert into strategyos_ingestion_batch_documents (batch_id,evidence_document_id)
+                values (%s,%s)''', (batch, document))
+            batches.append((run, batch))
+    context = PolicyContext(tenant_id=tenant, principal_id='fixture',
+        roles=frozenset({'executive'}), purpose=UsePurpose.EXTERNAL_MODEL)
+    old_run, _ = batches[0]
+    new_run, batch = batches[1]
+    # A batch association alone must not erase the original source restriction.
+    assert not repo.run_source_access(new_run, context=context)['allowed']
+    repo.record_occurrence(EvidenceOccurrence(tenant_id=tenant,
+        source_key='approved-reimport', artifact_hash=digest, source_native_id='reimport:1'),
+        evidence_document_id=document, ingestion_batch_id=batch)
+    access = repo.run_source_access(new_run, context=context)
+    assert access['allowed'] and access['source_count'] == 1
+    assert not repo.run_source_access(old_run, context=context)['allowed']
+    # Consent changes on the actual current source still take effect immediately.
+    source, policy, _ = registered[1]
+    repo.register_source(source, policy=replace(policy, external_model_allowed=False),
+        recorded_by='fixture', rationale='Withdraw current source model consent')
+    assert not repo.run_source_access(new_run, context=context)['allowed']
+
+
 def test_bulk_snapshot_cannot_bypass_sources_outside_its_ingestion_batch(ledger):
     import psycopg
     repo, url, tenant = ledger

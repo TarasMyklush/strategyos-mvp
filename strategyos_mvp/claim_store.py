@@ -780,6 +780,16 @@ class ClaimRepository:
                         join strategyos_ingestion_batch_documents bd on bd.batch_id = b.id
                         join strategyos_evidence_documents d on d.id = bd.evidence_document_id
                         where b.tenant_id = %s and b.run_id::text = %s
+                          -- The blob is deduplicated across sources. Its first
+                          -- importer is not the authority for a later, separately
+                          -- registered occurrence. Keep the document-origin
+                          -- fallback only for legacy entries without occurrences.
+                          and not exists (
+                              select 1 from strategyos_evidence_occurrences observed
+                              where observed.tenant_id = b.tenant_id
+                                and observed.ingestion_batch_id = b.id
+                                and observed.evidence_document_id = d.id
+                          )
                         union
                         select eo.source_system_id from strategyos_ingestion_batches b
                         join strategyos_evidence_occurrences eo on eo.ingestion_batch_id = b.id
