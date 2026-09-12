@@ -71,6 +71,17 @@ def test_deploy_verifies_the_anonymous_login_boundary_after_cutover() -> None:
     assert "Anonymous application, API-documentation, and login boundaries are closed." in text
 
 
+def test_production_deploy_atomically_attests_running_release_and_source() -> None:
+    import yaml
+
+    workflow = yaml.safe_load(_deploy_yaml())
+    steps = workflow['jobs']['deploy']['steps']
+    attestation = next(step for step in steps if step.get('name') == 'Attest deployed revision and approved source snapshot')
+    assert 'deploy/scripts/record_release.py' in attestation['run']
+    assert '--container strategyos-strategyos-api-1' in attestation['run']
+    assert 'No new source authorization or business ratification.' in attestation['run']
+
+
 def test_deployment_only_creates_a_customer_run_when_explicitly_requested() -> None:
     import yaml
 

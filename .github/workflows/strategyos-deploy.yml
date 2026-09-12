@@ -541,6 +541,15 @@ jobs:
               --reviewer-auth-header "Authorization: Bearer ${reviewer_token}"
           fi
 
+      - name: Attest deployed revision and approved source snapshot
+        run: >-
+          ssh ${SSH_OPTS} "${TARGET_HOST}"
+          "cd '${TARGET_DIR}/app' && python3 deploy/scripts/record_release.py
+          --base '${TARGET_DIR}'
+          --container strategyos-strategyos-api-1
+          --target '${STRATEGYOS_PUBLIC_URL}'
+          --approval-basis 'Operational attestation of the existing approved production run. No new source authorization or business ratification.'"
+
       - name: Verify governed research and egress boundary
         env:
           STRATEGYOS_OPERATOR_AUTH_HEADER: ${{ secrets.STRATEGYOS_OPERATOR_AUTH_HEADER }}
