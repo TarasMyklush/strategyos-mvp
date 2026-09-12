@@ -97,7 +97,7 @@ with sync_playwright() as p:
                 assert 'Source-backed fact' in visible and 'General AI answer' not in visible
                 assert payload['matched'] is True and payload['citations']
                 assert all(c.get('resolved') and c.get('claim_revision_id') for c in payload['citations'])
-                assert payload['retrieval']['facts_considered'] > 80
+                assert payload['retrieval']['facts_considered'] >= len(facts)
                 assert payload['retrieval']['complete'] is True
                 if slug=='ebitda-typo':
                     rendered.locator('.assistant-citation-list > summary').click()

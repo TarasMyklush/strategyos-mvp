@@ -11735,6 +11735,9 @@ def _hydrate_governed_qa_context(
         )
     records = [record for record in list(snapshot.get("records") or []) if isinstance(record, Mapping)]
     context["bundle"] = claim_backed_bundle(records)
+    if retrieval_plan is not None and retrieval_plan["intent"] == "facts":
+        selected_keys = retrieval_plan.get("selected_metric_keys", retrieval_plan["metric_keys"])
+        context["bundle"].answer_metric_keys = frozenset(selected_keys)
     from .assistant_scope import current_scope
     if current_scope.get() is not None:
         # Rebuild presentation from this filtered snapshot; legacy display copy
@@ -11766,7 +11769,8 @@ def _assistant_claim_retrieval_plan(
     catalog = ClaimRepository().snapshot_metric_catalog(
         run_id, context=replace(context, purpose=UsePurpose.EXTERNAL_MODEL))
     plan = llm_qa.plan_claim_retrieval(question, catalog=catalog, config=CONFIG)
-    return {**plan, "metric_keys": plan["metric_keys"] | FINANCE_HEADLINE_METRIC_KEYS | FINANCE_PRESENTATION_METRIC_KEYS}
+    return {**plan, "selected_metric_keys": plan["metric_keys"],
+            "metric_keys": plan["metric_keys"] | FINANCE_HEADLINE_METRIC_KEYS | FINANCE_PRESENTATION_METRIC_KEYS}
 
 
 def _resolve_public_assistant_context(

@@ -276,3 +276,29 @@ def test_malformed_coverage_cannot_certify_answer(record, monkeypatch, coverage)
     with pytest.raises(RuntimeError, match='invalid evidence selection'):
         llm_qa.answer_question('Forecast accuracy?', bundle=SimpleNamespace(authorized_claim_records=[record]),
             findings=[], summary={'run_id': 'run'}, config=_config())
+
+
+@pytest.mark.parametrize('selected', [frozenset(), frozenset({'missing.metric'}), frozenset({'finance.revenue'})])
+def test_answer_selection_uses_semantic_categories_without_dashboard_preloads(record, monkeypatch, selected):
+    from strategyos_mvp import llm_qa, model_policy
+    from tests.test_llm_qa import _config
+    records = [{**record, 'claim_revision_id': f'r-{i}', 'metric_key': 'finance.revenue'} for i in range(161)]
+    records.append({**record, 'claim_revision_id': 'dashboard-only', 'metric_key': 'ceo.cash_floor'})
+    bundle = SimpleNamespace(authorized_claim_records=records, answer_metric_keys=selected)
+    monkeypatch.setattr(model_policy, 'evidence_model_access', lambda _: True)
+    calls = []
+    def provider(**kwargs):
+        request = json.loads(kwargs['messages'][-1]['content'])
+        calls.append(request)
+        assert {fact['ref'] for fact in request['facts']} == {f'r-{i}' for i in range(161)}
+        return json.dumps({'matched': True, 'fact_refs': ['r-160'], 'answer_supported': True})
+    monkeypatch.setattr(llm_qa, '_call_openai_compatible_chat', provider)
+    result = llm_qa.answer_question('Natural language request', bundle=bundle,
+        findings=[], summary={'run_id':'run'}, config=_config())
+    assert len(bundle.authorized_claim_records) == 162
+    if 'finance.revenue' in selected:
+        assert len(calls) == 1 and result['matched']
+        assert result['retrieval']['facts_considered'] == 161
+        assert result['citations'][0]['claim_revision_id'] == 'r-160'
+    else:
+        assert calls == [] and not result['matched'] and not result['citations']

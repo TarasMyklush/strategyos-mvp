@@ -388,7 +388,10 @@ def answer_question(
     authorized_records = getattr(bundle, "authorized_claim_records", None)
     if authorized_records is not None and not public_mode:
         from .fact_rendering import fact_registry, render_selection
-        registry = fact_registry(authorized_records)
+        answer_keys = getattr(bundle, "answer_metric_keys", None)
+        answer_records = authorized_records if answer_keys is None else (
+            record for record in authorized_records if record.get("metric_key") in answer_keys)
+        registry = fact_registry(answer_records)
         run_id = str(summary.get("_backing_run_id") or summary.get("run_id") or "")
         if not registry or not run_id:
             return render_selection({"matched":False,"fact_refs":[]}, {}, run_id=run_id)

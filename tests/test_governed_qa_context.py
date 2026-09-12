@@ -66,3 +66,25 @@ def test_persisted_findings_fail_closed_on_invalid_enums():
 
     assert findings[0].confidence == "LOW"
     assert findings[0].status == "draft"
+
+
+def test_hydration_keeps_dashboard_records_but_separates_semantic_answer_scope(monkeypatch):
+    from strategyos_mvp import api
+    seen = []
+    records = [{'metric_key': 'new.metric', 'value': '123'},
+               {'metric_key': 'ceo.cash_floor', 'value': '456'}]
+    class Repository:
+        def snapshot(self, key, **kwargs):
+            seen.append(kwargs)
+            return {'records': records}
+    monkeypatch.setattr(api, 'ClaimRepository', Repository)
+    monkeypatch.setattr(api, '_assistant_claim_retrieval_plan', lambda *args, **kwargs: {
+        'intent': 'facts', 'selected_metric_keys': frozenset({'new.metric'}),
+        'metric_keys': frozenset({'new.metric', 'ceo.cash_floor'})})
+    context = {'run_id':'run', 'summary':{'_claim_policy_context':{'tenant_id':'tenant-a'}}}
+    result = api._hydrate_governed_qa_context(context,
+        principal={'tenant_id':'tenant-a','subject':'reader','role':'executive'}, question='Natural question')
+    assert seen[0]['context'].tenant_id == 'tenant-a'
+    assert seen[0]['metric_keys'] == frozenset({'new.metric', 'ceo.cash_floor'})
+    assert len(result['bundle'].authorized_claim_records) == 2
+    assert result['bundle'].answer_metric_keys == frozenset({'new.metric'})

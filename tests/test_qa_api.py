@@ -5919,6 +5919,7 @@ def test_assistant_claim_hydration_has_no_literal_keyword_gate(monkeypatch):
     selected = api_module._assistant_claim_retrieval_plan('tell me about this in ordinary language',
         run_id='run', context=context, summary={})
     assert 'newly_ingested.unexpected_metric' in selected['metric_keys']
+    assert selected['selected_metric_keys'] == frozenset({'newly_ingested.unexpected_metric'})
     assert selected['intent'] == 'facts'
 
 

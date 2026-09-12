@@ -81,6 +81,8 @@ class DataBundle:
     tenant_context: Any = None
     ingestion_job: Any = None
     authorized_claim_records: tuple[dict[str, Any], ...] | None = None
+    # Server-selected answer evidence; presentation preloads remain in the full snapshot.
+    answer_metric_keys: frozenset[str] | None = None
 
 
 _ROLE_ATTRIBUTES: dict[str, str] = role_attribute_names()
