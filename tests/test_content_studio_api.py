@@ -1,10 +1,9 @@
 import json
 from types import SimpleNamespace
 
-from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from strategyos_mvp import auth, content_studio_api
+from strategyos_mvp import content_studio_api
 from strategyos_mvp.api import app
 
 
@@ -66,39 +65,6 @@ def test_research_uses_live_search_and_returns_sources(monkeypatch):
     assert captured["live_search"] is True
     assert response.json()["search_mode"] == "live-web"
     assert response.json()["results"][0]["url"] == "https://example.com/report"
-
-
-def test_integration_token_bypasses_interactive_identity_boundary(monkeypatch):
-    configured(monkeypatch)
-
-    def reject_as_identity(**_kwargs):
-        raise HTTPException(401, "A valid identity token is required.")
-
-    monkeypatch.setattr(auth, "authenticate_optional_request", reject_as_identity)
-    monkeypatch.setattr(
-        content_studio_api,
-        "_call_codex",
-        lambda *_args, **_kwargs: json.dumps({
-            "summary": "The dedicated integration credential was accepted.",
-            "results": [{
-                "title": "Primary source",
-                "url": "https://example.com/report",
-                "publisher": "Example",
-                "published_at": "2026-09-01",
-                "claim": "The protected route is reachable.",
-                "evidence_excerpt": "A short source-grounded passage.",
-                "why_it_matters": "Proves the server-to-server boundary.",
-            }],
-            "gaps": [],
-        }),
-    )
-    response = TestClient(app).post(
-        "/integrations/evidence-content/research",
-        headers={"Authorization": "Bearer " + TOKEN},
-        json={"query": "evidence-led content"},
-    )
-    assert response.status_code == 200
-    assert response.headers["cache-control"] == "private, no-store"
 
 
 def test_generation_uses_saved_evidence_without_search(monkeypatch):

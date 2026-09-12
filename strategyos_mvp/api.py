@@ -390,13 +390,6 @@ async def bind_authorized_data_scope(request: Request, call_next: Any) -> Any:
     headers = request.headers
     if request.url.path.startswith("/static/"):
         return await call_next(request)
-    if request.url.path.startswith("/integrations/evidence-content/"):
-        # This narrow server-to-server surface authenticates its own dedicated
-        # bearer token. Passing that token through the interactive identity
-        # boundary would misclassify it as an expired user session.
-        response = await call_next(request)
-        response.headers["Cache-Control"] = "private, no-store"
-        return response
     try:
         principal = await asyncio.to_thread(identity_boundary.authenticate_optional_request,
             x_api_key=headers.get("x-api-key"), authorization=headers.get("authorization"),
