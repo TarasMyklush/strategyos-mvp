@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 from typing import Literal
-from urllib.parse import urlencode
+from urllib.parse import urlencode, quote
 import re
 
 from pydantic import Field, field_validator
@@ -74,6 +74,12 @@ WORDS = {
     'concentration': ('Concentration above threshold', 'التركيز أعلى من الحد'),
     'share': ('Share', 'الحصة'),
     'threshold': ('Threshold', 'الحد'),
+    'allocation_basis': ('Approved allocation basis', 'أساس التوزيع المعتمد'),
+    'history': ('Historical value', 'القيمة التاريخية'),
+    'seasonality': ('Seasonal factor', 'المعامل الموسمي'),
+    'adjustment': ('Planning adjustment', 'تعديل التخطيط'),
+    'effective_weight': ('Effective weight', 'الوزن الفعلي'),
+    'not_applied': ('Not applied', 'غير مطبق'),
 }
 
 
@@ -116,10 +122,8 @@ def compose(principal, analysis_id, request):
             WHERE tenant_key=%s AND imported_at>%s AND payload->'period'=%s::jsonb ORDER BY imported_at DESC''',
             (tenant, actual['imported_at'], store._encode(actual['payload']['period'])))
         newer_actuals = [dict(zip([c.name for c in cursor.description], r)) for r in cursor.fetchall()]
-    for row, model in [(plan, Plan), (actual, Actuals)]:
-        value = model.model_validate(row['payload'])
-        references = plan_source_references(value) if model is Plan else actual_source_references(value)
-        registered_sources(tenant, row['source_pack_id'], references, principal=principal, purpose='export')
+    for row, kind in [(plan, 'plan'), (actual, 'actuals')]:
+        store._sources(principal, row, kind=kind, purpose='export')
     # Do not disclose revisions from a source whose access has been revoked.
     from .dimensional_intent_sources import SourceUnavailable
     warnings, newer_records = [], {}
@@ -138,11 +142,12 @@ def compose(principal, analysis_id, request):
         result, request, analysis_id=analysis_id,
         plan_digest=result['plan_import_digest'], actual_digest=result['actual_import_digest'],
         warnings=warnings, newer_records=newer_records,
+        plan_derivation=plan['payload'].get('derivation'),
     )
 
 
 def compose_snapshot(result, request, *, analysis_id, plan_digest, actual_digest,
-                     warnings=None, newer_records=None, evidence_url=None):
+                     warnings=None, newer_records=None, evidence_url=None, plan_derivation=None):
     """Compose the same deterministic pages from an already verified analysis snapshot."""
     if len(result['cells']) > 10000 or len(result['rollups']) > 200:
         raise ValueError('This reporting range exceeds the export budget of 10,000 cells or 200 metrics. Select a smaller reporting range.')
@@ -266,6 +271,31 @@ def compose_snapshot(result, request, *, analysis_id, plan_digest, actual_digest
         [word('cells', lang), word('owner', lang), word('target', lang), word('actual', lang),
          word('variance', lang), word('status', lang), word('evidence', lang)],
         [250, 140, 100, 100, 100, 90, 100], cell_rows, keys=cell_keys, links=cell_links))
+    if plan_derivation and plan_derivation.get('historical_actual_revision'):
+        by_cell = {cell['cell_id']: cell for cell in result['cells']}
+        allocation_rows, allocation_links, allocation_keys = [], [], []
+        for allocation in plan_derivation['allocations']:
+            cell = by_cell.get(allocation['cell_id'])
+            if cell is None:
+                continue
+            links, refs = {}, []
+            for column, side, source in [(1,'history',allocation['basis']),
+                                         (2,'seasonality',allocation.get('seasonality_basis'))]:
+                if not source:
+                    continue
+                path = '/api/intent/dimensional/plans/' + quote(result['plan_id'],safe='') + '/versions/' + str(result['plan_version']) + '/evidence?' + urlencode({'cell_id':cell['cell_id'],'basis':side})
+                number = len(evidence) + 1
+                evidence.append({'number':number,'cell_id':cell['cell_id'],'side':side,'source':source,'path':path})
+                refs.append(number); links[str(column)] = path
+            allocation_rows.append([label(cell['metric']) + '\n' + ' · '.join(label(v) for k,v in sorted(cell['dimensions'].items())),
+                allocation['historical_value'] + ' ' + cell['unit'], allocation.get('seasonality_factor') or word('not_applied',lang),
+                allocation['adjustment_percent'] + '%', allocation['effective_weight'] + ' ' + cell['unit'],
+                cell['target'] + ' ' + cell['unit'], reference_numbers(refs)])
+            allocation_links.append(links); allocation_keys.append(cell['cell_id'])
+        pages.extend(table_pages(word('allocation_basis',lang),
+            [word('cells',lang), word('history',lang), word('seasonality',lang), word('adjustment',lang),
+             word('effective_weight',lang), word('target',lang), word('evidence',lang)],
+            [250,100,90,100,110,110,120], allocation_rows,keys=allocation_keys,links=allocation_links))
     # Each value links to its exact governed evidence. Preserve the full register
     # in the PDF attachment/PPTX notes instead of hundreds of one-source slides.
     documents = {}
@@ -281,6 +311,8 @@ def compose_snapshot(result, request, *, analysis_id, plan_digest, actual_digest
     binding = {'composer_version': 'board-pack.v4', 'analysis_hash': analysis_id, 'plan_digest': plan_digest,
                'actual_digest': actual_digest, 'template': template.model_dump(mode='json'),
                'language': lang, 'warnings': warnings, 'newer_records': newer_records}
+    if plan_derivation:
+        binding['plan_derivation'] = plan_derivation
     add('Snapshot references / مراجع اللقطة', [
         word('snapshot', lang), word('assurance', lang),
         'Technical provenance is retained in the PDF attachment and slide notes.',

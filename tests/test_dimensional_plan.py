@@ -406,6 +406,19 @@ def test_history_decomposition_discloses_mix_adjustments_and_reconciles(bundle):
     assert sum(cell.target for cell in proposal.cells) == Decimal('200')
 
 
+@pytest.mark.parametrize('missing', ['pack','factor','evidence'])
+def test_seasonality_never_defaults_missing_inputs_to_neutral_weights(bundle, missing):
+    body=historical_request(bundle[0]).model_dump(mode='json')
+    body['seasonality_source_pack_id']='seasonal-profile'
+    for item in body['allocations']:
+        item.update(seasonality_factor='1',seasonality_basis=bundle[0]['cells'][0]['source'])
+    if missing=='pack': body['seasonality_source_pack_id']=None
+    elif missing=='factor': body['allocations'][0]['seasonality_factor']=None
+    else: body['allocations'][0]['seasonality_basis']=None
+    with pytest.raises(ValueError,match='Seasonality requires'):
+        HistoricalDecompositionRequest.model_validate(body)
+
+
 @pytest.mark.parametrize('mutation,match', [
     (lambda value: value['observations'].__setitem__(0, {**value['observations'][0], 'value': None}), 'missing, not zero'),
     (lambda value: value['observations'].__setitem__(0, {**value['observations'][0], 'value': '0'}), 'must be positive'),

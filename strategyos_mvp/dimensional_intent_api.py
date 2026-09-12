@@ -292,8 +292,9 @@ def catalog(request: Request, offset: Annotated[int, Query(ge=0)] = 0,
 @router.get('/plans/{plan_id}/versions/{version}/evidence')
 def plan_evidence(plan_id: str, version: Annotated[int, Path(ge=1)],
                   cell_id: Annotated[str, Query(min_length=1, max_length=160)],
-                  principal: dict[str, Any] = require_role('operator', 'reviewer', 'executive')):
-    filename, content = perform(lambda: store.plan_evidence_bytes(principal, plan_id, version, cell_id))
+                  principal: dict[str, Any] = require_role('operator', 'reviewer', 'executive'),
+                  basis: Literal['target', 'history', 'seasonality'] = 'target'):
+    filename, content = perform(lambda: store.plan_evidence_bytes(principal, plan_id, version, cell_id, basis))
     return Response(content=content, media_type='application/octet-stream', headers={
         'Content-Disposition': "attachment; filename*=UTF-8''" + quote(filename, safe=''),
         'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store'})

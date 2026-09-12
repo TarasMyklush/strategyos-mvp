@@ -919,6 +919,13 @@ button:disabled { opacity: .5; cursor: not-allowed; }
         <label class="vault-field">Decimal places<input id="decomposition-precision" type="number" value="2" min="0" max="12" required></label>
       </div>
       <div class="vault-actions"><button id="history-load" type="button" class="secondary">Load historical mix</button></div>
+      <label><input id="seasonality-enabled" type="checkbox"> Apply a separately evidenced seasonal profile</label>
+      <div id="seasonality-fields" class="vault-controls" hidden>
+        <p class="vault-note">Each seasonal factor multiplies the historical weight before the planning adjustment. A factor of 1 leaves it unchanged. Supply a registered evidence file and an exact row or cell reference for every factor. The proposal still needs independent ratification.</p>
+        <label class="vault-field">Registered seasonal source pack<input id="seasonality-pack" maxlength="160" data-seasonality required disabled></label>
+        <label class="vault-field">Evidence file within that pack<input id="seasonality-path" data-seasonality required disabled></label>
+        <label class="vault-field">Registered file SHA-256<input id="seasonality-sha" pattern="[a-f0-9]{64}" data-seasonality required disabled></label>
+      </div>
       <p id="history-status" class="vault-note" role="status" aria-live="polite">Choose a prior snapshot to inspect the recorded mix.</p>
       <div id="history-allocations" class="vault-table" hidden tabindex="0" role="region" aria-label="Historical allocation adjustments"></div>
       <button id="history-create" type="submit" hidden>Create history-based proposal</button>

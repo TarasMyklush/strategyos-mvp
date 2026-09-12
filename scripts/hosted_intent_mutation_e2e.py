@@ -127,11 +127,13 @@ def main() -> int:
             temp = Path(temp_dir)
             evidence = temp / "evidence.csv"
             evidence.write_text(
-                "business_unit,product,region,client,planned,actual\n"
-                "GROUP,ITEM-A,NORTH,RETAIL,100,40\n"
-                "GROUP,ITEM-A,SOUTH,INSTITUTION,100,160\n"
-                "GROUP,ITEM-A,NORTH,HOSPITAL,0,40\n"
-                "GROUP,ITEM-A,NORTH,PHARMACY,0,60\n",
+                "business_unit,product,region,client,planned,actual,seasonal_factor\n"
+                "GROUP,ITEM-A,NORTH,RETAIL,100,40,1\n"
+                "GROUP,ITEM-A,SOUTH,INSTITUTION,100,160,1\n"
+                "GROUP,ITEM-A,NORTH,HOSPITAL,0,40,1\n"
+                "GROUP,ITEM-A,NORTH,PHARMACY,0,60,1\n"
+                "GROUP,ITEM-A,SOUTH,HOSPITAL,0,40,2\n"
+                "GROUP,ITEM-A,SOUTH,PHARMACY,0,60,1\n",
                 encoding="utf-8",
             )
             source_hash = hashlib.sha256(evidence.read_bytes()).hexdigest()
@@ -464,12 +466,66 @@ def main() -> int:
             pass_step("Executive ratifies the advisor-generated plan version through the UI", {
                 "version": 2, "governance_status": "ratified", "decomposed_parent_total": "100.00"})
 
+            seasonal_actuals = json.loads(json.dumps(actuals))
+            seasonal_actuals['revision'] = actual_revision + '-seasonal'
+            for index, observation in enumerate(seasonal_actuals['observations']):
+                observation['dimensions']['region'] = 'south'
+                observation['source']['locator'] = f'row {index+6}, actual'
+            seasonal_file = temp/'seasonal-history.json'
+            seasonal_file.write_text(json.dumps(seasonal_actuals))
+            operator_page.goto(urljoin(base_url,'plan'),wait_until='domcontentloaded')
+            operator_page.locator('#vault-content:not([hidden])').wait_for(timeout=20000)
+            operator_page.locator('#import-panel > details > summary').click()
+            operator_page.locator('#import-panel > details > details > summary').click()
+            operator_page.locator('#actual-pack').fill(source_pack_id)
+            operator_page.locator('#actual-file').set_input_files(seasonal_file)
+            operator_page.locator('#actual-import-form button[type="submit"]').click()
+            wait_message(operator_page,'Actual snapshot imported')
+            pass_step('Operator imports the separately scoped seasonal historical input through the UI')
+            choose_plan(operator_page,2)
+            operator_page.locator('#decomposition-cell').select_option('institutional')
+            operator_page.locator('#decomposition-dimension').select_option('client')
+            operator_page.locator('#history-actual').select_option(seasonal_actuals['revision'])
+            operator_page.locator('#history-load').click()
+            expect(operator_page.locator('#history-create')).to_be_visible(timeout=20000)
+            operator_page.locator('#seasonality-enabled').check()
+            operator_page.locator('#seasonality-pack').fill(source_pack_id)
+            operator_page.locator('#seasonality-path').fill('evidence.csv')
+            operator_page.locator('#seasonality-sha').fill(source_hash)
+            rows=operator_page.locator('#history-allocations tbody tr')
+            for index,member in enumerate(['hospital','pharmacy']):
+                rows.nth(index).locator('[data-field="cell_id"]').fill('seasonal-'+member)
+                rows.nth(index).locator('[data-field="seasonality_factor"]').fill('2' if index==0 else '1')
+                rows.nth(index).locator('[data-field="seasonality_locator"]').fill(f'row {index+6}, seasonal_factor')
+            operator_page.locator('#history-create').click()
+            wait_message(operator_page,'History-based proposal created as version 3')
+            proposed=api(operator_context,'get',f'api/intent/dimensional/plans/{plan_id}/versions/3').json()
+            assert proposed['governance_status']=='proposed'
+            assert proposed['payload']['derivation']['engine_version']=='history-seasonal-allocation.v1'
+            targets={c['id']:c['target'] for c in proposed['payload']['cells']}
+            assert targets['seasonal-hospital']=='57.14' and targets['seasonal-pharmacy']=='42.86'
+            operator_page.screenshot(path=output_dir/'12-seasonal-proposal.png',full_page=True)
+            pass_step('Operator applies evidenced seasonal factors separately from history and adjustments through the UI',{'targets':targets})
+            executive_page.goto(urljoin(base_url,'plan'),wait_until='domcontentloaded')
+            executive_page.locator('#vault-content:not([hidden])').wait_for(timeout=20000)
+            choose_plan(executive_page,3)
+            executive_page.locator('#decomposition-lineage > summary').click()
+            expect(executive_page.locator('#decomposition-allocations')).to_contain_text('Seasonal factor')
+            executive_page.locator('#review-note').fill('Reviewed the seasonal source factors, historical inputs, separate adjustments and exact target reconciliation.')
+            executive_page.locator('#reviewed').check()
+            executive_page.get_by_role('button',name='Ratify reviewed version').click()
+            wait_message(executive_page,'This plan version has been ratified')
+            with executive_page.expect_download() as download:
+                executive_page.get_by_role('link',name='Seasonal evidence',exact=False).first.click()
+            assert hashlib.sha256(Path(download.value.path()).read_bytes()).hexdigest()==source_hash
+            pass_step('Executive independently ratifies the seasonal proposal and opens its exact evidence through the UI',{'version':3})
+
             report["status"] = "passed"
             report["finished_at"] = datetime.now(UTC).isoformat()
             report["summary"] = {
                 "passed_steps": len(report["steps"]),
                 "browser_personas": 3,
-                "ui_mutations": 10,
+                "ui_mutations": 13,
                 "negative_authority_checks": 2,
                 "external_integrations_called": 0,
             }

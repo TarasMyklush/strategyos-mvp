@@ -17,7 +17,7 @@ import psycopg
 from psycopg import sql
 import pytest
 
-from strategyos_mvp import auth, dimensional_intent_sources as sources
+from strategyos_mvp import api, auth, dimensional_intent_sources as sources
 from strategyos_mvp import dimensional_intent_store as store
 from strategyos_mvp.dimensional_intent_api import router
 from strategyos_mvp.dimensional_plan import Actuals, Plan, fingerprint
@@ -1274,6 +1274,84 @@ def test_history_decomposition_blocks_missing_history_and_stale_parent(setup):
     with pytest.raises(store.Conflict, match='newer ratified'):
         store.create_history_decomposition(s['operator'], s['p']['plan_id'], 1,
                                            HistoricalDecompositionRequest.model_validate(history_body(s, parent['digest'])))
+
+
+def test_seasonal_decomposition_keeps_separate_evidence_and_rechecks_it_before_ratification(setup):
+    s = setup
+    parent = import_pair(s); approve(s,parent); import_history(s)
+    seasonal_pack = 'seasonal-evidence'
+    seasonal_root = s['root'].parent / seasonal_pack
+    shutil.copytree(s['root'], seasonal_root)
+    manifest = deepcopy(s['manifest']); manifest['source_pack_id'] = seasonal_pack
+    (seasonal_root/'summary.json').write_text(json.dumps(manifest))
+    body = history_body(s,parent['digest']); body['seasonality_source_pack_id'] = seasonal_pack
+    for index,item in enumerate(body['allocations']):
+        item.update(seasonality_factor='2' if index == 0 else '1',
+                    seasonality_basis={**s['p']['cells'][0]['source'],'locator':f'Seasonal factor row {index+2}'})
+    request = HistoricalDecompositionRequest.model_validate(body)
+    proposal = store.create_history_decomposition(s['operator'],s['p']['plan_id'],1,request)
+    assert store.create_history_decomposition(s['operator'],s['p']['plan_id'],1,request)['digest'] == proposal['digest']
+    cells = {cell['id']:cell['target'] for cell in proposal['payload']['cells']}
+    assert cells['regional-hospital'] == '66.66' and cells['regional-pharmacy'] == '33.34'
+    assert sum(Decimal(value) for value in cells.values()) == Decimal('200')
+    d = proposal['payload']['derivation']
+    assert d['engine_version'] == 'history-seasonal-allocation.v1'
+    assert d['seasonality_source_pack_id'] != d['historical_source_pack_id']
+    assert d['allocations'][0]['historical_value'] == '40'
+    assert Decimal(d['allocations'][0]['effective_weight']) == Decimal('120')
+    prefix=f"/api/intent/dimensional/plans/{s['p']['plan_id']}/versions/2/evidence"
+    response=s['client'].get(prefix,params={'cell_id':'regional-hospital','basis':'seasonality'})
+    original=(seasonal_root/'raw/evidence.csv').read_bytes()
+    assert response.status_code==200 and response.content==original
+    (seasonal_root/'raw/evidence.csv').write_bytes(b'changed seasonal factors')
+    with pytest.raises(sources.SourceUnavailable):
+        store.ratify(s['executive'],s['p']['plan_id'],2,proposal['digest'],'Reviewed seasonal factors and their independent evidence.')
+    (seasonal_root/'raw/evidence.csv').write_bytes(original)
+    ratified=store.ratify(s['executive'],s['p']['plan_id'],2,proposal['digest'],'Reviewed seasonal factors and their independent evidence.')
+    assert ratified['plan_digest']==proposal['digest']
+    current=deepcopy(s['a']); current['revision']='seasonal-current'
+    original_observation=current['observations'].pop(0)
+    current['observations'].extend([{**original_observation,
+        'dimensions':{**original_observation['dimensions'],'client':member},'value':value}
+        for member,value in [('hospital','60'),('pharmacy','30')]])
+    store.import_actuals(s['operator'],Actuals.model_validate(current),s['pack'])
+    analysis=store.create_analysis(s['executive'],s['p']['plan_id'],2,current['revision'],TODAY)
+    from strategyos_mvp import board_pack
+    pack=board_pack.compose(s['executive'],analysis['analysis_hash'],board_pack.PackRequest(language='en'))
+    assert pack['binding']['plan_derivation']==proposal['payload']['derivation']
+    assert len([ref for ref in pack['evidence'] if ref['side']=='seasonality'])==2
+    assert len([ref for ref in pack['evidence'] if ref['side']=='history'])==2
+    allocation_page=next(p for p in pack['pages'] if p['title']=='Approved allocation basis')
+    assert allocation_page['table']['rows'][0][1:4]==['40 SAR','2','50%']
+    assert allocation_page['table']['rows'][0][5]=='66.66 SAR'
+
+
+def test_imported_history_cannot_claim_fabricated_weights_against_a_real_snapshot(setup):
+    from strategyos_mvp.dimensional_plan import PlanDerivation
+    s=setup
+    parent=import_pair(s); approve(s,parent); import_history(s)
+    proposal=store.create_history_decomposition(s['operator'],s['p']['plan_id'],1,
+        HistoricalDecompositionRequest.model_validate(history_body(s,parent['digest'])))
+    fake=deepcopy(proposal['payload']); fake['version']=3
+    d=fake['derivation']; first=d['allocations'][0]
+    first.update(historical_value='80',effective_weight='120',weight='120')
+    for cell in fake['cells']:
+        if cell['id']=='regional-hospital': cell['target']='66.66'
+        elif cell['id']=='regional-pharmacy': cell['target']='33.34'
+    d['request_hash']=fingerprint(PlanDerivation.model_validate(d).model_dump(mode='json',exclude={'request_hash'},exclude_none=True))
+    with pytest.raises(ValueError,match='decomposition endpoint'):
+        store.import_plan(s['operator'],Plan.model_validate(fake),s['pack'])
+    # The database independently prevents replacing a stored proposal, even
+    # when an operator supplies a matching checksum for the fabricated payload.
+    fake['version']=2
+    digest=fingerprint(fake)
+    with pytest.raises(psycopg.errors.RaiseException,match='immutable'):
+        with s['connect']() as conn:
+            conn.execute('UPDATE strategyos_intent_plan_versions SET payload=%s::jsonb,digest=%s WHERE plan_id=%s AND version=2',
+                         (json.dumps(fake),digest,s['p']['plan_id']))
+    approved=store.ratify(s['executive'],s['p']['plan_id'],2,proposal['digest'],
+                         'Reviewed the original, unchanged historical allocation and its evidence.')
+    assert approved['plan_digest']==proposal['digest']
 
 
 def advisor_body(s, digest):

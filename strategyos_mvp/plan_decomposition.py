@@ -38,6 +38,8 @@ class HistoricalAllocation(Contract):
     owner: Name
     tolerance: Amount = Field(ge=0)
     adjustment_percent: Amount = Field(default=0, gt=-100, le=100000)
+    seasonality_factor: Amount | None = Field(default=None, gt=0, le=1000)
+    seasonality_basis: SourceReference | None = None
 
 
 class HistoricalDecompositionRequest(Contract):
@@ -45,6 +47,7 @@ class HistoricalDecompositionRequest(Contract):
     parent_cell_id: Name
     split_dimension: Name
     historical_actual_revision: Name
+    seasonality_source_pack_id: Name | None = None
     decimal_places: int = Field(default=2, ge=0, le=12, strict=True)
     allocations: list[HistoricalAllocation] = Field(min_length=2, max_length=500)
 
@@ -54,6 +57,10 @@ class HistoricalDecompositionRequest(Contract):
         members = [item.member for item in self.allocations]
         if len(ids) != len(set(ids)) or len(members) != len(set(members)):
             raise ValueError("Historical allocation cell IDs and members must be unique.")
+        seasonal = self.seasonality_source_pack_id is not None
+        if any((item.seasonality_factor is not None) != seasonal or
+               (item.seasonality_basis is not None) != seasonal for item in self.allocations):
+            raise ValueError('Seasonality requires a registered source pack, factor and evidence for every allocation.')
         return self
 
 
@@ -271,7 +278,8 @@ def decompose_from_history(parent: Plan, actuals: Actuals, request: HistoricalDe
             raise ValueError(f"Historical observation for member {item.member} must be positive for mix allocation.")
         with localcontext() as context:
             context.prec = 80
-            effective = observation.value * (Decimal(1) + item.adjustment_percent / Decimal(100))
+            seasonal_factor = item.seasonality_factor if item.seasonality_factor is not None else Decimal(1)
+            effective = observation.value * seasonal_factor * (Decimal(1) + item.adjustment_percent / Decimal(100))
         if effective <= 0:
             raise ValueError("Historical adjustment must leave every effective weight positive.")
         explicit.append(Allocation(cell_id=item.cell_id, member=item.member, weight=effective,
@@ -288,6 +296,9 @@ def decompose_from_history(parent: Plan, actuals: Actuals, request: HistoricalDe
             "adjustment_percent": str(item.adjustment_percent),
             "effective_weight": str(effective),
         })
+        if request.seasonality_source_pack_id:
+            lineage[-1].update(seasonality_factor=str(item.seasonality_factor),
+                               seasonality_basis=item.seasonality_basis.model_dump(mode='json'))
     proposal = decompose(parent, DecompositionRequest(
         parent_digest=request.parent_digest,
         parent_cell_id=request.parent_cell_id,
@@ -298,12 +309,14 @@ def decompose_from_history(parent: Plan, actuals: Actuals, request: HistoricalDe
     payload = proposal.model_dump(mode="json", exclude_none=True)
     derivation = payload["derivation"]
     derivation.update({
-        "engine_version": "history-adjusted-allocation.v1",
+        "engine_version": "history-seasonal-allocation.v1" if request.seasonality_source_pack_id else "history-adjusted-allocation.v1",
         "allocations": sorted(lineage, key=lambda value: value["cell_id"]),
         "historical_actual_revision": actuals.revision,
         "historical_actual_digest": historical_digest,
         "historical_source_pack_id": historical_source_pack_id,
     })
+    if request.seasonality_source_pack_id:
+        derivation['seasonality_source_pack_id'] = request.seasonality_source_pack_id
     derivation.pop("request_hash")
     derivation["request_hash"] = fingerprint(derivation)
     return Plan.model_validate(payload)

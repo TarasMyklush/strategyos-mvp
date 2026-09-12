@@ -72,6 +72,8 @@ class DecompositionAllocation(Contract):
     historical_value: Amount | None = None
     adjustment_percent: Amount | None = None
     effective_weight: Amount | None = None
+    seasonality_factor: Amount | None = Field(default=None, gt=0, le=1000)
+    seasonality_basis: SourceReference | None = None
 
     @model_validator(mode="after")
     def one_dimension_shape(self):
@@ -83,7 +85,7 @@ class DecompositionAllocation(Contract):
 class PlanDerivation(Contract):
     kind: Literal["decomposition"]
     engine_version: Literal["weighted-allocation.v1", "history-adjusted-allocation.v1",
-                            "weighted-multidimensional-allocation.v1"]
+                            "weighted-multidimensional-allocation.v1", "history-seasonal-allocation.v1"]
     parent_plan_id: Name
     parent_version: int = Field(ge=1, strict=True)
     parent_digest: str = Field(pattern=r"^[a-f0-9]{64}$")
@@ -98,6 +100,7 @@ class PlanDerivation(Contract):
     historical_actual_revision: Name | None = None
     historical_actual_digest: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     historical_source_pack_id: Name | None = None
+    seasonality_source_pack_id: Name | None = None
 
     @model_validator(mode="after")
     def derivation_shape(self):
@@ -281,11 +284,14 @@ class Plan(Contract):
             basis = self.derivation.model_dump(mode="json", exclude={"request_hash"}, exclude_none=True)
             if fingerprint(basis) != self.derivation.request_hash:
                 raise ValueError("Decomposition lineage hash mismatch.")
-            history = self.derivation.engine_version == "history-adjusted-allocation.v1"
+            history = self.derivation.engine_version in {"history-adjusted-allocation.v1", "history-seasonal-allocation.v1"}
             if history != all((self.derivation.historical_actual_revision,
                                self.derivation.historical_actual_digest,
                                self.derivation.historical_source_pack_id)):
                 raise ValueError("Historical decomposition requires a complete actual-snapshot binding.")
+            seasonal = self.derivation.engine_version == 'history-seasonal-allocation.v1'
+            if seasonal != bool(self.derivation.seasonality_source_pack_id):
+                raise ValueError('Seasonal decomposition requires its own registered source-pack binding.')
             derived = {item.cell_id for item in self.derivation.allocations}
             cells = {cell.id: cell for cell in self.cells}
             if not derived.issubset(cells):
@@ -300,6 +306,16 @@ class Plan(Contract):
                 if history and not all(value is not None for value in
                                        (item.historical_value, item.adjustment_percent, item.effective_weight)):
                     raise ValueError("Historical allocation lineage is incomplete.")
+                if ((item.seasonality_factor is not None) != seasonal or
+                        (item.seasonality_basis is not None) != seasonal):
+                    raise ValueError('Seasonal allocation lineage requires a factor and evidence for every cell.')
+                if history:
+                    with localcontext() as context:
+                        context.prec = 80
+                        factor = item.seasonality_factor if seasonal else Decimal(1)
+                        expected_weight = item.historical_value * factor * (Decimal(1) + item.adjustment_percent / Decimal(100))
+                    if expected_weight <= 0 or item.weight != expected_weight or item.effective_weight != expected_weight:
+                        raise ValueError('Historical, seasonal and adjustment inputs do not reconcile to the effective allocation weight.')
         return self
 
 

@@ -35,8 +35,10 @@ carries its owner, target, tolerance, evidence and allocation method.
 
 Remaining decomposition backlog, in order:
 
-1. Add seasonality as a separate governed input from the already disclosed
-   historical mix and explicit adjustment bridge.
+1. Verify the separate seasonal-profile implementation in production: registered
+   evidence, a disclosed factor per child, independent review, exact reconciliation
+   and readable historical/seasonal evidence links. Candidate implementation and
+   focused tests are recorded in `assessment/input-requirements-delivery-2026-09-12.md`.
 2. Add large realistic dataset acceptance and client terminology review; concurrency,
    historical-unit mismatch and absent-history cases are already automated.
 

@@ -71,6 +71,12 @@
     document.querySelectorAll('button, select, input, textarea').forEach(function (control) { control.disabled = state.busy; });
     $('analyse-button').disabled = state.busy || !state.record || state.record.governance_status !== 'ratified' || !$('actual-select').value;
     $('ratify-button').disabled = state.busy || !state.record || !state.record.permissions.can_ratify || !$('reviewed').checked || $('review-note').value.trim().length < 20;
+    seasonalityControls();
+  }
+  function seasonalityControls() {
+    var enabled = $('seasonality-enabled').checked;
+    $('seasonality-fields').hidden = !enabled;
+    document.querySelectorAll('[data-seasonality]').forEach(function (input) { input.disabled = state.busy || !enabled; });
   }
   async function action(work) {
     if (state.busy) return;
@@ -131,13 +137,17 @@
     }));
     if (plan.derivation) {
       var d = plan.derivation;
-      var historical = d.engine_version === 'history-adjusted-allocation.v1';
+      var historical = ['history-adjusted-allocation.v1','history-seasonal-allocation.v1'].indexOf(d.engine_version) !== -1;
       var multidimensional = d.engine_version === 'weighted-multidimensional-allocation.v1';
       $('decomposition-summary').textContent = multidimensional ?
         'The approved parent objective was decomposed across ' + d.split_dimensions.map(label).join(', ') + '; every result reconciles to the objective.' :
         'The selected approved target was split by ' + label(d.split_dimension) + (historical ? ' using the governed historical mix.' : ' using the approved allocation weights.');
-      table('decomposition-allocations', multidimensional ? ['Result cell', 'Dimensions', 'Weight', 'Owner / tolerance', 'Evidence'] : historical ? ['Result cell', 'Member', 'Historical', 'Adjustment', 'Effective weight', 'Owner / tolerance', 'Historical evidence'] : ['Result cell', 'Member', 'Weight', 'Owner / tolerance', 'Evidence'], d.allocations.map(function (a) {
-        return multidimensional ? [a.cell_id, dimensions(a.dimensions), a.weight, a.owner + ' / ' + a.tolerance, a.basis.locator + ' · SHA-256 ' + a.basis.sha256] : historical ? [a.cell_id, a.member, a.historical_value, a.adjustment_percent + '%', a.effective_weight, a.owner + ' / ' + a.tolerance, a.basis.locator + ' · SHA-256 ' + a.basis.sha256] : [a.cell_id, a.member, a.weight, a.owner + ' / ' + a.tolerance, a.basis.locator + ' · SHA-256 ' + a.basis.sha256];
+      table('decomposition-allocations', multidimensional ? ['Result cell', 'Dimensions', 'Weight', 'Owner / tolerance', 'Evidence'] : historical ? ['Result cell', 'Member', 'Historical', 'Seasonal factor', 'Adjustment', 'Effective weight', 'Owner / tolerance', 'Evidence'] : ['Result cell', 'Member', 'Weight', 'Owner / tolerance', 'Evidence'], d.allocations.map(function (a) {
+        var refs = node('div');
+        refs.appendChild(link(historical ? 'Historical evidence' : 'Allocation evidence', planPath() + '/evidence?cell_id=' + encodeURIComponent(a.cell_id) + '&basis=' + (historical ? 'history' : 'target')));
+        if (a.seasonality_basis) refs.appendChild(link(' · Seasonal evidence', planPath() + '/evidence?cell_id=' + encodeURIComponent(a.cell_id) + '&basis=seasonality'));
+        var details = node('details'); details.appendChild(node('summary','Technical details')); details.appendChild(node('pre',JSON.stringify(a,null,2))); refs.appendChild(details);
+        return multidimensional ? [a.cell_id, dimensions(a.dimensions), a.weight, a.owner + ' / ' + a.tolerance, refs] : historical ? [a.cell_id, a.member, a.historical_value, a.seasonality_factor === null || a.seasonality_factor === undefined ? 'Not applied' : a.seasonality_factor, a.adjustment_percent + '%', a.effective_weight, a.owner + ' / ' + a.tolerance, refs] : [a.cell_id, a.member, a.weight, a.owner + ' / ' + a.tolerance, refs];
       }));
       show('decomposition-lineage', true);
     }
@@ -222,6 +232,7 @@
   $('decomposition-cell').addEventListener('change', seedDecomposition);
   $('decomposition-dimension').addEventListener('change', seedDecomposition);
   $('history-actual').addEventListener('change', resetHistory);
+  $('seasonality-enabled').addEventListener('change', seasonalityControls);
   $('as-of').addEventListener('change', function () { show('analysis-panel', false); window.dispatchEvent(new CustomEvent('kyvern-analysis', { detail: null })); });
   $('review-note').addEventListener('input', controls); $('reviewed').addEventListener('change', controls);
   $('refresh').addEventListener('click', function () { action(async function () { resetSelection(); await loadCatalog(false); await loadPlan(); }); });
@@ -257,14 +268,17 @@
     state.history = await request(planPath() + '/history-candidates' + query);
     var rows = state.history.candidates.map(function (candidate) {
       var cell = safeId($('decomposition-cell').value + '-' + candidate.member);
-      function input(field, value, type) { var n = document.createElement('input'); n.dataset.field = field; n.value = value; n.type = type || 'text'; n.required = true; return n; }
+      function input(field, value, type) { var n = document.createElement('input'); n.dataset.field = field; n.value = value; n.type = type || 'text'; n.required = true; n.setAttribute('aria-label',field.replace(/_/g,' ')); return n; }
       var adjustment = input('adjustment_percent', '0', 'number'); adjustment.step = 'any'; adjustment.min = '-99.999999999999';
+      var seasonal = input('seasonality_factor','1','number'); seasonal.step='any'; seasonal.min='0.000000000001'; seasonal.max='1000'; seasonal.dataset.seasonality='';
+      var seasonalLocator = input('seasonality_locator',''); seasonalLocator.dataset.seasonality=''; seasonalLocator.placeholder='Seasonal evidence row / cell';
       var tolerance = input('tolerance', String(state.record.payload.cells.find(function (item) { return item.id === $('decomposition-cell').value; }).tolerance), 'number'); tolerance.step = 'any'; tolerance.min = '0';
-      return [input('cell_id', cell), candidate.member, candidate.historical_value, adjustment,
+      return [input('cell_id', cell), candidate.member, candidate.historical_value, seasonal, seasonalLocator, adjustment,
               input('owner', state.record.payload.cells.find(function (item) { return item.id === $('decomposition-cell').value; }).owner), tolerance,
               candidate.source.locator, candidate.readiness];
     });
-    table('history-allocations', ['Result cell', 'Member', 'Historical value', 'Adjustment %', 'Owner', 'Tolerance', 'Evidence', 'Readiness'], rows);
+    table('history-allocations', ['Result cell', 'Member', 'Historical value', 'Seasonal factor', 'Seasonal evidence location', 'Adjustment %', 'Owner', 'Tolerance', 'Evidence', 'Readiness'], rows);
+    seasonalityControls();
     show('history-allocations', true); show('history-create', state.history.readiness === 'ready');
     $('history-status').textContent = state.history.readiness === 'ready' ? 'Historical mix is complete. Adjustments are disclosed and applied before exact allocation.' : 'This snapshot is blocked because at least one matched value is missing or nonpositive.';
   }); });
@@ -273,12 +287,18 @@
     var rows = Array.from($('history-allocations').querySelectorAll('tbody tr'));
     var allocations = rows.map(function (row, index) {
       function value(field) { return row.querySelector('[data-field="' + field + '"]').value.trim(); }
-      return { cell_id: value('cell_id'), member: state.history.candidates[index].member,
+      var item = { cell_id: value('cell_id'), member: state.history.candidates[index].member,
         owner: value('owner'), tolerance: value('tolerance'), adjustment_percent: value('adjustment_percent') };
+      if ($('seasonality-enabled').checked) {
+        item.seasonality_factor = value('seasonality_factor');
+        item.seasonality_basis = {path:$('seasonality-path').value.trim(),sha256:$('seasonality-sha').value.trim(),locator:value('seasonality_locator')};
+      }
+      return item;
     });
     var result = await request(planPath() + '/decompose-from-history', {
       parent_digest: state.history.parent_digest, parent_cell_id: state.history.parent_cell_id,
       split_dimension: state.history.split_dimension, historical_actual_revision: state.history.historical_actual_revision,
+      seasonality_source_pack_id: $('seasonality-enabled').checked ? $('seasonality-pack').value.trim() : null,
       decimal_places: Number($('decomposition-precision').value), allocations: allocations
     });
     await loadCatalog(false); $('plan-select').value = result.plan_id + ':' + result.version; await loadPlan();

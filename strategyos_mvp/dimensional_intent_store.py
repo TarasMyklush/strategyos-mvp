@@ -106,15 +106,19 @@ def _actuals(conn, tenant, revision):
         WHERE tenant_key=%s AND revision=%s''', (tenant, revision)))
 
 
-def _sources(principal, row, *, kind, verify_bytes=True):
+def _sources(principal, row, *, kind, verify_bytes=True, purpose='analysis'):
     tenant, _ = _scope(principal)
     value = Plan.model_validate(row['payload']) if kind == 'plan' else Actuals.model_validate(row['payload'])
     references = plan_source_references(value) if kind == 'plan' else actual_source_references(value)
-    primary = registered_sources(tenant, row['source_pack_id'], references, verify_bytes=verify_bytes, principal=principal)
+    primary = registered_sources(tenant, row['source_pack_id'], references, verify_bytes=verify_bytes, principal=principal, purpose=purpose)
     if kind == 'plan' and value.derivation and value.derivation.historical_source_pack_id:
         history_references = [item.basis for item in value.derivation.allocations]
         registered_sources(tenant, value.derivation.historical_source_pack_id, history_references,
-                           verify_bytes=verify_bytes, principal=principal)
+                           verify_bytes=verify_bytes, principal=principal, purpose=purpose)
+    if kind == 'plan' and value.derivation and value.derivation.seasonality_source_pack_id:
+        seasonal_references = [item.seasonality_basis for item in value.derivation.allocations]
+        registered_sources(tenant, value.derivation.seasonality_source_pack_id, seasonal_references,
+                           verify_bytes=verify_bytes, principal=principal, purpose=purpose)
     return primary
 
 
@@ -405,6 +409,9 @@ def create_history_decomposition(principal, plan_id, version, request):
             WHERE tenant_key=%s AND plan_id=%s''', (tenant, plan_id)).fetchone()[0]
         _sources(principal, parent, kind='plan')
         _sources(principal, actual_row, kind='actuals')
+        if request.seasonality_source_pack_id:
+            registered_sources(tenant, request.seasonality_source_pack_id,
+                [item.seasonality_basis for item in request.allocations], principal=principal)
         proposal = decompose_from_history(
             Plan.model_validate(parent['payload']), Actuals.model_validate(actual_row['payload']), request,
             next_version=latest + 1, historical_digest=actual_row['digest'],
@@ -555,6 +562,20 @@ def ratify(principal, plan_id, version, expected_digest, note):
                         historical['source_pack_id'] != derivation['historical_source_pack_id']):
                     raise Conflict('The historical actual snapshot failed its lineage integrity check.')
                 _sources(principal, historical, kind='actuals')
+                # Recompute from the bound source snapshot, rather than trusting
+                # historical values supplied in an imported derivation record.
+                from .plan_decomposition import HistoricalDecompositionRequest, decompose_from_history
+                request = HistoricalDecompositionRequest.model_validate({
+                    key: derivation[key] for key in ('parent_digest','parent_cell_id','split_dimension',
+                        'historical_actual_revision','decimal_places','seasonality_source_pack_id') if derivation.get(key) is not None
+                } | {'allocations': [{key: item[key] for key in ('cell_id','member','owner','tolerance',
+                        'adjustment_percent','seasonality_factor','seasonality_basis') if item.get(key) is not None}
+                        for item in derivation['allocations']]})
+                replay = decompose_from_history(Plan.model_validate(parent['payload']),
+                    Actuals.model_validate(historical['payload']), request, next_version=version,
+                    historical_digest=historical['digest'], historical_source_pack_id=historical['source_pack_id'])
+                if _plan_payload(replay) != _plan_payload(Plan.model_validate(row['payload'])):
+                    raise Conflict('The proposed decomposition does not reconcile to its bound historical inputs and approved parent.')
         newest = conn.execute('''SELECT COALESCE(MAX(version),0) FROM strategyos_intent_ratifications
             WHERE tenant_key=%s AND plan_id=%s''', (tenant, plan_id)).fetchone()[0]
         if version <= newest:
@@ -757,15 +778,25 @@ def catalog(principal, offset=0, limit=25, *, qa_plan_id=None):
                             'can_manage_ratifiers': principal['role'] == 'tenant_admin'}}
 
 
-def plan_evidence_bytes(principal, plan_id, version, cell_id):
+def plan_evidence_bytes(principal, plan_id, version, cell_id, basis='target'):
     tenant, _ = _scope(principal)
     record = read_plan(principal, plan_id, version)
     cell = next((c for c in record['payload']['cells'] if c['id'] == cell_id), None)
     if not cell:
         raise NotFound('Cell evidence not found.')
     from .strategy_compiler import SourceReference
-    source = SourceReference.model_validate(cell['source'])
-    root, _ = registered_sources(tenant, record['source_pack_id'], [source], principal=principal, purpose='export')
+    source_value, pack_id = cell['source'], record['source_pack_id']
+    if basis != 'target':
+        if basis not in {'history', 'seasonality'}:
+            raise ValueError('Unknown decomposition evidence basis.')
+        derivation = record['payload'].get('derivation') or {}
+        allocation = next((a for a in derivation.get('allocations', []) if a['cell_id'] == cell_id), {})
+        source_value = allocation.get('basis' if basis == 'history' else 'seasonality_basis')
+        pack_id = derivation.get('historical_source_pack_id' if basis == 'history' else 'seasonality_source_pack_id')
+        if not source_value or not pack_id:
+            raise NotFound('This cell has no recorded evidence for that allocation basis.')
+    source = SourceReference.model_validate(source_value)
+    root, _ = registered_sources(tenant, pack_id, [source], principal=principal, purpose='export')
     return _evidence_content(root, source)
 
 
