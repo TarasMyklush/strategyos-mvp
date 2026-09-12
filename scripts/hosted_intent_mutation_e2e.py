@@ -59,6 +59,7 @@ def main() -> int:
         "subject": base_url,
         "started_at": datetime.now(UTC).isoformat(),
         "mode": "hosted Chromium mutation lifecycle with synthetic append-only records",
+        "candidate_static_root": os.getenv('INTENT_UI_CANDIDATE_ROOT'),
         "records": {
             "source_key": source_key,
             "structure_id": structure_id,
@@ -82,6 +83,25 @@ def main() -> int:
         )
         page = context.new_page()
         pages.append(page)
+        if os.getenv('INTENT_UI_CANDIDATE_ROOT'):
+            candidate = Path(os.environ['INTENT_UI_CANDIDATE_ROOT'])
+            for filename in ('intent_vault.js', 'advisor_console.js', 'board_pack.js'):
+                page.route('**/static/' + filename + '*',
+                           lambda route, request, filename=filename: route.fulfill(
+                               content_type='text/javascript', body=(candidate / filename).read_text()))
+            def owned_controls(route):
+                try:
+                    response = route.fetch(timeout=60000)
+                    body = response.text()
+                except Exception:
+                    route.abort()
+                    return
+                for element, owner in [('board-pack', 'board'), ('advisor-console', 'advisor'),
+                                       ('structure-setup', 'structure'), ('objective-decomposition-form', 'objective'),
+                                       ('source-plan-package-form', 'source-package')]:
+                    body = body.replace(f'id="{element}"', f'id="{element}" data-control-owner="{owner}"')
+                route.fulfill(response=response, body=body)
+            page.route(re.compile(re.escape(base_url) + r'plan(?:\?|$)'), owned_controls)
         page.goto(urljoin(base_url, "login?manual=true"), wait_until="domcontentloaded")
         page.locator("#username").fill(username)
         page.locator("#password").fill(users[username])
@@ -521,12 +541,93 @@ def main() -> int:
             assert hashlib.sha256(Path(download.value.path()).read_bytes()).hexdigest()==source_hash
             pass_step('Executive independently ratifies the seasonal proposal and opens its exact evidence through the UI',{'version':3})
 
+            def import_complete_actuals(revision):
+                complete = json.loads(json.dumps(actuals))
+                complete['revision'] = revision
+                # This is a separate synthetic current-period import, not the
+                # preceding historical window used to derive the proposal.
+                complete['period'] = plan['period']
+                complete['recorded_on'] = plan['period']['end']
+                complete['observations'].extend(seasonal_actuals['observations'])
+                path = temp / (revision + '.json')
+                path.write_text(json.dumps(complete))
+                operator_page.goto(urljoin(base_url, 'plan'), wait_until='domcontentloaded')
+                operator_page.locator('#vault-content:not([hidden])').wait_for(timeout=20000)
+                operator_page.locator('#import-panel > details > summary').click()
+                operator_page.locator('#import-panel > details > details > summary').click()
+                operator_page.locator('#actual-pack').fill(source_pack_id)
+                operator_page.locator('#actual-file').set_input_files(path)
+                operator_page.locator('#actual-import-form button[type="submit"]').click()
+                wait_message(operator_page, 'Actual snapshot imported')
+
+            def compare_and_compose(page, revision):
+                page.goto(urljoin(base_url, 'plan'), wait_until='domcontentloaded')
+                page.locator('#vault-content:not([hidden])').wait_for(timeout=20000)
+                choose_plan(page, 3)
+                page.locator('#actual-select').select_option(revision)
+                with page.expect_response(lambda r: r.url.endswith('/analyses') and r.request.method == 'POST') as response:
+                    page.locator('#analyse-button').click()
+                assert response.value.ok, response.value.text()
+                analysis = response.value.json()
+                page.locator('#analysis-cells tbody tr').first.wait_for()
+                page.locator('#analysis-cells button').first.click()
+                expect(page.locator('#analysis-explanation-citation')).to_have_text('Approved plan · Version 3')
+                expect(page.locator('#analysis-explanation-evidence a')).to_have_count(2)
+                page.locator('#pack-template-select option').filter(has_text=advisor_id).wait_for(state='attached')
+                page.locator('#pack-template-select').select_option(advisor_id + ':1')
+                expect(page.locator('#pack-template')).to_have_value(re.compile(re.escape(advisor_id)), timeout=20000)
+                expect(page.locator('#pack-preview-button')).to_be_enabled(timeout=20000)
+                page.locator('#pack-language').select_option('bilingual')
+                with page.expect_response(lambda r: r.url.endswith('/board-packs') and r.request.method == 'POST', timeout=60000) as generated:
+                    page.locator('#pack-preview-button').click()
+                assert generated.value.ok, generated.value.text()
+                pack = generated.value.json()
+                expect(page.locator('#pack-status')).to_contain_text('Current against governed records.')
+                from strategyos_mvp.board_pack import word
+                rows = [(key, row) for p in pack['pack']['pages'] if p['title'] == word('cells', 'bilingual')
+                        for key, row in zip(p['table']['keys'], p['table']['rows'])]
+                assert len(rows) == len(analysis['cells']) == len(dict(rows))
+                for cell in analysis['cells']:
+                    assert dict(rows)[cell['cell_id']][2:4] == [cell['target'], cell['actual']]
+                return analysis, pack
+
+            complete_revision = actual_revision + '-complete'
+            import_complete_actuals(complete_revision)
+            original_analysis, original_pack = compare_and_compose(operator_page, complete_revision)
+            operator_page.screenshot(path=output_dir/'13-board-original.png', full_page=True)
+            pass_step('Operator generates a complete bilingual pack and opens a version-cited cell explanation through the UI',
+                      {'analysis_id': original_analysis['analysis_hash'], 'pack_id': original_pack['pack_id']})
+
+            updated_revision = actual_revision + '-complete-revision-2'
+            import_complete_actuals(updated_revision)
+            executive_page.goto(urljoin(base_url, 'plan?analysis=' + original_analysis['analysis_hash']), wait_until='domcontentloaded')
+            executive_page.locator('#pack-history-select option').filter(has_text='stale').wait_for(state='attached', timeout=20000)
+            executive_page.locator('#pack-history-select').select_option(original_pack['pack_id'])
+            executive_page.locator('#pack-history-load').click()
+            expect(executive_page.locator('#pack-status')).to_contain_text('Stale:')
+            old_record = api(executive_context, 'get', 'api/intent/dimensional/board-packs/' + original_pack['pack_id']).json()
+            assert old_record['pack'] == original_pack['pack'], 'The previously generated snapshot changed'
+            executive_page.screenshot(path=output_dir/'14-board-stale.png', full_page=True)
+            pass_step('Executive sees the old pack marked stale while its recorded content stays immutable')
+
+            new_analysis, new_pack = compare_and_compose(executive_page, updated_revision)
+            assert new_pack['pack_id'] != original_pack['pack_id']
+            assert new_analysis['actual_revision'] == updated_revision
+            with executive_page.expect_download() as download:
+                executive_page.locator('#pack-pdf').click()
+            pdf_path = output_dir/'regenerated-bilingual-board.pdf'
+            download.value.save_as(pdf_path)
+            assert pdf_path.read_bytes().startswith(b'%PDF')
+            executive_page.screenshot(path=output_dir/'15-board-regenerated.png', full_page=True)
+            pass_step('Executive reviews the newer actual revision and regenerates and downloads a new bilingual snapshot through the UI',
+                      {'new_pack_id': new_pack['pack_id'], 'new_actual_revision': updated_revision})
+
             report["status"] = "passed"
             report["finished_at"] = datetime.now(UTC).isoformat()
             report["summary"] = {
                 "passed_steps": len(report["steps"]),
                 "browser_personas": 3,
-                "ui_mutations": 13,
+                "ui_mutations": 19,
                 "negative_authority_checks": 2,
                 "external_integrations_called": 0,
             }

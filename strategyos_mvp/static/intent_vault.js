@@ -68,7 +68,9 @@
     return data;
   }
   function controls() {
-    document.querySelectorAll('button, select, input, textarea').forEach(function (control) { control.disabled = state.busy; });
+    document.querySelectorAll('button, select, input, textarea').forEach(function (control) {
+      if (!control.closest('[data-control-owner]')) control.disabled = state.busy;
+    });
     $('analyse-button').disabled = state.busy || !state.record || state.record.governance_status !== 'ratified' || !$('actual-select').value;
     $('ratify-button').disabled = state.busy || !state.record || !state.record.permissions.can_ratify || !$('reviewed').checked || $('review-note').value.trim().length < 20;
     seasonalityControls();

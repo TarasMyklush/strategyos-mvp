@@ -3,6 +3,7 @@
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
   var analysis = null, template = null, recorded = null, busy = false, internalTemplateWrite = false;
+  var workQueue = Promise.resolve(), pendingWork = 0;
   function node(tag, value) { var n = document.createElement(tag); if (value !== undefined) n.textContent = value; return n; }
   function save(blob, filename) {
     var url = URL.createObjectURL(blob), a = document.createElement('a');
@@ -13,11 +14,20 @@
   function setTemplate(value) {
     template = value; internalTemplateWrite = true; $('pack-template').value = JSON.stringify(value, null, 2); internalTemplateWrite = false; reset();
   }
-  async function action(work) {
-    if (busy) return; busy = true;
+  function action(work) {
+    var selectedAnalysis = analysis;
+    pendingWork += 1; busy = true;
     $('board-pack').querySelectorAll('button, input, select, textarea').forEach(function (n) { n.disabled = true; });
-    try { await work(); } catch (e) { $('pack-status').textContent = e.message; }
-    finally { busy = false; $('board-pack').querySelectorAll('button, input, select, textarea').forEach(function (n) { n.disabled = false; }); updateDownloads(); }
+    workQueue = workQueue.then(async function () {
+      try { if (selectedAnalysis === analysis) await work(); }
+      catch (e) { if (selectedAnalysis === analysis) $('pack-status').textContent = e.message; }
+      finally {
+        pendingWork -= 1; busy = pendingWork > 0;
+        $('board-pack').querySelectorAll('button, input, select, textarea').forEach(function (n) { n.disabled = busy; });
+        updateDownloads();
+      }
+    });
+    return workQueue;
   }
   async function request(path, body, binary) {
     var requestedAnalysis = analysis;

@@ -14,7 +14,9 @@
     if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'The configuration request failed.');
     return data;
   }
-  function controls() { $('advisor-console').querySelectorAll('button,input,textarea,select').forEach(function (item) { item.disabled = busy; }); }
+  function controls() { $('advisor-console').querySelectorAll('button,input,textarea,select').forEach(function (item) {
+    if (item.closest('[data-control-owner]') === $('advisor-console')) item.disabled = busy;
+  }); }
   async function action(work) { if (busy) return; busy = true; controls(); try { await work(); } catch (error) { $('advisor-readiness').textContent = error.message; } finally { busy = false; controls(); } }
   function table(target, headings, rows) {
     var t = node('table'), head = node('thead'), hr = node('tr'), body = node('tbody');

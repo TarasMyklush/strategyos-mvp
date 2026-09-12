@@ -932,7 +932,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
     </form>
     <details style="margin-top:24px"><summary>Decompose a whole objective across dimensions</summary>
       <p class="vault-note">Allocate the complete approved metric across two or more configured dimensions. Every output cell receives an owner, tolerance and evidence basis; the final cell receives the disclosed rounding remainder.</p>
-      <form id="objective-decomposition-form">
+      <form id="objective-decomposition-form" data-control-owner="objective">
         <div class="vault-controls">
           <label class="vault-field">Objective metric<select id="objective-decomposition-metric" required></select></label>
           <label class="vault-field">Decimal places<input id="objective-decomposition-precision" type="number" value="2" min="0" max="12" required></label>
@@ -957,10 +957,10 @@ button:disabled { opacity: .5; cursor: not-allowed; }
     </form>
     </details>
   </div>
-  <div id="advisor-console" class="vault-panel">
+  <div id="advisor-console" class="vault-panel" data-control-owner="advisor">
     <div class="section-head"><div><div class="section-eyebrow">Client setup</div><h2>Strategic Advisor console</h2></div><button id="advisor-refresh" class="secondary" type="button">Refresh configurations</button></div>
     <p>Configure one approved objective, its historical allocation, accountabilities and bilingual board labels. Source bindings come from governed records and cannot be edited here.</p>
-    <details id="structure-setup">
+    <details id="structure-setup" data-control-owner="structure">
       <summary>Organization and dimension structure</summary>
       <p class="vault-note">Define the business units in scope, reusable dimension hierarchies and how registered source fields map to them. Save a new version when the structure changes; a separate tenant administrator approves the authoritative version.</p>
       <div class="vault-controls">
@@ -1064,7 +1064,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
     <p class="vault-note">These figures are preserved with their approved plan and actual revision. Source hashes verify file integrity; they do not independently certify each reported value.</p>
     <a id="saved-link">Reopen this saved analysis</a>
   </div>
-  <div id="board-pack" class="vault-panel" hidden>
+  <div id="board-pack" class="vault-panel" data-control-owner="board">
     <h2>Board pack composer</h2>
     <p>Turn this saved analysis into an evidence-linked board review. Figures stay bound to this version; exports check current source permissions and flag newer records.</p>
     <div class="vault-controls">
@@ -1094,7 +1094,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   <div id="import-panel" class="vault-panel" hidden>
     <details><summary>Import plan and actual snapshots</summary>
       <p>Compile a registered plan package into an independently approved organization structure, a plan proposal and its comparable actual snapshot. Source targets, owners, dimensions and rounding remain traceable to the registered files.</p>
-      <form id="source-plan-package-form">
+      <form id="source-plan-package-form" data-control-owner="source-package">
         <h3>Registered plan package</h3>
         <div class="vault-controls">
           <label class="vault-field">Source pack ID<input id="source-plan-pack" required maxlength="160" pattern="[A-Za-z0-9][A-Za-z0-9_.-]*"></label>
