@@ -67,7 +67,7 @@ def fact_registry(records):
         if record.get('scenario'):
             parts.append('scenario: ' + str(record['scenario']))
         parts.extend(f'{key}: {value}' for key,value in identity_dimensions.items())
-        metric_name = str(dimensions.get('driver_key') or record['metric_key'].split('.')[-1]).replace('_', ' ').upper()
+        metric_name = str(dimensions.get('component') or dimensions.get('driver_key') or record['metric_key'].split('.')[-1]).replace('_', ' ').upper()
         label = str(record.get('label') or record.get('claim_kind') or '')
         display_scope = [when, str(subject['key'])]
         if record.get('business_unit'):
@@ -80,7 +80,12 @@ def fact_registry(records):
                                  label.casefold(), str(record.get('claim_kind') or '').casefold()}))
         displayed_value = f'{unit} {Decimal(normalized):,f}' if value_type == 'numeric' else normalized
         display_text = f'{metric_name} ({label}): {displayed_value}\n' + ' · '.join(display_scope)
-        result[ref] = {'ref':ref, 'text':' · '.join(parts) + f': {normalized} {unit}',
+        if isinstance(dimensions.get('driver'), str) and dimensions['driver'].strip():
+            display_text += '\nRecorded source commentary: ' + dimensions['driver']
+        # The semantic selector must also see recorded context, not only a
+        # hand-picked subset of dimension names. It remains untrusted evidence.
+        context_text = json.dumps(dimensions, ensure_ascii=False, sort_keys=True, default=str)
+        result[ref] = {'ref':ref, 'text':' · '.join(parts) + f': {normalized} {unit}\nRecorded context: {context_text}',
                        'display_text':display_text, 'record':record, 'value':normalized, 'unit':unit}
     return result
 
@@ -126,7 +131,12 @@ def render_selection(selection, registry, *, run_id):
                       'unit':fact['unit'],'claim_kind':record.get('claim_kind'),
                       'formula':record.get('formula'),'business_unit':record.get('business_unit'),
                       'scenario':record.get('scenario'),'dimensions':record.get('identity_dimensions',{})})
-    return {'matched':True,'answer':'\n\n'.join(registry[ref]['display_text'] for ref in refs),
-            'basis':'Immutable facts from the authorized claim snapshot.', 'citations':citations,
+    from .fact_comparison import selected_comparisons
+    comparisons = selected_comparisons(refs, registry)
+    answer_parts = [registry[ref]['display_text'] for ref in refs]
+    answer_parts.extend(item['display_text'] for item in comparisons)
+    return {'matched':True,'answer':'\n\n'.join(answer_parts),
+            'basis':'Immutable source facts; any labelled comparison is calculated as actual minus plan from compatible input revisions.', 'citations':citations,
+            'calculated_comparisons': comparisons,
             'suggestions':[], 'fact_contract':CONTRACT,'fact_cells':facts,
             '_orchestrator_force_answer':True}
