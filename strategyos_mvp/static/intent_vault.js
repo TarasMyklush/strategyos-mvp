@@ -192,7 +192,7 @@
       });
       if (finding.finding_type === 'price_volume_mix') (finding.input_rows || []).forEach(function (item) {
         [['plan_price', 'Planned price'], ['plan_volume', 'Planned volume'], ['actual_price', 'Actual price'], ['actual_volume', 'Actual volume']].forEach(function (source) {
-          refs.appendChild(link(item.member + ' · ' + (source[0] === 'plan' ? 'Plan evidence' : 'Actual evidence'), '/analyses/' + result.analysis_hash + '/evidence?side=' + source[0] + '&cell_id=' + encodeURIComponent(item.cell_id)));
+          refs.appendChild(link(item.member + ' · ' + source[1] + ' evidence', '/analyses/' + result.analysis_hash + '/evidence?side=' + source[0] + '&cell_id=' + encodeURIComponent(item.cell_id)));
         });
       });
       card.appendChild(refs); findings.appendChild(card);

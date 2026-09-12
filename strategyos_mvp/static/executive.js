@@ -5569,7 +5569,7 @@
             provider: namedProvider || accountableProvider,
             formula: String(firstDefined(calculation.formula, driver.formula, 'Calculation definition unavailable')),
             missing_inputs: missingInputs,
-            source_contract_id: firstDefined(sourceContract.registry_id, null)
+            source_contract_id: String(sourceContract.registry_id || '').trim() || null
           })
         });
         var payload = await parseJsonResponse(response);
