@@ -69,3 +69,15 @@ def test_deploy_verifies_the_anonymous_login_boundary_after_cutover() -> None:
     assert text.count("--login-required") == 2
     assert "- name: Verify anonymous login boundary" in text
     assert "Anonymous application, API-documentation, and login boundaries are closed." in text
+
+
+def test_deployment_only_creates_a_customer_run_when_explicitly_requested() -> None:
+    import yaml
+
+    workflow = yaml.safe_load(_deploy_yaml())
+    steps = workflow['jobs']['deploy']['steps']
+    smoke = next(step for step in steps if step.get('name') == 'Verify queued execution')
+    assert smoke['if'] == '${{ inputs.run_smoke }}'
+    worker = next(step for step in steps if step.get('name') == 'Check Hatchet worker health')
+    assert 'check_hatchet_worker.sh' in worker['run']
+    assert 'run_smoke' not in worker.get('if', '')

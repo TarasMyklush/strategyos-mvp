@@ -582,8 +582,11 @@ jobs:
           TARGET_URL="${STRATEGYOS_PUBLIC_URL}" \
           bash deploy/scripts/validate_public_edge.sh
 
+      # Creating a run is a data mutation, independent of whether Hatchet is
+      # enabled. Normal releases retain the current customer candidate; worker
+      # registration/readiness is verified above without submitting a new run.
       - name: Verify queued execution
-        if: ${{ inputs.run_smoke || env.STRATEGYOS_RUN_EXECUTION_MODE == 'hatchet' }}
+        if: ${{ inputs.run_smoke }}
         env:
           STRATEGYOS_RUN_AUTH_HEADER: ${{ secrets.STRATEGYOS_RUN_AUTH_HEADER }}
         run: |
