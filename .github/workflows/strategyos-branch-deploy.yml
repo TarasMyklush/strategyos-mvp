@@ -434,9 +434,6 @@ jobs:
           upsert("STRATEGYOS_LLM_API_KEY", os.environ.get("STRATEGYOS_LLM_API_KEY", ""))
           upsert("STRATEGYOS_IDP_TEST_USERS", os.environ.get("STRATEGYOS_IDP_TEST_USERS", ""))
           upsert("STRATEGYOS_CONTENT_STUDIO_TOKEN", os.environ.get("STRATEGYOS_CONTENT_STUDIO_TOKEN", ""))
-          if not any(line.startswith("STRATEGYOS_RESEARCH_GATEWAY_TOKEN=") for line in lines):
-              import secrets
-              upsert("STRATEGYOS_RESEARCH_GATEWAY_TOKEN", secrets.token_urlsafe(48))
           path.write_text("\n".join(lines) + "\n", encoding="utf-8")
           PY
           if [ -n "${STRATEGYOS_LLM_API_KEY}" ]; then
