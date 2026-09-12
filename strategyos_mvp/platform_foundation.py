@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .finding_quantification import reviewed_amount
 
 from dataclasses import asdict, dataclass, field, is_dataclass
 from datetime import UTC, datetime
@@ -574,7 +575,7 @@ def build_domain_filter_contracts(
                 label=label,
                 case_count=len(subset),
                 recoverable_sar=round(
-                    sum(float(row.get("recoverable_sar") or 0.0) for row in subset), 2
+                    sum(reviewed_amount(row) for row in subset), 2
                 ),
                 citation_count=sum(int(row.get("citation_count") or 0) for row in subset),
                 challenged_count=sum(1 for row in subset if row.get("challenged")),

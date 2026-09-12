@@ -83,7 +83,8 @@ def test_cash_recovery_handler_sums_recoverable_value_and_flags_weak_findings(mo
 
     result = workers.cash_recovery_handler(ctx, {"run_id": "run1"})
 
-    assert result["data"]["total_recoverable_sar"] == 50000.0
+    assert result["data"]["total_recoverable_sar"] == 30000.0
+    assert result["data"]["excluded_finding_ids"] == ["FIN-002"]
     assert result["data"]["locked_recoverable_sar"] == 30000.0
     assert result["data"]["weak_findings"] == ["FIN-002"]
     assert result["confidence"] == "medium"

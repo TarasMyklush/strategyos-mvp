@@ -10,6 +10,9 @@ from strategyos_mvp.skills.finance_controls import run_all_finance_skills
 def qa_context():
     bundle = load_dataset(SOURCE_DATASET)
     findings = run_all_finance_skills(bundle)
+    from strategyos_mvp.agents.finance_agents import FinanceAuditorAgent
+    FinanceAuditorAgent().run_review_rounds(findings)
+    assert all(f.status == "locked" for f in findings)
     return bundle, findings
 
 

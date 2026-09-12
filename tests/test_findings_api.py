@@ -171,12 +171,12 @@ def test_board_reconciliation_gate_checks_arithmetic_citations_and_open_case_lin
     }
     passed = api_module._board_reconciliation_payload(
         {"total_recoverable_sar": 100},
-        [{"finding_id": "F-001", "recoverable_sar": 100, "challenged": True}],
+        [{"finding_id": "F-001", "recoverable_sar": 100, "challenged": True, "status": "locked"}],
         audit,
     )
     mismatched = api_module._board_reconciliation_payload(
         {"total_recoverable_sar": 177},
-        [{"finding_id": "F-001", "recoverable_sar": 100, "challenged": True}],
+        [{"finding_id": "F-001", "recoverable_sar": 100, "challenged": True, "status": "locked"}],
         audit,
     )
 

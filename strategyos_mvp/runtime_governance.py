@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .finding_quantification import reviewed_amount
 
 import hashlib
 import json
@@ -187,7 +188,7 @@ def build_run_summary(state: dict[str, Any]) -> dict[str, Any]:
         ),
         "total_recoverable_sar": round(
             sum(
-                float(getattr(finding, "recoverable_sar", 0.0)) for finding in findings
+                reviewed_amount(finding) for finding in findings
             ),
             2,
         ),

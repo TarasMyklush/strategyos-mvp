@@ -460,6 +460,10 @@ def _handle_distinct_parties(question: str, bundle: _DataBundle, findings: list[
 def _handle_recoverable(question: str, bundle: _DataBundle, findings: list[_Finding]) -> dict[str, _Any]:
     if not findings:
         return _needs('findings', 'authorized findings with complete run coverage')
+    from .finding_quantification import reviewed_findings
+    excluded = len(findings) - len(reviewed_findings(findings))
+    if excluded:
+        return _needs("reviewed_findings", "completed review of all findings before stating a complete recovery total")
     total = round(sum(float(f.recoverable_sar) for f in findings), 2)
     if _has_any(
         question,

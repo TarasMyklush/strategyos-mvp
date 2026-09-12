@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .finding_quantification import reviewed_amount, reviewed
 
 from datetime import datetime
 from typing import Any, Mapping
@@ -287,7 +288,7 @@ def build_executive_read_model(
         if data_status == "ready"
         else "No current governed run is available."
     )
-    total_recoverable = round(sum(_as_float(row.get("recoverable_sar")) for row in rows), 2)
+    total_recoverable = round(sum(reviewed_amount(row) for row in rows), 2)
     finding_citation_count = sum(_as_int(row.get("citation_count")) for row in rows)
     audited_citation_count = _as_optional_int((audit_summary or {}).get("citation_count"))
     citation_count = (
@@ -307,9 +308,9 @@ def build_executive_read_model(
             run_id=run_id,
             as_of=as_of,
             source=_source(truth_source, "strategyos_findings.recoverable_sar", "governed_artifact.findings.recoverable_sar"),
-            record_count=len(rows),
-            derivation="sum(recoverable_sar)",
-            complete=bool(summary),
+            record_count=sum(reviewed(row) for row in rows),
+            derivation="sum(recoverable_sar where status is locked or approved)",
+            complete=bool(summary) and all(reviewed(row) for row in rows),
         ),
         "finding_count": claim(
             len(rows),

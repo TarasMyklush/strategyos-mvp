@@ -448,22 +448,26 @@ class CaseFileWriter:
 
 def render_case_file(findings: list[Finding], bundle: DataBundle) -> str:
     findings = sorted(findings, key=lambda finding: (-finding.recoverable_sar, finding.finding_id))
-    total_leakage = sum(f.leakage_sar for f in findings)
-    total_recoverable = sum(f.recoverable_sar for f in findings)
+    from ..finding_quantification import reviewed_findings, reviewed_amount
+    quantified = reviewed_findings(findings)
+    total_leakage = sum(reviewed_amount(f, "leakage_sar") for f in quantified)
+    total_recoverable = sum(reviewed_amount(f) for f in quantified)
     lines = [
         "# Final consolidated case file",
         "",
         "## Executive Summary",
         "",
-        f"- Total leakage identified: SAR {total_leakage:,.2f}",
-        f"- Total recoverable identified: SAR {total_recoverable:,.2f}",
+        f"- Reviewed leakage identified: SAR {total_leakage:,.2f}",
+        f"- Reviewed recovery and conditional savings opportunities: SAR {total_recoverable:,.2f}",
         f"- Locked findings: {sum(f.status == 'locked' for f in findings)} of {len(findings)}",
+        f"- Excluded from reviewed totals: {len(findings) - len(quantified)} findings pending review, disputed, rejected or blocked.",
+        "- Opportunity amounts are estimates, not confirmed cash recovery.",
         f"- Detector coverage: {_detector_summary(bundle)}",
         "- Methodology: deterministic source ingestion, evidence hashing, finance-control skills, Analyst draft, Auditor challenge, and cited case-file generation.",
         "",
     ]
     lines.extend(['### Top three recovery opportunities', ''])
-    for finding in findings[:3]:
+    for finding in quantified[:3]:
         lines.append(f'- {finding.title}: SAR {finding.recoverable_sar:,.2f} recoverable ({finding.confidence.lower()} confidence).')
     lines.extend(['', '<!-- pagebreak -->', '', '## Findings', ''])
     for finding in findings:
@@ -570,6 +574,9 @@ def render_working_capital(bundle: DataBundle, findings: list[Finding]) -> str:
 
 
 def render_qa(findings: list[Finding], bundle: DataBundle) -> str:
+    from ..finding_quantification import reviewed_findings
+    all_findings = findings
+    findings = reviewed_findings(findings)
     recoverable = sorted(findings, key=lambda f: f.recoverable_sar, reverse=True)
     top_five = recoverable[:5]
     top_single_event = max(recoverable, key=_single_event_leakage_sar, default=None)
@@ -582,7 +589,8 @@ def render_qa(findings: list[Finding], bundle: DataBundle) -> str:
     non_ebitda_recovery = sum(f.recoverable_sar for f in top_five) - ebitda_recovery
     recurring_h2 = sum(f.recoverable_sar for f in recurring)
     recurring_h2_ebitda = sum(f.recoverable_sar for f in recurring if _finding_affects_ebitda(f))
-    lines = ["# Drill-down Q&A transcript", ""]
+    lines = ["# Drill-down Q&A transcript", "",
+             f"Financial conclusions include {len(findings)} reviewed findings; {len(all_findings) - len(findings)} unreviewed or excluded findings do not contribute. Opportunity amounts are not confirmed cash recovery.", ""]
     lines.extend([
         "## Detector coverage",
         "",
@@ -593,6 +601,14 @@ def render_qa(findings: list[Finding], bundle: DataBundle) -> str:
         lines.append(f"- {item}")
     if _skipped_detector_lines(bundle):
         lines.append("")
+    if not findings:
+        for number, question in enumerate([
+            "Which vendor has the largest single-event cash leakage?",
+            "What is the top-five recovery impact?",
+            "Which patterns would recur in H2?",
+        ], 1):
+            lines.extend([f"## Q{number}. {question}", "", "No reviewed findings are available for this financial conclusion. Review must finish before a value can be stated.", ""])
+        return "\n".join(lines)
     if top_single_event:
         single_event = _single_event_leakage_sar(top_single_event)
         lines.extend([

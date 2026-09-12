@@ -15,15 +15,9 @@ def test_case_file_writer_emits_phase5_deliverables(tmp_path: Path):
         "run_mode": "partial",
     }
     findings = run_all_finance_skills(bundle)
-    audit_events = [
-        AuditEvent(
-            round_no=1,
-            actor="Finance Auditor",
-            finding_id=findings[0].finding_id,
-            action="challenge",
-            detail="Phase 5 output verification sample.",
-        )
-    ]
+    from strategyos_mvp.agents.finance_agents import FinanceAuditorAgent
+    audit_events = FinanceAuditorAgent().run_review_rounds(findings)
+    assert all(f.status == "locked" for f in findings)
 
     artifacts = CaseFileWriter().write_all(bundle, findings, audit_events, tmp_path)
 

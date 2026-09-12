@@ -14,6 +14,7 @@ inside Hatchet.
 """
 
 from __future__ import annotations
+from ..finding_quantification import reviewed_amount, reviewed
 
 from typing import Any
 
@@ -71,7 +72,7 @@ def cash_recovery_handler(ctx: ToolExecutionContext, input: dict[str, Any]) -> d
     citations = citations_result.get("citations", [])
     coverage = _citation_coverage(findings, citations)
 
-    total_recoverable = sum(float(f.get("recoverable_sar") or 0.0) for f in findings)
+    total_recoverable = sum(reviewed_amount(f) for f in findings)
     locked_recoverable = sum(
         float(f.get("recoverable_sar") or 0.0) for f in findings if f.get("status") == "locked"
     )
@@ -94,7 +95,8 @@ def cash_recovery_handler(ctx: ToolExecutionContext, input: dict[str, Any]) -> d
             "metrics": {},
         }
 
-    gaps = []
+    excluded = [f["finding_id"] for f in findings if not reviewed(f)]
+    gaps = [f"{len(excluded)} finding(s) excluded from reviewed recovery totals pending review."] if excluded else []
     if coverage["weak_findings"]:
         gaps.append(
             f"{len(coverage['weak_findings'])} finding(s) have no resolvable citation: "
@@ -105,7 +107,7 @@ def cash_recovery_handler(ctx: ToolExecutionContext, input: dict[str, Any]) -> d
 
     return {
         "summary": (
-            f"{len(findings)} finding(s) explain SAR {total_recoverable:,.0f} recoverable "
+            f"{len(findings) - len(excluded)} reviewed finding(s) support SAR {total_recoverable:,.0f} in potential recovery and conditional savings "
             f"(SAR {locked_recoverable:,.0f} locked)."
         ),
         "status": "complete" if not gaps else "complete",
@@ -115,6 +117,7 @@ def cash_recovery_handler(ctx: ToolExecutionContext, input: dict[str, Any]) -> d
             "total_recoverable_sar": total_recoverable,
             "locked_recoverable_sar": locked_recoverable,
             "weak_findings": coverage["weak_findings"],
+            "excluded_finding_ids": excluded,
         },
         "citations": result_citations,
         "confidence": confidence,

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .finding_quantification import reviewed_amount, reviewed
 
 import asyncio
 import dataclasses
@@ -1298,7 +1299,7 @@ def _build_public_safe_assistant_packet(
 
     display_rows = list(finding_rows or [])[:3]
     displayed_recoverable = round(
-        sum(float(row.get("recoverable_sar") or 0.0) for row in display_rows),
+        sum(reviewed_amount(row) for row in display_rows),
         2,
     )
     total_recoverable = float(metrics.get("total_recoverable_sar") or 0.0)
@@ -2392,10 +2393,7 @@ def _kpi_card_payloads(
         {
             "card_id": "recoverable_value",
             "label": "Recoverable value",
-            "value": float(
-                (summary or {}).get("total_recoverable_sar")
-                or sum(float(row.get("recoverable_sar") or 0.0) for row in rows)
-            ),
+            "value": sum(reviewed_amount(row) for row in rows),
             "unit": "SAR",
             "trend_hint": "bounded_finance_snapshot",
         },
@@ -2566,11 +2564,11 @@ def _governed_metrics_payload(
     filtered_challenged_count = sum(1 for row in view_rows if row.get("challenged"))
     resolved_count = int((audit_summary or {}).get("resolved_count") or 0)
     total_recoverable = round(
-        sum(float(row.get("recoverable_sar") or 0.0) for row in all_rows),
+        sum(reviewed_amount(row) for row in all_rows),
         2,
     )
     filtered_total_recoverable = round(
-        sum(float(row.get("recoverable_sar") or 0.0) for row in view_rows),
+        sum(reviewed_amount(row) for row in view_rows),
         2,
     )
     report_contracts = _summary_report_contracts(summary)
@@ -2604,7 +2602,7 @@ def _board_reconciliation_payload(
 ) -> dict[str, Any]:
     governed_rows = list(rows or [])
     computed_recoverable = round(
-        sum(float(row.get("recoverable_sar") or 0.0) for row in governed_rows),
+        sum(reviewed_amount(row) for row in governed_rows),
         2,
     )
     stated_raw = (summary or {}).get("total_recoverable_sar")
@@ -2643,6 +2641,11 @@ def _board_reconciliation_payload(
         (audit_summary or {}).get("status") == "ok"
     ) and open_challenge_ids.issubset(row_ids) and row_challenge_ids == open_challenge_ids
     checks = [
+        {
+            "key": "finding_review_status",
+            "status": "passed" if all(reviewed(row) for row in governed_rows) else "failed",
+            "excluded_finding_ids": [row.get("finding_id") for row in governed_rows if not reviewed(row)],
+        },
         {
             "key": "recoverable_arithmetic",
             "status": "passed" if recoverable_passed else "failed",
@@ -4533,7 +4536,7 @@ def _drilldown_contract_payload(
     resolved_count = int((audit_summary or {}).get("resolved_count") or 0)
     citation_count = int((audit_summary or {}).get("citation_count") or 0)
     total_recoverable = round(
-        sum(float(item.get("recoverable_sar") or 0.0) for item in finding_rows),
+        sum(reviewed_amount(item) for item in finding_rows),
         2,
     )
     latest_point = trend.get("latest_point") or {}
@@ -6088,7 +6091,7 @@ def _agent_modules_payload(
             "lane": "executive",
             "summary": f"Tracks recoverable value across {len(rows)} case{'s' if len(rows) != 1 else ''}.",
             "route": "/public/runs/latest/findings" if public_safe else "/runs/latest/findings",
-            "output_metric": _format_sar_brief(sum(float(row.get("recoverable_sar") or 0.0) for row in rows)),
+            "output_metric": _format_sar_brief(sum(reviewed_amount(row) for row in rows)),
             "approval_dependency": "none",
         },
         {
