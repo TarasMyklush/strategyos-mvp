@@ -12220,7 +12220,7 @@ def _assistant_response_payload(
                 "run_mode":context["run_mode"],"question":question,"persona":persona,
                 "requested_mode":requested_mode,"mode":response_mode,
                 "assistant_mode":"governed_fact","answered_by":"governed_fact_selection",
-                "determinism_tier":("derived_insight" if base_result.get("calculated_comparisons") else "governed_fact") if base_result.get("matched") else "needs_evidence",
+                "determinism_tier":("derived_insight" if base_result.get("calculated_comparisons") else "governed_fact") if base_result.get("matched") else ("context_only" if base_result.get("answer_coverage") == "context_only" else "needs_evidence"),
                 "response_sections":{},"executive_blocks":[]}
     plain_model_scope = str((base_result or {}).get("assistant_scope") or "")
     if plain_model_scope == "general":

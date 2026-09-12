@@ -253,7 +253,9 @@
     var comparisons = safeArray(payload.calculated_comparisons).map(function (item) {
       return '<li>' + escapeHtml(item.display_text || '') + '</li>';
     }).join('');
-    return '<div class="assistant-governed-answer"><div class="assistant-fact-table-scroll"><table class="assistant-fact-table">'
+    return '<div class="assistant-governed-answer">'
+      + (payload.answer_caveat ? '<p class="assistant-fact-paragraph">' + escapeHtml(payload.answer_caveat) + '</p>' : '')
+      + '<div class="assistant-fact-table-scroll"><table class="assistant-fact-table">'
       + '<caption>Source-backed facts</caption><thead><tr><th scope="col">Measure and scope</th><th scope="col">Status</th><th scope="col">Value</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
       + (comparisons ? '<section><h4>Calculated comparisons</h4><ul>' + comparisons + '</ul></section>' : '')
       + (commentary.length ? '<section><h4>Recorded source commentary</h4>' + commentary.join('') + '</section>' : '') + '</div>';
@@ -7423,7 +7425,7 @@
               ? 'request_error' : 'service_error';
         }
         var sections = payload.response_sections && typeof payload.response_sections === 'object' ? payload.response_sections : {};
-        var tierLabel = { policy: 'Permission required', request_error: 'Request not completed', governed_context: 'Verified KPI context', governed_fact: 'Source-backed fact', needs_evidence: 'Evidence unavailable', service_error: 'Service unavailable', general: 'General AI answer', derived_insight: 'Derived insight', advisory: (payload.external_consultation && payload.external_consultation.used ? 'Public research' : 'AI advice') }[tier] || '';
+        var tierLabel = { policy: 'Permission required', request_error: 'Request not completed', governed_context: 'Verified KPI context', governed_fact: 'Source-backed fact', context_only: 'Context only', needs_evidence: 'Evidence unavailable', service_error: 'Service unavailable', general: 'General AI answer', derived_insight: 'Derived insight', advisory: (payload.external_consultation && payload.external_consultation.used ? 'Public research' : 'AI advice') }[tier] || '';
         var bodyHtml = role === 'assistant'
           ? renderAssistantMarkdownToHtml(firstDefined(message.text, ''))
           : escapeHtml(firstDefined(message.text, ''));

@@ -15,6 +15,8 @@ This release follows the Input Folder audit. Completion requires deployed accept
 
 ### Additional verification on 12 September
 
+- Answer coverage is now assessed separately from fact selection. Related authorized facts remain visible with unchanged values and citations, but an incomplete answer is labelled Context only and does not count as matched. Multi-batch results receive a union-level completeness assessment. The model supplies only a validated boolean; it cannot author factual prose or figures through this contract. Focused checks: 124 passed. Full regression, CI and deployed semantic acceptance remain pending. This is not independent factual evaluation and does not close G10 or document retrieval coverage.
+
 - Assistant deadline work shares elapsed time across model stages and retries, stops expired calls before reserving inference, and retains the provider slot while cancelled blocking work finishes. The answer phase is bounded to at most 55 seconds, leaving delivery headroom before the browser's 60-second limit; Sol and medium reasoning are unchanged. Four regression tests cover retry allowance, expired-call exclusion, real-thread cancellation/slot retention, request context and a multi-stage deadline. Full local regression including the final governed layout: 2,639 passed / 164 service-dependent skips. CI and deployed timeout acceptance are pending; this does not resolve missing answer semantics.
 - Combined source-index/auditor/rerun release `f6de58f` deployment 34702533637 is fully green. Standard hosted checks passed; a new source analysis, reindex and selected-job review/publication lifecycle are not yet certified.
 

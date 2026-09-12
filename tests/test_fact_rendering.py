@@ -89,7 +89,7 @@ def test_semantic_selection_receives_numeric_and_text_evidence_without_rewriting
         packet = json.loads(kwargs['messages'][-1]['content'])
         assert {fact['ref'] for fact in packet['facts']} == {'approved-revision', 'qualitative'}
         assert statement in next(fact['text'] for fact in packet['facts'] if fact['ref'] == 'qualitative')
-        return json.dumps({'matched': True, 'fact_refs': ['qualitative']})
+        return json.dumps({'matched': True, 'fact_refs': ['qualitative'], 'answer_supported': True})
     monkeypatch.setattr(llm_qa, '_call_openai_compatible_chat', provider)
     result = llm_qa.answer_question('What explanation was recorded?',
         bundle=SimpleNamespace(authorized_claim_records=[record, source]), findings=[],
@@ -125,7 +125,7 @@ def test_provider_selection_is_rendered_and_orchestrator_cannot_rewrite_it(recor
     from strategyos_mvp import llm_qa, api, model_policy
     from tests.test_llm_qa import _config
     monkeypatch.setattr(model_policy,'evidence_model_access',lambda _:True)
-    monkeypatch.setattr(llm_qa,'_call_openai_compatible_chat',lambda **kwargs:json.dumps({'matched':True,'fact_refs':['approved-revision']}))
+    monkeypatch.setattr(llm_qa,'_call_openai_compatible_chat',lambda **kwargs:json.dumps({'matched':True,'fact_refs':['approved-revision'],'answer_supported':True}))
     answer=llm_qa.answer_question('Revenue for NUPCO?',bundle=SimpleNamespace(authorized_claim_records=(record,)),
         findings=[],summary={'run_id':'run'},config=_config())
     payload=api._assistant_response_payload(response_mode='llm',question='Revenue?',
@@ -183,7 +183,7 @@ def test_semantic_selection_sees_all_facts_without_literal_or_eighty_record_cuto
         request = json.loads(kwargs['messages'][-1]['content'])
         assert request['question'] == question
         assert {fact['ref'] for fact in request['facts']} == {r['claim_revision_id'] for r in records}
-        return json.dumps({'matched': True, 'fact_refs': ['last-ebitda']})
+        return json.dumps({'matched': True, 'fact_refs': ['last-ebitda'], 'answer_supported': True})
     monkeypatch.setattr(llm_qa, '_call_openai_compatible_chat', provider)
     result = llm_qa.answer_question(question, bundle=SimpleNamespace(authorized_claim_records=records),
         findings=[], summary={'run_id': 'run'}, config=_config())
@@ -200,9 +200,13 @@ def test_large_evidence_packets_are_lossless_and_every_batch_is_validated(record
     monkeypatch.setattr(model_policy, 'evidence_model_access', lambda _: True)
     seen = []
     def provider(**kwargs):
-        facts = json.loads(kwargs['messages'][-1]['content'])['facts']
+        packet = json.loads(kwargs['messages'][-1]['content'])
+        if 'approved_comparisons' in packet:
+            assert len(packet['facts']) == 27
+            return json.dumps({'answer_supported': True})
+        facts = packet['facts']
         seen.extend(fact['ref'] for fact in facts)
-        return json.dumps({'matched': True, 'fact_refs': [fact['ref'] for fact in facts]})
+        return json.dumps({'matched': True, 'fact_refs': [fact['ref'] for fact in facts], 'answer_supported': False})
     monkeypatch.setattr(llm_qa, '_call_openai_compatible_chat', provider)
     result = llm_qa.answer_question('Show all values', bundle=SimpleNamespace(authorized_claim_records=records),
         findings=[], summary={'run_id': 'run'}, config=_config())
@@ -210,6 +214,7 @@ def test_large_evidence_packets_are_lossless_and_every_batch_is_validated(record
     assert len(result['fact_cells']) == 27  # No hidden 20-result limit either.
     assert result['retrieval']['batches_completed'] > 1
     assert result['retrieval']['complete'] is True
+    assert result['matched'] and result['answer_coverage'] == 'supported'
 
 
 @pytest.mark.parametrize('response', ['not json', '{"matched":true,"fact_refs":["foreign"]}'])
@@ -235,3 +240,39 @@ def test_unverified_answers_never_get_a_source_backed_badge(result, tier):
         orchestrated=None, base_result=result)
     assert payload['determinism_tier'] == tier
     assert not payload.get('citations')
+
+
+@pytest.mark.parametrize('supported', [True, False])
+def test_related_facts_do_not_automatically_establish_answer(record, monkeypatch, supported):
+    from strategyos_mvp import llm_qa, model_policy, api
+    from tests.test_llm_qa import _config
+    monkeypatch.setattr(model_policy, 'evidence_model_access', lambda _: True)
+    monkeypatch.setattr(llm_qa, '_call_openai_compatible_chat', lambda **kwargs: json.dumps({
+        'matched': True, 'fact_refs': ['approved-revision'], 'answer_supported': supported}))
+    result = llm_qa.answer_question('Whose forecasts are consistently best?',
+        bundle=SimpleNamespace(authorized_claim_records=[record]), findings=[],
+        summary={'run_id': 'run'}, config=_config())
+    original = render_selection({'matched': True, 'fact_refs': ['approved-revision']},
+                                fact_registry([record]), run_id='run')
+    assert result['fact_cells'] == original['fact_cells']
+    assert result['citations'] == original['citations']
+    assert result['matched'] is supported
+    payload = api._assistant_response_payload(response_mode='llm', question='Forecast accuracy?',
+        context={'run_id': 'run', 'run_mode': 'full'}, requested_mode='auto', persona='ceo',
+        orchestrated=None, base_result=result)
+    assert payload['determinism_tier'] == ('governed_fact' if supported else 'context_only')
+    if not supported:
+        assert result['answer'].startswith(result['answer_caveat'])
+        assert 'SAR 1,200,000.00' in result['answer']
+
+
+@pytest.mark.parametrize('coverage', [None, 'true', 1, {}, []])
+def test_malformed_coverage_cannot_certify_answer(record, monkeypatch, coverage):
+    from strategyos_mvp import llm_qa, model_policy
+    from tests.test_llm_qa import _config
+    monkeypatch.setattr(model_policy, 'evidence_model_access', lambda _: True)
+    monkeypatch.setattr(llm_qa, '_call_openai_compatible_chat', lambda **kwargs: json.dumps({
+        'matched': True, 'fact_refs': ['approved-revision'], 'answer_supported': coverage}))
+    with pytest.raises(RuntimeError, match='invalid evidence selection'):
+        llm_qa.answer_question('Forecast accuracy?', bundle=SimpleNamespace(authorized_claim_records=[record]),
+            findings=[], summary={'run_id': 'run'}, config=_config())
