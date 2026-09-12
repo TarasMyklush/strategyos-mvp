@@ -51,6 +51,76 @@ def test_nonfinite_or_stale_facts_cannot_be_selected(record):
         assert fact_registry([{**record,**change}])=={}
 
 
+def test_text_claim_keeps_exact_source_statement_and_claim_status(record):
+    statement = 'Supplier reported a delayed shipment; the cause has not been independently verified.'
+    source = {**record, 'value_type': 'text', 'value': statement, 'unit': None,
+              'currency': None, 'claim_kind': 'reported_claim', 'label': 'Reported claim',
+              'metric_key': 'operations.delivery_reason'}
+    registry = fact_registry([source])
+    source['value'] = 'Unapproved replacement'
+    result = render_selection({'matched': True, 'fact_refs': ['approved-revision']}, registry, run_id='run')
+    assert statement in result['answer']
+    assert '(Reported claim)' in result['answer']
+    assert result['fact_cells'][0]['value'] == statement
+    assert result['fact_cells'][0]['value_type'] == 'text'
+    assert result['citations'][0]['excerpt'] == result['answer']
+    assert 'Unapproved replacement' not in result['answer']
+
+
+@pytest.mark.parametrize('changes', [
+    {'value': ''}, {'value': '  '}, {'value': {'answer': 'Not a source statement'}},
+    {'traceability': 'missing'}, {'superseded_since_analysis': True}, {'value_type': 'unsupported'},
+])
+def test_invalid_or_unavailable_text_is_not_selectable(record, changes):
+    source = {**record, 'value_type': 'text', 'value': 'Recorded explanation',
+              'unit': None, 'currency': None, **changes}
+    assert fact_registry([source]) == {}
+
+
+def test_semantic_selection_receives_numeric_and_text_evidence_without_rewriting(record, monkeypatch):
+    from strategyos_mvp import llm_qa, model_policy
+    from tests.test_llm_qa import _config
+    statement = 'Management attributes the delay to customs clearance.'
+    source = {**record, 'claim_revision_id': 'qualitative', 'value_type': 'text',
+              'value': statement, 'unit': None, 'currency': None,
+              'claim_kind': 'reported_claim', 'label': 'Reported claim'}
+    monkeypatch.setattr(model_policy, 'evidence_model_access', lambda _: True)
+    def provider(**kwargs):
+        packet = json.loads(kwargs['messages'][-1]['content'])
+        assert {fact['ref'] for fact in packet['facts']} == {'approved-revision', 'qualitative'}
+        assert statement in next(fact['text'] for fact in packet['facts'] if fact['ref'] == 'qualitative')
+        return json.dumps({'matched': True, 'fact_refs': ['qualitative']})
+    monkeypatch.setattr(llm_qa, '_call_openai_compatible_chat', provider)
+    result = llm_qa.answer_question('What explanation was recorded?',
+        bundle=SimpleNamespace(authorized_claim_records=[record, source]), findings=[],
+        summary={'run_id': 'run'}, config=_config())
+    assert statement in result['answer']
+    assert result['retrieval']['facts_considered'] == 2
+
+
+def test_text_evidence_page_displays_statement_as_escaped_text(record):
+    from strategyos_mvp.fact_view import fact_page
+    source = {**record, 'value_type': 'text', 'value': '<script>untrusted()</script> سبَب التأخير',
+              'unit': None, 'currency': None, 'claim_kind': 'reported_claim', 'label': 'Reported claim'}
+    response = fact_page({'record': source, 'analysis_as_of': '2026-06-30'})
+    visible = response.body.decode().split('<details>')[0]
+    assert '&lt;script&gt;untrusted()&lt;/script&gt;' in visible
+    assert '<script>' not in visible and 'سبَب التأخير' in visible
+    assert '(Reported claim)' in visible
+    assert response.headers['cache-control'] == 'private, no-store'
+
+
+def test_display_retains_business_scope_while_internal_components_remain_in_lineage(record):
+    record['dimensions'] = {'presentation_component': 'Cost Component', 'series': 'actual',
+                            'region': 'Central', 'product': 'Branded Rx', 'client': 'NUPCO'}
+    registry = fact_registry([record])
+    result = render_selection({'matched': True, 'fact_refs': ['approved-revision']}, registry, run_id='run')
+    assert all(value in result['answer'] for value in ('Central', 'Branded Rx', 'NUPCO'))
+    assert 'presentation component:' not in result['answer'] and 'series: actual' not in result['answer']
+    assert result['fact_cells'][0]['dimensions'] == record['dimensions']
+    assert 'presentation_component: Cost Component' in registry['approved-revision']['text']
+
+
 def test_provider_selection_is_rendered_and_orchestrator_cannot_rewrite_it(record,monkeypatch):
     from strategyos_mvp import llm_qa, api, model_policy
     from tests.test_llm_qa import _config

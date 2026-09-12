@@ -1012,6 +1012,6 @@
   "scope_note": "Canonical local baseline; no hosted deployment or GitHub push performed by this consolidation. Concurrent Codex gateway work is preserved and excluded from consolidation validation.",
   "remediation_scope": "All P0/P1 application work and UI QA; actual external ERP/treasury/calendar connections deferred by user. No real-world dispatch is simulated as completed.",
   "ui_constraint": "User requires preserving the existing UI. Removed new pages, navigation and language controls on 2026-09-05. Keep existing layouts, CSS, branding and controls; integrate functional corrections through existing surfaces.",
-  "revalidated_at": "2026-09-08",
-  "revalidation_note": "Current P0 check: four of eight P0 gaps remain unclosed. G05 fabricated-number protection, G06 authority enforcement and G07 full multi-tenant isolation are partial; G10 factual answer quality is open. The hosted Intent mutation lifecycle passed, but its subsystem evidence does not satisfy the broader product-wide acceptance criteria."
+  "revalidated_at": "2026-09-12",
+  "revalidation_note": "The current register lists seven of eight P0 items closed and G10 factual-answer acceptance open. This corrects the stale summary that contradicted the detailed G05/G06/G07 records; it does not newly certify those closures. Release 693fd8a passed 2,735 CI tests with zero skips and its hosted research, executive/Intent and Hermes browser suites. These checks do not constitute the fixed 50-question correctness gate or completion of all Input Folder requirements. Historical observations and missing-data statements below require current-release revalidation."
 }

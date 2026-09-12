@@ -392,6 +392,8 @@ def answer_question(
                  'Return exactly {"matched":true,"fact_refs":["revision-id"]} or '
                  '{"matched":false,"fact_refs":[]}. No other fields or prose. '
                  'Each fact retains its metric, subject, period, scenario and units. '
+                 'Text records are source statements with an explicit claim label; select relevant statements '
+                 'without treating a reported claim, assumption or forecast as an established actual. '
                  'Respect any explicitly requested period, subject and scenario: never substitute a different '
                  'period or entity when the requested one is absent. '
                  'Select available actual and plan facts when a comparison is requested; do not invent a computed difference. '

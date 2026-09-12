@@ -6,7 +6,7 @@ The preview now runs the enriched approved synthetic dataset with durable review
 
 The register contains **33 gaps: 8 P0, 21 P1 and 4 P2**. 18 have partial remediation and 10 are closed. These are risk priorities, not a completion percentage.
 
-Revalidated 2026-09-08: Current P0 check: four of eight P0 gaps remain unclosed. G05 fabricated-number protection, G06 authority enforcement and G07 full multi-tenant isolation are partial; G10 factual answer quality is open. The hosted Intent mutation lifecycle passed, but its subsystem evidence does not satisfy the broader product-wide acceptance criteria.
+Revalidated 2026-09-12: The current register lists seven of eight P0 items closed and G10 factual-answer acceptance open. This corrects the stale summary that contradicted the detailed G05/G06/G07 records; it does not newly certify those closures. Release 693fd8a passed 2,735 CI tests with zero skips and its hosted research, executive/Intent and Hermes browser suites. These checks do not constitute the fixed 50-question correctness gate or completion of all Input Folder requirements. Historical observations and missing-data statements below require current-release revalidation.
 
 ## Current scope
 

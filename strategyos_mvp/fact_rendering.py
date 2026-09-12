@@ -12,6 +12,16 @@ from urllib.parse import quote
 CONTRACT = 'governed-fact-selection-v1'
 
 
+def _numeric_value(record):
+    value, scale = Decimal(str(record['value'])), Decimal(str(record['scale']))
+    if (not value.is_finite() or not scale.is_finite() or scale <= 0
+            or abs(value.adjusted()) > 100 or abs(scale.adjusted()) > 100):
+        raise ValueError('Invalid numeric fact.')
+    with localcontext() as ctx:
+        ctx.prec = max(50, len(value.as_tuple().digits) + len(scale.as_tuple().digits))
+        return format(value * scale, 'f')
+
+
 def fact_registry(records):
     result = {}
     for raw in records:
@@ -21,26 +31,28 @@ def fact_registry(records):
         record = deepcopy(dict(raw))
         if record.get('traceability') != 'present' or record.get('superseded_since_analysis'):
             continue
-        if record.get('value_type') != 'numeric':
+        value_type = record.get('value_type')
+        if value_type not in {'numeric', 'text'}:
             continue
         try:
-            value, scale = Decimal(str(record['value'])), Decimal(str(record['scale']))
-            if (not value.is_finite() or not scale.is_finite() or scale <= 0
-                    or abs(value.adjusted()) > 100 or abs(scale.adjusted()) > 100):
-                continue
-            with localcontext() as ctx:
-                ctx.prec = max(50, len(value.as_tuple().digits) + len(scale.as_tuple().digits))
-                normalized = format(value * scale, 'f')
+            if value_type == 'text':
+                if not isinstance(record.get('value'), str) or not record['value'].strip():
+                    continue
+                normalized = record['value']
+            else:
+                normalized = _numeric_value(record)
         except (KeyError, ValueError, InvalidOperation):
             continue
         subject = record.get('subject') or {}
-        if not record.get('metric_key') or not subject.get('key') or not record.get('unit'):
+        if not record.get('metric_key') or not subject.get('key'):
+            continue
+        if value_type == 'numeric' and not record.get('unit'):
             continue
         period = record.get('period') or {}
         when = ' to '.join(str(period[key]) for key in ('start','end') if period.get(key))
         when = when or str(period.get('as_of') or 'period not specified')
-        unit = str(record.get('currency') or record['unit'])
-        if record.get('currency') and record['unit'] not in {record['currency'], 'currency', 'money'}:
+        unit = str(record.get('currency') or record.get('unit') or '')
+        if record.get('currency') and record.get('unit') not in {record['currency'], 'currency', 'money'}:
             unit = f"{record['currency']} {record['unit']}"
         dimensions = record.get('dimensions') or {}
         identity_dimensions = {key:dimensions[key] for key in (
@@ -63,8 +75,11 @@ def fact_registry(records):
         if record.get('scenario'):
             display_scope.append(str(record['scenario']))
         display_scope.extend(f'{key.replace("_", " ")}: {value}' for key, value in identity_dimensions.items()
-                             if key not in {'driver_key', 'component_key'})
-        display_text = f'{metric_name} ({label}): {unit} {Decimal(normalized):,f}\n' + ' · '.join(display_scope)
+                             if key not in {'driver_key', 'component_key', 'presentation_component'}
+                             and not (key == 'series' and str(value).casefold() in {
+                                 label.casefold(), str(record.get('claim_kind') or '').casefold()}))
+        displayed_value = f'{unit} {Decimal(normalized):,f}' if value_type == 'numeric' else normalized
+        display_text = f'{metric_name} ({label}): {displayed_value}\n' + ' · '.join(display_scope)
         result[ref] = {'ref':ref, 'text':' · '.join(parts) + f': {normalized} {unit}',
                        'display_text':display_text, 'record':record, 'value':normalized, 'unit':unit}
     return result
@@ -107,7 +122,8 @@ def render_selection(selection, registry, *, run_id):
                           'excerpt':fact['display_text'],'claim_revision_id':ref,'href':href,'resolved':True})
         facts.append({'claim_revision_id':ref,'metric_key':record['metric_key'],
                       'subject':record['subject'],'period':record.get('period'),
-                      'value':fact['value'],'unit':fact['unit'],'claim_kind':record.get('claim_kind'),
+                      'value':fact['value'],'value_type':record['value_type'],
+                      'unit':fact['unit'],'claim_kind':record.get('claim_kind'),
                       'formula':record.get('formula'),'business_unit':record.get('business_unit'),
                       'scenario':record.get('scenario'),'dimensions':record.get('identity_dimensions',{})})
     return {'matched':True,'answer':'\n\n'.join(registry[ref]['display_text'] for ref in refs),
