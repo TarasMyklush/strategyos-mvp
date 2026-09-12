@@ -57,6 +57,10 @@ def main() -> int:
             locale="en-GB",
             timezone_id="Asia/Dubai",
         )
+        if os.getenv('EXECUTIVE_JS_CANDIDATE'):
+            candidate_js = Path(os.environ['EXECUTIVE_JS_CANDIDATE']).read_text()
+            context.route('**/static/executive.js*', lambda route: route.fulfill(content_type='text/javascript', body=candidate_js))
+            report['candidate_javascript'] = os.environ['EXECUTIVE_JS_CANDIDATE']
         page = context.new_page()
 
         response = page.goto(urljoin(base_url, "plan"), wait_until="domcontentloaded")
@@ -87,7 +91,8 @@ def main() -> int:
         page.get_by_role("button", name="Sign in").click()
         page.wait_for_url(lambda url: "/login" not in url, timeout=15_000)
         page.goto(urljoin(base_url, "app?persona=ceo"), wait_until="domcontentloaded")
-        expected_org = page.locator("#brand-org").inner_text()
+        session = context.request.get(urljoin(base_url, "ui/session")).json()
+        expected_org = session["tenant_context"]["tenant_name"]
         assert expected_org and expected_org != "Executive workspace"
         started = monotonic()
         expect(page.locator("#driver-row")).to_contain_text("Revenue", timeout=5_000)
@@ -169,20 +174,20 @@ def main() -> int:
         page.wait_for_url(re.compile(r"/app\?persona=ceo"), timeout=10_000)
         page.locator('#driver-row [data-driver-key="revenue"]').wait_for(timeout=45_000)
         assert page.locator("#persona-label").inner_text() == "Group CEO"
-        assert page.locator("#brand-org").inner_text() == expected_org
+        expect(page.locator("#brand-org")).to_have_text(expected_org)
         page.goto(urljoin(base_url, "outreach"), wait_until="domcontentloaded")
         page.get_by_role("link", name="AI Assistants").click()
         page.wait_for_url(lambda url: "/app" in url and "persona=ceo" in url, timeout=10_000)
         page.locator('#driver-row [data-driver-key="revenue"]').wait_for(timeout=45_000)
         assert page.locator("#persona-label").inner_text() == "Group CEO"
-        assert page.locator("#brand-org").inner_text() == expected_org
+        expect(page.locator("#brand-org")).to_have_text(expected_org)
         page.evaluate("localStorage.setItem('strategyos.executive.persona', 'group-cfo')")
         page.goto(urljoin(base_url, "plan"), wait_until="domcontentloaded")
         page.get_by_role("link", name="Executive view").click()
         page.wait_for_url(re.compile(r"/app(?:\?.*)?$"), timeout=10_000)
         page.locator('#driver-row [data-driver-key="revenue"]').wait_for(timeout=45_000)
         assert page.locator("#persona-label").inner_text() == "Group CEO"
-        assert page.locator("#brand-org").inner_text() == expected_org
+        expect(page.locator("#brand-org")).to_have_text(expected_org)
         assert page.get_by_text("This persona workspace", exact=True).count() == 0
         assert page.evaluate("localStorage.getItem('strategyos.executive.persona')") == "ceo"
         passed("Executive persona survives navigation and stale browser state self-heals")
@@ -191,17 +196,22 @@ def main() -> int:
         context.route("**/assistant/chat", lambda route: route.abort())
         page.locator('#driver-row [data-driver-key="cash_vs_floor"]').click()
         page.locator("[data-kpi-ask-input]").fill("Do I need to intervene on cash headroom?")
+        page.locator('#driver-row [data-driver-key="cash_vs_floor"]').click()
+        expect(page.locator('[data-kpi-ask-input]')).to_have_value('Do I need to intervene on cash headroom?')
         page.locator("[data-kpi-ask-send]").click()
         page.locator("#assistant-drawer.is-open").wait_for(timeout=10_000)
         assistant_text = page.locator("#assistant-messages")
-        expect(assistant_text).to_contain_text("governed local answer", timeout=15_000)
-        expect(assistant_text).to_contain_text("SAR 1.41B", timeout=15_000)
+        expect(assistant_text).to_contain_text("Service unavailable", timeout=15_000)
+        expect(assistant_text).to_contain_text("Retry now", timeout=15_000)
+        expect(assistant_text.locator('.assistant-message--assistant').last).not_to_contain_text('Source-backed fact')
         assert "loading" not in page.locator("[data-kpi-ask-send]").inner_text().lower()
-        page.screenshot(path=output_dir / "05-deterministic-assistant-fallback.png", full_page=True)
-        passed("A failed language request returns the scoped deterministic answer without a sticky control")
+        page.screenshot(path=output_dir / "05-assistant-service-error.png", full_page=True)
+        passed("KPI drafts survive redraws; failed language requests remain service errors with a retry")
+        page.keyboard.press('Escape')
 
         page.set_viewport_size({"width": 390, "height": 844})
         assert page.locator("#driver-row").is_visible()
+        assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1')
         page.screenshot(path=output_dir / "06-mobile-briefing.png", full_page=True)
         passed("The executive journey remains usable at a 390px viewport")
         report["status"] = "passed"

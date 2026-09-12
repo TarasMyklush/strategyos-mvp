@@ -3065,7 +3065,7 @@
         message.autoRetryEligible = false;
         return message;
       }
-      if (!isLegacyAssistantTransportFallback(message.text)) return message;
+      if (!isLegacyAssistantTransportFallback(message.text) && !(message.payload && message.payload.language_layer_unavailable)) return message;
       changed = true;
       return {
         role: "assistant",
@@ -3167,57 +3167,6 @@
     return result;
   }
 
-  function deterministicAssistantFallback(message, context, reason, policyPayload) {
-    var ctx = context && typeof context === "object" ? context : {};
-    var key = String(firstDefined(ctx.kpi_key, ctx.driver_key, state.activeDriverKey, "")).trim();
-    var driver = getVisibleDrivers().find(function (item) {
-      return String(firstDefined(item && item.driver_key, item && item.key, "")) === key;
-    }) || getActiveDriver();
-    if (!driver || !driver.kpi_contract) return null;
-    var brief = driver.executive_brief && typeof driver.executive_brief === "object" ? driver.executive_brief : {};
-    var audit = brief.audit && typeof brief.audit === "object" ? brief.audit : {};
-    var calculation = brief.calculation && typeof brief.calculation === "object" ? brief.calculation : {};
-    var signal = brief.executive_signal && typeof brief.executive_signal === "object" ? brief.executive_signal : {};
-    var label = String(firstDefined(driver.label, ctx.kpi_label, "Selected KPI"));
-    var metric = String(firstDefined(brief.metric, driver.metric, "Not calculated"));
-    var comparison = brief.comparison && typeof brief.comparison === "object" ? brief.comparison : {};
-    var missing = safeArray(audit.missing_inputs).length
-      ? safeArray(audit.missing_inputs).filter(Boolean)
-      : safeArray(driver.missing_inputs).filter(Boolean);
-    var provider = String(firstDefined(driver.accountable_provider, audit.accountable_provider, "Finance data owner"));
-    var isPolicy = Boolean(policyPayload && policyPayload.policy_denied);
-    var prefix = isPolicy
-      ? "The external language service is not authorized for these sources. Here is the governed local answer."
-      : "The language service did not finish before the request deadline. Here is the governed local answer.";
-    var facts = [
-      "**" + label + ":** " + metric + ".",
-      String(firstDefined(signal.readout, brief.readout, driver.detail, "")).trim(),
-      comparison.value ? "Comparison: " + comparison.value + "." : "",
-      calculation.formula ? "Method: " + calculation.formula : "",
-      missing.length ? "Needed: " + missing.join("; ") + ". Accountable provider: " + provider + "." : ""
-    ].filter(Boolean);
-    var sources = safeArray(firstDefined(audit.source_titles, driver.source_files, [])).map(businessSourceLabel).filter(Boolean);
-    return {
-      ok: true,
-      answer: prefix + "\n\n" + facts.join(" "),
-      metadata: "Governed local KPI record" + (sources.length ? " · " + sources.join(" · ") : ""),
-      responsePayload: {
-        status: "ok",
-        determinism_tier: "governed_fact",
-        language_layer_unavailable: true,
-        fallback_reason: String(reason || (isPolicy ? "source permission" : "language service timeout")),
-        permission_request: isPolicy ? {
-          label: "Request source permission",
-          provider: provider,
-          kpi_label: label,
-          formula: String(firstDefined(calculation.formula, driver.formula, "Governed KPI calculation")),
-          missing_inputs: ["Data-owner authorization for approved external language processing"]
-        } : null
-      },
-      requestId: firstDefined(policyPayload && policyPayload.request_id, ""),
-      endpoint: "/assistant/chat"
-    };
-  }
 
   function applyAssistantResultToMessage(thread, message, result) {
     if (!thread || !message || !result) return;
@@ -3412,10 +3361,6 @@
         return serviceFailure;
       }
       if (payload && payload.status === "ok") {
-        if (payload.policy_denied) {
-          var policyFallback = deterministicAssistantFallback(cleanMessage, entrypointCtx, "source permission", payload);
-          if (policyFallback) return policyFallback;
-        }
         var successfulResult = {
           ok: true,
           answer: qaAnswerText(payload),
@@ -3435,13 +3380,6 @@
         responseBody: payload
       });
     } catch (error) {
-      var localFallback = deterministicAssistantFallback(
-        cleanMessage,
-        entrypointCtx,
-        firstDefined(error && error.errorType, "language service unavailable"),
-        error && error.payload
-      );
-      if (localFallback) return localFallback;
       return makeAssistantFailureResult(cleanMessage, {
         endpoint: firstDefined(error && error.endpoint, "/assistant/chat"),
         statusCode: firstDefined(error && error.status, ""),
@@ -5170,11 +5108,13 @@
         var restoreReadingPosition = function () {
           if (window.scrollY !== readingPosition) window.scrollTo(0, readingPosition);
         };
+        // Commit the selected KPI and its composer together. Deferring the
+        // detail render leaves the previous KPI's input active for a frame.
+        renderDriverDrillFidelity();
+        renderSummary();
+        renderHero();
         restoreReadingPosition();
         window.requestAnimationFrame(function () {
-          renderDriverDrillFidelity();
-          renderSummary();
-          renderHero();
           // KPI detail is deliberately inline below the strip. Selecting a
           // tile must never move the executive's reading position. Browsers
           // can apply scroll anchoring after the next frame when the selected
@@ -5496,6 +5436,14 @@
   }
 
   function renderInlineKpiDrill(driver, drillCard) {
+    // Refreshing the data must not erase a question being composed. Keep drafts
+    // in this authenticated page's memory, separately for each KPI.
+    var previousInput = drillCard.querySelector('[data-kpi-ask-input]');
+    var previousContext = drillCard.__strategyosKpiAskContext || {};
+    state.kpiQuestionDrafts = state.kpiQuestionDrafts || {};
+    var restoreFocus = previousInput && document.activeElement === previousInput;
+    var selectionStart = restoreFocus ? previousInput.selectionStart : null;
+    var selectionEnd = restoreFocus ? previousInput.selectionEnd : null;
     var label = firstDefined(driver.label, "this KPI");
     var availability = String(firstDefined(driver.availability, "unavailable"));
     var key = String(firstDefined(driver.driver_key, driver.key, ""));
@@ -5621,6 +5569,14 @@
     // during that refresh cannot fall through to the browser's native form
     // navigation and disappear. Keep the current governed KPI context on the
     // container; the single delegated handler reads it at submit time.
+    var restoredInput = drillCard.querySelector('[data-kpi-ask-input]');
+    if (restoredInput) {
+      restoredInput.value = state.kpiQuestionDrafts[key] || '';
+      if (restoreFocus && previousContext.key === key) {
+        restoredInput.focus({preventScroll: true});
+        restoredInput.setSelectionRange(selectionStart, selectionEnd);
+      }
+    }
     drillCard.__strategyosKpiAskContext = {
       key: key,
       label: label,
@@ -5629,6 +5585,13 @@
     };
     if (!drillCard.__strategyosKpiAskBound) {
       drillCard.__strategyosKpiAskBound = true;
+      drillCard.addEventListener('input', function (event) {
+        var input = event.target;
+        var context = drillCard.__strategyosKpiAskContext || {};
+        if (input && input.matches('[data-kpi-ask-input]') && context.key) {
+          state.kpiQuestionDrafts[context.key] = input.value;
+        }
+      });
       drillCard.addEventListener("submit", function (event) {
         var target = event.target;
         var askForm = target && typeof target.closest === "function"
@@ -5641,6 +5604,7 @@
         if (!typed) return;
         var askContext = drillCard.__strategyosKpiAskContext || {};
         input.value = "";
+        state.kpiQuestionDrafts[askContext.key] = '';
         askAssistant(typed, askForm.querySelector("[data-kpi-ask-send]") || null, {
           entrypoint: "ceo_kpi_inline",
           source: "executive_surface",
@@ -7363,8 +7327,14 @@
           : '';
         if (payload.policy_denied) failureMeta = '';
         var tier = payload.policy_denied ? 'policy' : String(firstDefined(payload.determinism_tier, '')).trim();
+        if (message.status === 'failed') {
+          var failureStatus = Number(message.statusCode) || 0;
+          tier = failureStatus === 401 || failureStatus === 403 ? 'policy'
+            : (['cancelled', 'superseded', 'validation_error', 'question_too_long'].indexOf(message.errorType) !== -1 || [400, 413, 422].indexOf(failureStatus) !== -1)
+              ? 'request_error' : 'service_error';
+        }
         var sections = payload.response_sections && typeof payload.response_sections === 'object' ? payload.response_sections : {};
-        var tierLabel = { policy: 'Permission required', governed_fact: 'Source-backed fact', needs_evidence: 'Evidence unavailable', service_error: 'Service unavailable', general: 'General AI answer', derived_insight: 'Derived insight', advisory: (payload.external_consultation && payload.external_consultation.used ? 'Public research' : 'AI advice') }[tier] || '';
+        var tierLabel = { policy: 'Permission required', request_error: 'Request not completed', governed_fact: 'Source-backed fact', needs_evidence: 'Evidence unavailable', service_error: 'Service unavailable', general: 'General AI answer', derived_insight: 'Derived insight', advisory: (payload.external_consultation && payload.external_consultation.used ? 'Public research' : 'AI advice') }[tier] || '';
         var bodyHtml = role === 'assistant'
           ? renderAssistantMarkdownToHtml(firstDefined(message.text, ''))
           : escapeHtml(firstDefined(message.text, ''));
