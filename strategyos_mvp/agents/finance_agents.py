@@ -109,6 +109,9 @@ class FinanceAuditorAgent:
     max_rounds = 10
     minimum_challenged_findings = 4
 
+    def required_challenges(self, findings: list[Finding]) -> int:
+        return min(len(findings), max(self.minimum_challenged_findings, (len(findings) + 1) // 2))
+
     def challenge_findings(self, findings: list[Finding]) -> list[AuditEvent]:
         return self.run_review_rounds(findings)
 
@@ -187,12 +190,13 @@ class FinanceAuditorAgent:
     def verify_acceptance_coverage(
         self, findings: list[Finding], audit_events: list[AuditEvent]
     ) -> dict[str, object]:
+        finding_ids = {finding.finding_id for finding in findings}
         challenged_finding_ids = {
             event.finding_id
             for event in audit_events
-            if event.actor == self.name and event.action == "challenge"
+            if event.actor == self.name and event.action == "challenge" and event.finding_id in finding_ids
         }
-        required = min(self.minimum_challenged_findings, len(findings))
+        required = self.required_challenges(findings)
         passed = len(challenged_finding_ids) >= required
         return {
             "passed": passed,
@@ -210,6 +214,7 @@ class FinanceAuditorAgent:
         self, findings: list[Finding], challenged_once: set[str]
     ) -> dict[str, str]:
         challenge_map: dict[str, str] = {}
+        required = self.required_challenges(findings)
         for finding in self._sorted_review_candidates(findings):
             if finding.status == "locked" or finding.finding_id in challenged_once:
                 continue
@@ -217,7 +222,7 @@ class FinanceAuditorAgent:
             if issues:
                 challenge_map[finding.finding_id] = " ".join(issues)
 
-        if len(challenged_once) + len(challenge_map) >= self.minimum_challenged_findings:
+        if len(challenged_once) + len(challenge_map) >= required:
             return challenge_map
 
         for finding in self._sorted_review_candidates(findings):
@@ -229,7 +234,7 @@ class FinanceAuditorAgent:
                 "Acceptance-sensitive verification sample required before lock. "
                 f"Confirm citation sufficiency ({len(finding.citations)} citation(s)) and recoverable logic."
             )
-            if len(challenged_once) + len(challenge_map) >= self.minimum_challenged_findings:
+            if len(challenged_once) + len(challenge_map) >= required:
                 break
         return challenge_map
 

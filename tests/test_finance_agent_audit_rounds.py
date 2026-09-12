@@ -1,5 +1,6 @@
 from strategyos_mvp.agents.finance_agents import FinanceAnalystAgent, FinanceAuditorAgent
 from strategyos_mvp.models import Citation, Finding
+import pytest
 
 
 def _finding(index: int, *, citations: int = 3, calculation: bool = True) -> Finding:
@@ -103,3 +104,25 @@ def test_audit_challenges_weak_findings_before_strong_sample_findings():
     ]
 
     assert {"F-002", "F-003", "F-004"}.issubset(set(challenged_in_round_one))
+
+
+@pytest.mark.parametrize('count,required', [(1, 1), (6, 4), (8, 4), (9, 5), (14, 7)])
+def test_auditor_reviews_at_least_half_of_larger_finding_sets(count, required):
+    findings = [_finding(i) for i in range(count)]
+    auditor = FinanceAuditorAgent()
+    events = auditor.run_review_rounds(findings)
+    report = auditor.verify_acceptance_coverage(findings, events)
+    assert report['required_challenged_findings'] == required
+    assert report['actual_challenged_findings'] >= required
+    assert report['passed']
+
+
+def test_unrelated_and_repeated_challenge_events_cannot_satisfy_coverage():
+    from dataclasses import replace
+    findings = [_finding(i) for i in range(9)]
+    auditor = FinanceAuditorAgent()
+    challenge = next(event for event in auditor.run_review_rounds(findings) if event.action == 'challenge')
+    events = [challenge] * 5 + [replace(challenge, finding_id='unrelated')]
+    report = auditor.verify_acceptance_coverage(findings, events)
+    assert report['actual_challenged_findings'] == 1
+    assert not report['passed']
