@@ -17233,6 +17233,15 @@ def authority_matrix_update(
     return {"status": "ok", "matrix": matrix, "editable": True}
 
 
+def _require_assistant_persona(request, principal):
+    from .assistant_scope import request_persona
+    persona = request_persona(request)
+    role = str(principal.get('role') or 'anonymous')
+    allowed = principal.get('personas')
+    if (allowed is not None and persona not in allowed) or (role == 'bu' and persona not in {'gm','bu','bucfo'}):
+        raise HTTPException(403, 'This identity is not entitled to the requested persona.')
+
+
 def _assistant_authority_refusal(
     request: AssistantChatRequest,
     principal: Mapping[str, Any],
@@ -17243,11 +17252,7 @@ def _assistant_authority_refusal(
     from .assistant_scope import request_persona
     persona = request_persona(request)
     role = str(principal.get("role") or "anonymous")
-    allowed_personas = principal.get("personas")
-    if (allowed_personas is not None and persona not in allowed_personas) or (
-        role == "bu" and persona not in {"gm", "bu", "bucfo"}
-    ):
-        raise HTTPException(status_code=403, detail="This identity is not entitled to the requested persona.")
+    _require_assistant_persona(request, principal)
     tenant_id = _principal_tenant_id(principal)
     matrix = get_authority_matrix(tenant_id)
     requests = [("board_materials", "view")] if persona == "board" else classify_requests(request.question, context)
@@ -17283,6 +17288,41 @@ def _assistant_authority_refusal(
     return None
 
 
+class AssistantKpiContextRequest(BaseModel):
+    run_id: str = Field(min_length=1, max_length=160)
+    kpi_key: str = Field(min_length=1, max_length=80)
+    persona: str = Field(default='ceo', min_length=1, max_length=40)
+
+
+@app.post('/assistant/kpi-context')
+def assistant_kpi_context(
+    request: AssistantKpiContextRequest,
+    principal: dict[str, Any] = require_role(*PRODUCT_READ_ROLES),
+):
+    from .assistant_scope import bind_assistant
+    from .assistant_kpi_context import read_context
+    if request.persona not in set(list_supported_personas()):
+        raise HTTPException(422, 'Unsupported assistant persona.')
+    _require_assistant_persona(request, principal)
+    if request.persona == 'board':
+        raise HTTPException(403, 'Board questions require the approved meeting snapshot; live KPI context is not substituted.')
+    with bind_assistant(request, principal, get_authority_matrix(_principal_tenant_id(principal))):
+        policy = PolicyContext(tenant_id=_principal_tenant_id(principal),
+            principal_id=str(principal.get('subject') or 'unknown'),
+            roles=frozenset({str(principal['role'])}), purpose=UsePurpose.EXECUTIVE_BRIEFING,
+            business_units=frozenset(principal.get('business_units') or ()))
+        try:
+            return read_context(ClaimRepository(), run_id=request.run_id, key=request.kpi_key, context=policy)
+        except PermissionError as exc:
+            raise HTTPException(403, str(exc)) from None
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from None
+        except (KeyError, LookupError):
+            raise HTTPException(404, 'No verified figures are available for this KPI under your current access.') from None
+        except RuntimeError:
+            raise HTTPException(503, 'The governed KPI figures cannot currently be verified.') from None
+
+
 @app.post("/assistant/chat")
 async def assistant_chat(
     request: AssistantChatRequest,
@@ -17304,6 +17344,17 @@ async def assistant_chat(
     with bind_assistant(request, principal, get_authority_matrix(_principal_tenant_id(principal))):
         if public_safe:
             return await _assistant_chat_response(request, public_safe=True)
+        if not llm_qa.chat_status(CONFIG).get('enabled'):
+            from .governed_finance import EVIDENCE_COMPONENTS
+            selection = {**(request.context or {}), **(request.assistant_context or {})}
+            key = selection.get('kpi_key') or selection.get('driver_key') or (request.driver_context or {}).get('key')
+            if request.run_id and key in EVIDENCE_COMPONENTS:
+                local = await asyncio.to_thread(assistant_kpi_context,
+                    AssistantKpiContextRequest(run_id=request.run_id, kpi_key=key, persona=request_persona(request)),
+                    principal=principal)
+                return {**local, 'question': request.question, 'language_status': 'unavailable',
+                        'answer': 'The language layer is unavailable. ' + local['answer'],
+                        'llm_status': llm_qa.chat_status(CONFIG)}
         return await _assistant_chat_response(request, public_safe=False,
             authenticated_role=role, authenticated_principal=principal)
 

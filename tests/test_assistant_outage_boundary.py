@@ -83,3 +83,45 @@ assert.equal(composer,'cash');
 assert(frames.length>0,'Scroll correction remains deferred');
 '''
     subprocess.run(['node', '-e', program], check=True, capture_output=True, text=True)
+
+
+def test_slow_answer_context_and_failure_retry_use_fresh_server_reads():
+    source = Path('strategyos_mvp/static/executive.js').read_text()
+    wrapper = source[source.index('  async function buildAssistantReplyWithContext('):source.index('  function threadStore(')]
+    program = '''
+const assert=require('node:assert/strict');
+let timer, delay, reads=0, finish;
+const window={setTimeout:(fn,ms)=>{timer=fn;delay=ms;return 1},clearTimeout:()=>{}};
+const state={activePersona:'ceo'};
+const safeArray=x=>Array.isArray(x)?x:[];
+const activeRunId=()=> 'run';
+const assistantEntrypointContext=()=>({kpi_key:'cash_vs_floor'});
+let buildAssistantReply=()=>new Promise(resolve=>{finish=resolve;});
+const postJson=async(path,body,options)=>{
+  assert.equal(path,'/assistant/kpi-context');
+  assert.deepEqual(body,{run_id:'run',kpi_key:'cash_vs_floor',persona:'ceo'});
+  assert.equal(options.timeoutMs,3000);
+  reads++;
+  return {payload:{context_only:true,answer:'Verified server read '+reads}};
+};
+''' + wrapper + '''
+(async()=>{
+  let progress;
+  const pending=buildAssistantReplyWithContext('question',null,null,x=>{progress=x});
+  assert.equal(delay,12000);
+  await timer();
+  assert.equal(progress.answer,'Verified server read 1');
+  finish({ok:false,errorType:'service_error'});
+  const final=await pending;
+  assert.equal(reads,2,'The failure boundary must reauthorize, not reuse progress context');
+  assert(final.answer.includes('server read 2'));
+  assert(final.retryable && final.retryPrompt==='question');
+  for(const statusCode of [401,403]){
+    buildAssistantReply=async()=>({ok:false,statusCode});
+    const denied=await buildAssistantReplyWithContext('question');
+    assert.equal(denied.ok,false);
+    assert.equal(reads,2,'Authentication denial must not trigger context substitution');
+  }
+})().catch(e=>{console.error(e);process.exit(1)});
+'''
+    subprocess.run(['node','-e',program],check=True,capture_output=True,text=True)

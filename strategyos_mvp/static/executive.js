@@ -1279,7 +1279,13 @@
     var pendingThread = threadStore()[threadKey];
     var result;
     try {
-      result = await buildAssistantReply(cleanPrompt, validChip, hiddenContext);
+      result = await buildAssistantReplyWithContext(cleanPrompt, validChip, hiddenContext, function (payload) {
+        if (!pending || !state.assistantRequestPending) return;
+        pending.text = payload.answer;
+        pending.payload = payload;
+        if (validChip) { validChip.textContent = originalText; validChip.disabled = false; }
+        renderAssistantStudio();
+      });
     } catch (error) {
       result = makeAssistantFailureResult(cleanPrompt, {
         endpoint: firstDefined(error && error.endpoint, "/assistant/chat"),
@@ -3182,10 +3188,11 @@
       message.caseLinks = safeArray(result.responsePayload && result.responsePayload.case_links);
       message.timestamp = new Date().toISOString();
       message.status = "ok";
-      message.retryable = false;
-      message.needsRetry = false;
+      message.retryable = result.retryable === true;
+      message.needsRetry = result.retryable === true;
       message.autoRetryEligible = false;
-      delete message.retryPrompt;
+      if (result.retryable) message.retryPrompt = result.retryPrompt;
+      else delete message.retryPrompt;
       delete message.requestId;
       delete message.statusCode;
       delete message.errorType;
@@ -3371,6 +3378,8 @@
           answer: qaAnswerText(payload),
           metadata: qaAnswerMeta(payload),
           responsePayload: payload,
+          retryable: payload.context_only === true,
+          retryPrompt: cleanMessage,
           requestId: requestId,
           endpoint: endpoint
         };
@@ -3393,6 +3402,52 @@
         details: error && error.message ? error.message : String(error || "unknown network error")
       });
     }
+  }
+
+  async function buildAssistantReplyWithContext(message, sourceEl, hiddenContext, onContext) {
+    var selection = Object.assign({}, assistantEntrypointContext(sourceEl), hiddenContext || {});
+    var key = selection.kpi_key || selection.driver_key;
+    var run = activeRunId(), finished = false;
+    async function readContext() {
+      if (!key || !run || run === 'latest-public' || selection.entrypoint === 'board_portal') return null;
+      try {
+        var response = await postJson('/assistant/kpi-context', {
+          run_id: run, kpi_key: key, persona: state.activePersona || 'ceo'
+        }, {timeoutMs: 3000});
+        return response.payload && response.payload.context_only ? response.payload : null;
+      } catch (_) { return null; }
+    }
+    var timer = window.setTimeout(async function () {
+      var context = await readContext();
+      if (!finished && context && onContext) onContext(context);
+    }, 12000);
+    try {
+      var result = await buildAssistantReply(message, sourceEl, hiddenContext);
+      var policy = result.responsePayload && result.responsePayload.policy_denied;
+      var denied = [401,403].indexOf(Number(result.statusCode)) !== -1;
+      var cancelled = ['cancelled','superseded'].indexOf(result.errorType) !== -1;
+      if ((!result.ok || policy) && !denied && !cancelled) {
+        // Reauthorize at the failure boundary. A previous progress result or
+        // browser KPI cache must never be promoted into a fresh answer.
+        var context = await readContext();
+        if (context) {
+          context.answer = 'The language answer could not be completed. ' + context.answer;
+          context.language_status = policy ? 'permission_required' : 'unavailable';
+          if (policy) {
+            var providers = safeArray(context.source_providers);
+            context.answer = result.answer + '\n\n' + context.answer +
+              (providers.length ? '\n\nAccountable source provider: ' + providers.join('; ') + '.' : '');
+            context.permission_request = {label:'Request source permission', kpi_label:key.replace(/_/g,' '),
+              provider:providers.join('; ') || 'Source administrator — provider not recorded',
+              formula:'Authorized KPI evidence',
+              missing_inputs:['Data-owner authorization for approved external language processing']};
+          }
+          return {ok:true, answer:context.answer, responsePayload:context,
+            retryable:true, retryPrompt:message, endpoint:'/assistant/kpi-context'};
+        }
+      }
+      return result;
+    } finally { finished = true; window.clearTimeout(timer); }
   }
 
   function threadStore() {
@@ -3592,7 +3647,7 @@
     recalcThreadPreview(thread);
     saveStoredThreads();
     renderAssistantStudio();
-    var result = await buildAssistantReply(retryPrompt, sourceEl);
+    var result = await buildAssistantReplyWithContext(retryPrompt, sourceEl);
     applyAssistantResultToMessage(thread, message, result);
     state.failedAssistantAutoRetried[threadKey + ":" + messageIndex] = true;
     saveStoredThreads();
@@ -7310,7 +7365,7 @@
           failureMeta = '<details class="assistant-message__evidence"><summary>' + escapeHtml(assistantEvidenceSummary(message.meta)) + '</summary><div>' + escapeHtml(firstDefined(message.meta, '')) + '</div></details>';
         }
         var retryButton = '';
-        if (role === 'assistant' && message.status === 'failed' && message.retryable !== false && message.retryPrompt) {
+        if (role === 'assistant' && (message.status === 'failed' || message.needsRetry) && message.retryable !== false && message.retryPrompt) {
           retryButton = '<div class="assistant-message__actions"><button type="button" class="assistant-retry-button" data-assistant-retry-index="' + escapeHtml(String(entry.index)) + '">Retry now</button></div>';
         } else if (role === 'assistant' && message.status === 'pending') {
           retryButton = '<div class="assistant-message__actions"><button type="button" class="assistant-retry-button" data-assistant-cancel="true">Cancel request</button></div>';
@@ -7339,7 +7394,7 @@
               ? 'request_error' : 'service_error';
         }
         var sections = payload.response_sections && typeof payload.response_sections === 'object' ? payload.response_sections : {};
-        var tierLabel = { policy: 'Permission required', request_error: 'Request not completed', governed_fact: 'Source-backed fact', needs_evidence: 'Evidence unavailable', service_error: 'Service unavailable', general: 'General AI answer', derived_insight: 'Derived insight', advisory: (payload.external_consultation && payload.external_consultation.used ? 'Public research' : 'AI advice') }[tier] || '';
+        var tierLabel = { policy: 'Permission required', request_error: 'Request not completed', governed_context: 'Verified KPI context', governed_fact: 'Source-backed fact', needs_evidence: 'Evidence unavailable', service_error: 'Service unavailable', general: 'General AI answer', derived_insight: 'Derived insight', advisory: (payload.external_consultation && payload.external_consultation.used ? 'Public research' : 'AI advice') }[tier] || '';
         var bodyHtml = role === 'assistant'
           ? renderAssistantMarkdownToHtml(firstDefined(message.text, ''))
           : escapeHtml(firstDefined(message.text, ''));

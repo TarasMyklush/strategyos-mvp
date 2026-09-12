@@ -71,7 +71,11 @@ with sync_playwright() as p:
             item.update(answer=payload.get('answer'),tier=payload.get('determinism_tier'),retrieval=payload.get('retrieval'))
             assert 'Checking the board data' not in visible and 'did not return within' not in visible
             if kind=='service_error':
-                assert 'Service unavailable' in visible and 'Source-backed fact' not in visible, visible
+                assert 'Source-backed fact' not in visible, visible
+                assert 'Service unavailable' in visible or 'Verified KPI context' in visible, visible
+                if 'Verified KPI context' in visible:
+                    assert 'language answer could not be completed' in visible, visible
+                    assert rendered.locator('.assistant-citation-list').count() == 1
                 assert rendered.get_by_role('button',name='Retry now',exact=True).is_visible(), visible
                 assert not payload.get('citations')
                 item['verification']='browser-local fault injection'

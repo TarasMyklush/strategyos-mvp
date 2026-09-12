@@ -13,7 +13,8 @@ from tests.test_tabular_claims_postgres_e2e import setup_intake
 pytestmark=pytest.mark.integration
 
 
-def test_two_tenants_two_units_cannot_resolve_each_others_fact_links(ledger,monkeypatch):
+@pytest.mark.parametrize('metric', ['finance.revenue', 'ceo.revenue'])
+def test_two_tenants_two_units_cannot_resolve_each_others_fact_links(ledger,monkeypatch,metric):
     import psycopg
     repo,url,first=ledger
     with psycopg.connect(url) as conn:
@@ -26,7 +27,7 @@ def test_two_tenants_two_units_cannot_resolve_each_others_fact_links(ledger,monk
             recorded_by='qa',rationale='Isolated synthetic proof')
         for unit in ('east','west'):
             draft=ClaimDraft(tenant_id=tenant,assertion_namespace='http-proof',subject_type='client',subject_key='same-client',
-                business_unit=unit,metric_key='finance.revenue',claim_kind='actual',production_method='imported',
+                business_unit=unit,metric_key=metric,claim_kind='actual',production_method='imported',
                 value_numeric=100+len(entries),unit='SAR',currency='SAR',source_occurrence_keys=(occurrence,))
             revision=repo.record_claim(draft,traceability='present',context=operator)['claim_revision_id']
             run=str(uuid4())
@@ -41,6 +42,7 @@ def test_two_tenants_two_units_cannot_resolve_each_others_fact_links(ledger,monk
                 conn.execute("insert into strategyos_analysis_snapshot_claims(snapshot_id,claim_family_id,claim_revision_id,selection_reason) select %s,claim_family_id,id,'qa' from strategyos_claim_revisions where id=%s",(sid,revision))
             entries.append((tenant,unit,run,revision))
     monkeypatch.setattr(claim_api,'ClaimRepository',lambda:repo)
+    monkeypatch.setattr(api,'ClaimRepository',lambda:repo)
     monkeypatch.setattr(claim_store,'ClaimRepository',lambda:repo)
     monkeypatch.setattr(state_store,'database_connection',lambda:(psycopg.connect(url),None))
     monkeypatch.setattr(claim_retrieval,'ClaimRepository',lambda:repo)
@@ -67,6 +69,16 @@ def test_two_tenants_two_units_cannot_resolve_each_others_fact_links(ledger,monk
                 response=client.get(f'/api/claims/snapshots/{other_run}/revisions/{other_revision}')
                 allowed=(tenant,unit)==(other_tenant,other_unit)
                 assert response.status_code==(200 if allowed else 404),response.text
+                human = client.get(f'/api/claims/snapshots/{other_run}/revisions/{other_revision}?view=human')
+                assert human.status_code == (200 if allowed else 404), human.text
+                if metric == 'ceo.revenue':
+                    local = client.post('/assistant/kpi-context', json={'run_id':other_run,
+                        'persona':'gm', 'kpi_key':'revenue'})
+                    assert local.status_code == (200 if allowed else 404), local.text
+                    if allowed:
+                        assert {c['claim_revision_id'] for c in local.json()['citations']} == {revision}
+                    else:
+                        assert other_revision not in local.text and 'same-client' not in local.text
                 if allowed:
                     assert response.json()['record']['claim_revision_id']==revision
                 else:
@@ -79,16 +91,16 @@ def test_two_tenants_two_units_cannot_resolve_each_others_fact_links(ledger,monk
                             'question':'Show revenue','mode':'deterministic'})
                         assert blocked.status_code in {403,404},blocked.text
             for requested_unit in ('east','west'):
-                response=client.get('/api/claims',params={'metric_key':'finance.revenue','business_unit':requested_unit})
+                response=client.get('/api/claims',params={'metric_key':metric,'business_unit':requested_unit})
                 assert response.status_code==200,response.text
                 found={row['claim_revision_id'] for row in response.json()['records']}
                 assert found==({revision} if requested_unit==unit else set())
-                search=client.get('/api/claims/search',params={'text':'revenue','metric_key':'finance.revenue','business_unit':requested_unit})
+                search=client.get('/api/claims/search',params={'text':'revenue','metric_key':metric,'business_unit':requested_unit})
                 assert search.status_code==200,search.text
                 assert {row['claim_revision_id'] for row in search.json()['records']}==found
 
             # Export uses the same identity binding and cannot widen a BU.
-            response=client.get('/api/claims',params={'metric_key':'finance.revenue',
+            response=client.get('/api/claims',params={'metric_key':metric,
                 'business_unit':'west' if unit=='east' else 'east','purpose':'export'})
             assert response.status_code==200 and response.json()['records']==[]
             # Swapping a valid reference into the wrong snapshot must also fail.
