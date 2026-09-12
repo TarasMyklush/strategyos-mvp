@@ -7,11 +7,29 @@ logger = logging.getLogger(__name__)
 from . import semantic_embeddings, vector_store
 from .evidence import sha256_file
 
-MAX_FILE_ROWS = 10000
-MAX_CHUNKS = 50000
+# Explicit capacity refusals, never silent row truncation. The supplied pack
+# includes historical ledgers above 10k rows and over 87k eligible passages.
+MAX_FILE_ROWS = 100000
+MAX_CHUNKS = 250000
 CACHE_POINT_TYPE = 'source_embedding_cache'
 CACHE_BATCH_SIZE = 64
 CACHE_BOOTSTRAP_SCROLL_SIZE = 32
+
+
+def _table_records(rows, *, relative, digest, locator_prefix):
+    headers = [str(value) if value is not None else '' for value in next(rows, ())]
+    header_keys = {header.strip().casefold() for header in headers}
+    if 'question' in header_keys and {'answer type', 'where strategyos finds the answer'} & header_keys:
+        return
+    for number, values in enumerate(rows, start=2):
+        if number > MAX_FILE_ROWS:
+            raise ValueError(f'{relative}: table exceeds the reviewed indexing capacity.')
+        text = '; '.join(f'{headers[i] if i < len(headers) else i}: {value}'
+                         for i, value in enumerate(values) if value is not None)
+        # Keep the complete row, with the same resolvable row locator on each
+        # bounded passage. A long cell must not silently disappear from search.
+        for chunk in vector_store._chunk_text(text):
+            yield relative, digest, f'{locator_prefix} row {number}', chunk
 
 
 def _embedding_text(relative, text):
@@ -194,6 +212,11 @@ def source_records(evidence):
             for locator, text in extract_office_text(path):
                 for chunk in vector_store._chunk_text(text):
                     yield relative, entry['sha256'], locator, chunk
+        elif path.suffix.lower() == '.csv':
+            import csv
+            with path.open(encoding='utf-8-sig', newline='') as handle:
+                yield from _table_records(iter(csv.reader(handle)), relative=relative,
+                                          digest=entry['sha256'], locator_prefix='CSV')
         elif path.suffix.lower() == '.xlsx':
             from openpyxl import load_workbook
             book = load_workbook(path, read_only=True, data_only=True)
@@ -201,17 +224,8 @@ def source_records(evidence):
                 for sheet in book:
                     if sheet.max_row is not None and sheet.max_row > MAX_FILE_ROWS:
                         raise ValueError(f'{relative}: worksheet exceeds the reviewed indexing capacity.')
-                    rows = sheet.iter_rows(values_only=True)
-                    headers = [str(x or '') for x in next(rows, ())]
-                    header_keys = {header.strip().casefold() for header in headers}
-                    if 'question' in header_keys and {'answer type', 'where strategyos finds the answer'} & header_keys:
-                        continue
-                    for number, values in enumerate(rows, start=2):
-                        if number > MAX_FILE_ROWS:
-                            raise ValueError(f"{relative}: worksheet exceeds the reviewed indexing capacity.")
-                        text = '; '.join(f'{headers[i] if i < len(headers) else i}: {value}' for i, value in enumerate(values) if value is not None)
-                        if text:
-                            yield relative, entry['sha256'], f'{sheet.title}!Excel row {number}', text[:vector_store.MAX_INDEX_TEXT]
+                    yield from _table_records(sheet.iter_rows(values_only=True), relative=relative,
+                                              digest=entry['sha256'], locator_prefix=f'{sheet.title}!Excel')
             finally:
                 book.close()
 
@@ -247,12 +261,7 @@ def sync_sources(*, run_id, tenant_slug, evidence):
         tenant_slug=tenant_slug,
         descriptors=descriptors,
     )
-    allowed_paths = sorted({record[0] for record in records})
-    obsolete_filter = {'must': [{'key':key, 'match':{'value':value}} for key,value in
-                       (('run_id',run_id),('tenant_slug',tenant_slug),('point_type','source_chunk'))]}
-    if allowed_paths:
-        obsolete_filter['must_not'] = [{'key':'source_path','match':{'any':allowed_paths}}]
-    vector_store._qdrant_request('POST', f'/collections/{vector_store.COLLECTION_NAME}/points/delete?wait=true', {'filter':obsolete_filter})
+    current_ids = []
     reused = 0
     cache_hits = 0
     embedded = 0
@@ -265,6 +274,7 @@ def sync_sources(*, run_id, tenant_slug, evidence):
             locator = descriptor['locator']
             text = descriptor['text']
             point_id = vector_store._point_id(run_id, 'source_chunk', relative, locator, text)
+            current_ids.append(point_id)
             batch.append({'id': point_id,
                           'payload': {'run_id': run_id, 'tenant_slug': tenant_slug, 'point_type': 'source_chunk',
                                       'source_path': relative, 'source_hash': digest, 'locator': locator,
@@ -311,6 +321,13 @@ def sync_sources(*, run_id, tenant_slug, evidence):
             vector_store._qdrant_request('PUT', f'/collections/{vector_store.COLLECTION_NAME}/points?wait=true', {'points': missing})
         if offset % 1024 == 0:
             logger.info('Semantic source index: %s/%s records, %s reused', min(offset + 64, len(records)), len(records), reused)
+    # A changed chunking strategy must not leave the old truncated passages in
+    # the same run. Retire obsolete IDs only after every replacement is stored.
+    obsolete_filter = {'must': [{'key': key, 'match': {'value': value}} for key, value in
+                       (('run_id', run_id), ('tenant_slug', tenant_slug), ('point_type', 'source_chunk'))]}
+    if current_ids:
+        obsolete_filter['must_not'] = [{'has_id': sorted(set(current_ids))}]
+    vector_store._qdrant_request('POST', f'/collections/{vector_store.COLLECTION_NAME}/points/delete?wait=true', {'filter': obsolete_filter})
     return {'status': 'ready', 'point_count': len(records), 'reused_points': reused,
             'embedding_cache_hits': cache_hits, 'embedding_cache_seeded': cache_seeded,
             'embedded_points': embedded,

@@ -228,6 +228,8 @@ def resolve_payload(bundle: DataBundle, rel_path: str, locator: str, excerpt: st
             return resolve_structured_row(table, locator)
         return resolve_manifest_workbook_row(bundle, rel_path, locator)
     if rel_path.endswith(".csv"):
+        if re.fullmatch(r'CSV row \d+', locator):
+            return resolve_manifest_csv_row(bundle, rel_path, locator)
         return resolve_structured_row(table_for_source(bundle, rel_path), locator)
     if rel_path.endswith(".pdf"):
         return resolve_pdf_page(bundle, rel_path, locator, excerpt)
@@ -323,6 +325,38 @@ def resolve_manifest_workbook_row(bundle: DataBundle, rel_path: str, locator: st
                 "sheet_name": sheet.title, "row": {str(key): normalize_value(value) for key,value in zip(headers,values) if key is not None}}
     finally:
         book.close()
+
+
+def resolve_manifest_csv_row(bundle: DataBundle, rel_path: str, locator: str) -> dict[str, Any] | None:
+    """Resolve a logical CSV record, including quoted multiline fields."""
+    import csv
+    import io
+    match = re.fullmatch(r'CSV row (\d+)', locator)
+    entry = bundle.evidence.manifest.get(rel_path)
+    root = bundle.evidence.dataset_root.resolve()
+    path = (root / rel_path).resolve()
+    if not match or not entry or not path.is_relative_to(root) or not path.is_file():
+        return None
+    row_number = int(match[1])
+    from .source_search import MAX_FILE_ROWS
+    if not 2 <= row_number <= MAX_FILE_ROWS or path.stat().st_size > 20_000_000:
+        return None
+    raw = path.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != entry.get('sha256'):
+        return None
+    try:
+        rows = csv.reader(io.StringIO(raw.decode('utf-8-sig'), newline=''))
+        headers = next(rows, [])
+        for number, values in enumerate(rows, 2):
+            if number == row_number:
+                unambiguous = len(headers) == len(values) and all(headers) and len(set(headers)) == len(headers)
+                keys = headers if unambiguous else [f'{i + 1}: {headers[i] if i < len(headers) else "Column"}'
+                                                    for i in range(len(values))]
+                return {'source_type': 'structured_table', 'locator_type': 'row',
+                        'locator_value': row_number, 'row': dict(zip(keys, values))}
+    except (UnicodeError, csv.Error):
+        return None
+    return None
 
 
 def resolve_structured_row(df: pd.DataFrame | None, locator: str) -> dict[str, Any] | None:

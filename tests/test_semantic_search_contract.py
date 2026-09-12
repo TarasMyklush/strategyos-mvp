@@ -6,6 +6,60 @@ from openpyxl import Workbook
 from strategyos_mvp import semantic_embeddings, source_search, vector_store
 
 
+@pytest.mark.parametrize('extension', ['csv', 'xlsx'])
+def test_long_table_rows_keep_tail_and_exact_source_locator(tmp_path, extension):
+    import csv
+    path = tmp_path / ('records.' + extension)
+    values = [['Entity', 'Commentary', 'Actual'], ['A', 'x' * 9000 + ' Important final source statement', 0]]
+    if extension == 'csv':
+        with path.open('w', newline='') as handle:
+            csv.writer(handle).writerows(values)
+    else:
+        book = Workbook()
+        book.active.title = 'Records'
+        for row in values:
+            book.active.append(row)
+        book.save(path)
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    evidence = SimpleNamespace(dataset_root=tmp_path, manifest={path.name: {'sha256': digest}}, pdf_text={})
+    records = list(source_search.source_records(evidence))
+    assert len(records) > 1
+    assert all(row[0:2] == (path.name, digest) for row in records)
+    assert {row[2] for row in records} == {'CSV row 2' if extension == 'csv' else 'Records!Excel row 2'}
+    assert any('Important final source statement; Actual: 0' in row[3] for row in records)
+    assert all(len(row[3]) <= vector_store.MAX_INDEX_TEXT for row in records)
+
+
+def test_csv_keeps_quoted_multiline_records_and_excludes_evaluator_table(tmp_path):
+    import csv
+    path = tmp_path / 'records.csv'
+    with path.open('w', encoding='utf-8-sig', newline='') as handle:
+        csv.writer(handle).writerows([['Entity', 'Note'], ['A', 'first, line\nsecond line']])
+    def evidence():
+        return SimpleNamespace(dataset_root=tmp_path, manifest={path.name: {'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}}, pdf_text={})
+    records = list(source_search.source_records(evidence()))
+    assert records[0][2:] == ('CSV row 2', 'Entity: A; Note: first, line\nsecond line')
+    from strategyos_mvp.citation_resolver import resolve_payload
+    bundle = SimpleNamespace(evidence=evidence())
+    assert resolve_payload(bundle, path.name, records[0][2], '')['row'] == {'Entity': 'A', 'Note': 'first, line\nsecond line'}
+    assert resolve_payload(bundle, path.name, 'CSV row 3', '') is None
+    path.write_text('Question,Answer type\nsecret evaluation prompt,fact\n')
+    assert resolve_payload(bundle, path.name, 'CSV row 2', '') is None
+    assert list(source_search.source_records(evidence())) == []
+
+
+def test_historical_csv_after_ten_thousand_rows_is_indexed_and_resolves(tmp_path):
+    from strategyos_mvp.citation_resolver import resolve_payload
+    path = tmp_path / 'history.csv'
+    path.write_text('Record,Amount\n' + ''.join(f'{i},{i}\n' for i in range(10005)))
+    evidence = SimpleNamespace(dataset_root=tmp_path,
+        manifest={path.name: {'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}}, pdf_text={})
+    records = list(source_search.source_records(evidence))
+    assert len(records) == 10005
+    assert records[-1][2] == 'CSV row 10006'
+    assert resolve_payload(SimpleNamespace(evidence=evidence), path.name, records[-1][2], '')['row']['Amount'] == '10004'
+
+
 def test_source_rows_preserve_zero_exact_location_and_detect_file_mutation(tmp_path):
     book=Workbook();book.active.title='Budget';book.active.append(['BU','Actual']);book.active.append(['A',0])
     path=tmp_path/'budget.xlsx';book.save(path)
@@ -61,9 +115,12 @@ def test_reindex_reuses_only_matching_scope_and_hash(monkeypatch):
     monkeypatch.setattr(source_search,'source_records',lambda evidence:iter([('a.xlsx','hash','Sheet!Excel row 2','A: 0')]))
     monkeypatch.setattr(vector_store,'_run_filter',lambda run:None)
     monkeypatch.setattr(vector_store,'_ensure_collection',lambda:None)
-    embedded=[];writes=[]
+    embedded=[];writes=[];deletions=[]
     monkeypatch.setattr(semantic_embeddings,'embed_many',lambda texts:embedded.extend(texts) or [[1.0] for text in texts])
     def request(method,path,payload):
+        if '/points/delete' in path:
+            deletions.append((len(writes), payload['filter']))
+            return {}
         if path.endswith('/points'):
             return {'result':[{'id':payload['ids'][0],'payload':{'run_id':'run','tenant_slug':'tenant','source_hash':'hash'}}]}
         if method == 'PUT': writes.append(payload)
@@ -75,6 +132,11 @@ def test_reindex_reuses_only_matching_scope_and_hash(monkeypatch):
     assert result['reused_points']==0 and len(embedded)==1 and len(writes)==2
     assert writes[0]['points'][0]['payload']['point_type']=='source_embedding_cache'
     assert writes[1]['points'][0]['payload']['point_type']=='source_chunk'
+    write_count, scope = deletions[-1]
+    assert write_count == 2
+    assert scope['must'] == [{'key': key, 'match': {'value': value}} for key, value in
+                            (('run_id', 'run'), ('tenant_slug', 'other'), ('point_type', 'source_chunk'))]
+    assert scope['must_not'] == [{'has_id': [writes[1]['points'][0]['id']]}]
 
 
 def test_reindex_reuses_tenant_scoped_persistent_embedding_cache(monkeypatch):
