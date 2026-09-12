@@ -143,6 +143,7 @@ def main() -> int:
             operator_page.locator('input[name="files"]').set_input_files(str(evidence))
             operator_page.locator('input[name="storage_allowed"]').check()
             operator_page.locator("#source-form details summary").click()
+            operator_page.locator('input[name="export_allowed"]').check()
             fields = {
                 "source_key": source_key,
                 "display_name": "Synthetic hosted Intent acceptance evidence",

@@ -64,7 +64,7 @@ with sync_playwright() as p:
             assert response.ok, f'HTTP {response.status}: {response.text()[:600]}'
             payload=response.json()
             (out/(slug+'.json')).write_text(json.dumps(payload,ensure_ascii=False,indent=2))
-            page.wait_for_function("!document.querySelector('#assistant-messages .assistant-message--pending')",timeout=10000)
+            page.locator('#assistant-messages .assistant-message--pending').wait_for(state='hidden',timeout=15000)
             rendered=page.locator('#assistant-messages .assistant-message--assistant').last
             rendered.wait_for(timeout=10000)
             visible=rendered.inner_text()
