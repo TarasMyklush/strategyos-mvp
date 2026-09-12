@@ -81,3 +81,18 @@ def test_deployment_only_creates_a_customer_run_when_explicitly_requested() -> N
     worker = next(step for step in steps if step.get('name') == 'Check Hatchet worker health')
     assert 'check_hatchet_worker.sh' in worker['run']
     assert 'run_smoke' not in worker.get('if', '')
+
+
+def test_ci_requires_signed_package_indexes():
+    text = (ROOT / '.github/workflows/strategyos-ci.yml').read_text()
+    assert 'AllowInsecureRepositories' not in text
+    assert '--allow-unauthenticated' not in text
+
+
+def test_live_environment_aliases_share_the_same_noninterrupting_lock():
+    import yaml
+    deploy = yaml.safe_load(_deploy_yaml())
+    provider = yaml.safe_load((ROOT / '.github/workflows/strategyos-codex-production.yml').read_text())
+    assert deploy['concurrency']['group'] == provider['concurrency']['group']
+    assert '${{' not in deploy['concurrency']['group']
+    assert deploy['concurrency']['cancel-in-progress'] is False

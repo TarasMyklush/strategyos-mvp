@@ -94,8 +94,7 @@ jobs:
             sudo rm -f "$f"
           done
           sudo find /etc/apt/ -type f \( -name '*microsoft*' -o -name '*azure*' -o -name '*google-chrome*' \) -delete 2>/dev/null || true
-          # Allow insecure repos in case a stale apt cache entry still references the URL
-          sudo apt-get update -o Acquire::AllowInsecureRepositories=true
+          sudo apt-get update
           sudo apt-get install -y --no-install-recommends poppler-utils tesseract-ocr tesseract-ocr-eng
 
       - name: Install package and test runner

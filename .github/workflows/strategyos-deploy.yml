@@ -23,7 +23,9 @@ permissions:
   deployments: write
 
 concurrency:
-  group: strategyos-deploy-${{ inputs.target_environment }}
+  # Both selectable environment aliases may address the same live host.
+  # Share the provider production lock; never interrupt an active cutover.
+  group: strategyos-deploy-hetzner-qa
   cancel-in-progress: false
 
 env:
