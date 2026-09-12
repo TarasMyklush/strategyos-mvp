@@ -23,6 +23,12 @@ authority. Recover with a tested release compatible with the current schema.
 Database backups and prior images are retained; routine deployment never prunes
 the shared Docker host.
 
+The application image pins its Python base digest and uses a dated Debian
+snapshot for its exact OS package versions. Moving Debian mirrors remove old
+versions and can make unchanged releases unbuildable. Update the snapshot,
+base digest and affected version pins together for security maintenance;
+repository signatures remain verified even when snapshot expiry is disabled.
+
 Release acceptance includes the actual customer briefing, 576-cell Intent plan,
 granular analysis, persona navigation, mobile view, and real Hermes questions
 with source labels and evidence links. Research alone is insufficient. These

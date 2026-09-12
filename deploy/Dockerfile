@@ -1,4 +1,8 @@
-FROM python:3.12-slim
+FROM python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea
+
+# Exact package versions need an immutable repository as well as a pinned base.
+# Advance this snapshot and the package versions together for security updates.
+ARG DEBIAN_SNAPSHOT=20260912T080000Z
 
 ARG CA_CERTIFICATES_VERSION=20250419
 ARG CURL_VERSION=8.14.1-2+deb13u4
@@ -17,8 +21,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     STRATEGYOS_RUNTIME_DEP_TESSERACT_VERSION=${TESSERACT_OCR_VERSION} \
     STRATEGYOS_RUNTIME_DEP_TESSERACT_ENG_VERSION=${TESSERACT_OCR_ENG_VERSION}
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+RUN sed -i \
+        -e "s|http://deb.debian.org/debian$|https://snapshot.debian.org/archive/debian/${DEBIAN_SNAPSHOT}/|" \
+        -e "s|http://deb.debian.org/debian-security$|https://snapshot.debian.org/archive/debian-security/${DEBIAN_SNAPSHOT}/|" \
+        /etc/apt/sources.list.d/debian.sources \
+    && apt-get -o Acquire::Check-Valid-Until=false -o Acquire::Retries=3 update \
+    && apt-get -o Acquire::Check-Valid-Until=false -o Acquire::Retries=3 install -y --no-install-recommends \
         ca-certificates=${CA_CERTIFICATES_VERSION} \
         curl=${CURL_VERSION} \
         poppler-utils=${POPPLER_UTILS_VERSION} \
