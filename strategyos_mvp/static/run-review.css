@@ -1,0 +1,11 @@
+:root{color-scheme:light;--ink:#242620;--paper:#f7f5ef;--line:#dddccf;--sage:#54775d}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.6 system-ui,sans-serif}
+main{max-width:1080px;margin:0 auto;padding:32px 20px}h1,h2,h3{font-family:Georgia,serif;line-height:1.2}
+h1{font-size:40px}a{color:var(--sage)}section{padding:24px;background:white;border:1px solid var(--line);border-radius:16px;margin:24px 0}
+details{border-top:1px solid var(--line);padding:16px 0}summary{cursor:pointer;font-weight:600}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px}
+blockquote{border-left:3px solid var(--sage);margin:12px 0;padding-left:16px}p,a{overflow-wrap:anywhere}
+button{font:inherit;border:1px solid var(--line);border-radius:8px;background:white;padding:10px 14px;margin:6px;cursor:pointer}
+button:disabled{opacity:.5;cursor:wait}textarea{display:block;width:100%;min-height:100px;font:inherit;padding:12px;border:1px solid var(--line)}
+button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid var(--sage);outline-offset:3px}
+#review-run-list{max-height:320px;overflow:auto}#review-run-list a{display:block;padding:10px;border-bottom:1px solid var(--line)}
+@media(max-width:600px){main{padding:20px 12px}section{padding:16px}h1{font-size:32px}}

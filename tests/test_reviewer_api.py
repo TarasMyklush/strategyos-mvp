@@ -417,6 +417,41 @@ def test_run_detail_allows_operator(monkeypatch):
         _restore_env(original)
 
 
+def test_run_detail_rechecks_source_permission_before_exposing_checkpoint(monkeypatch):
+    from fastapi import HTTPException
+    original, client = _client_with_auth_env()
+    try:
+        def denied(*args):
+            raise HTTPException(403, 'Source permission revoked')
+        monkeypatch.setattr(api_module, '_require_run_source_use', denied)
+        monkeypatch.setattr(api_module.state_store, 'get_run_detail',
+                            lambda *_: pytest.fail('Restricted checkpoint must not be read'))
+        response = client.get('/reviewer/runs/run-1', headers=_auth_header('operator-secret'))
+        assert response.status_code == 403
+    finally:
+        _restore_env(original)
+
+
+def test_run_review_display_does_not_rewrite_approved_citations(monkeypatch):
+    from copy import deepcopy
+    from strategyos_mvp.prompt_injection import document_excerpt_for_display
+    original, client = _client_with_auth_env()
+    try:
+        raw = '<script>source text</script>'
+        findings = [{'finding_id': 'f-1', 'citations': [{'excerpt': raw, 'source_path': 'source.csv', 'locator': 'row 2'}]}]
+        stored = {'run_id': 'run-1', 'status': 'awaiting_review',
+                  'latest_checkpoint': {'state_json': {'findings': deepcopy(findings)}}}
+        monkeypatch.setattr(api_module.state_store, 'get_run_detail', lambda _: stored)
+        response = client.get('/reviewer/runs/run-1', headers=_auth_header('operator-secret'))
+        assert response.status_code == 200
+        assert stored['latest_checkpoint']['state_json']['findings'] == findings
+        display = response.json()['review_findings'][0]['citations'][0]
+        assert display['display_excerpt'] == document_excerpt_for_display(raw)
+        assert display['excerpt'] == raw
+    finally:
+        _restore_env(original)
+
+
 def test_run_detail_adds_fixed_lifecycle_timeline(monkeypatch):
     original, client = _client_with_auth_env()
     try:

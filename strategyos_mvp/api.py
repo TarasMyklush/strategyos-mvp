@@ -8961,6 +8961,7 @@ def homepage(
 @app.get("/app", response_class=HTMLResponse)
 def dashboard(
     lane: str | None = None,
+    review_run: str | None = None,
     persona: str | None = None,
     board: str | None = None,
     driver: str | None = None,
@@ -8973,6 +8974,9 @@ def dashboard(
     login_redirect = _login_or_authorized_html(principal)
     if login_redirect is not None:
         return login_redirect
+    if lane == "review":
+        from urllib.parse import urlencode
+        return RedirectResponse('/runs/review' + ('?' + urlencode({'review_run': review_run}) if review_run else ''), status_code=303)
     if lane == "operate":
         if not principal.get("auth_disabled") and not principal_has_any_role(str(principal.get("role")), "operator"):
             raise HTTPException(403, "Operator authority is required for source intake.")
@@ -8989,6 +8993,17 @@ def dashboard(
         ),
         entry_route="/app",
     )
+
+
+@app.get("/runs/review", response_class=HTMLResponse)
+def run_review_workspace(principal: dict[str, Any] = Depends(authenticate_optional_request)) -> Any:
+    login_redirect = _login_or_authorized_html(principal)
+    if login_redirect is not None:
+        return login_redirect
+    if not principal.get('auth_disabled') and not principal_has_any_role(str(principal.get('role')), 'operator', 'reviewer'):
+        raise HTTPException(403, 'Reviewer or operator authority is required for run review.')
+    return HTMLResponse((STATIC_DIR / 'run-review.html').read_text(encoding='utf-8'),
+                        headers={'Cache-Control': 'private, no-store'})
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
@@ -9556,8 +9571,9 @@ def reviewer_runs(
 @app.get("/reviewer/runs/{run_id}")
 def reviewer_run_detail(
     run_id: str,
-    _: dict[str, Any] = require_role("operator", "reviewer"),
+    principal: dict[str, Any] = require_role("operator", "reviewer"),
 ) -> dict[str, Any]:
+    _require_run_source_use(run_id, principal, UsePurpose.ANALYSIS)
     run_record = state_store.get_run_detail(run_id)
     if isinstance(run_record, dict) and run_record.get("status") == "skipped":
         run_record = _local_run_record_for_run_id(run_id) or run_record
@@ -9568,6 +9584,15 @@ def reviewer_run_detail(
     assert isinstance(record, dict)
     record["lifecycle_timeline"] = _run_lifecycle_timeline(record)
     record["workflow_summary"] = _record_workflow_summary(record)
+    # A display-only projection leaves stored checkpoint bytes and approval
+    # fingerprints unchanged. Model-facing quotation guards are not user copy.
+    from .prompt_injection import document_excerpt_for_display
+    review_state = (record.get('latest_checkpoint') or {}).get('state_json') or {}
+    record['review_findings'] = [
+        {**finding, 'citations': [{**citation, 'display_excerpt': document_excerpt_for_display(str(citation.get('excerpt') or ''))}
+                                  for citation in finding.get('citations') or []]}
+        for finding in review_state.get('findings') or []
+    ]
     summary_source = (
         record.get("summary_json") if isinstance(record.get("summary_json"), dict) else record
     )

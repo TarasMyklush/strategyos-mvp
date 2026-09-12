@@ -3946,6 +3946,9 @@
         var themeIcon = state.theme === "dark" ? "☾" : "☀";
         var themeLabel = state.theme === "dark" ? "Dark" : "Light";
         var feedbackAction = state.activePersona === "ceo" ? "" : '<button type="button" class="avatar-tooltip-action" data-avatar-action="feedback">Send feedback</button>';
+        if (['reviewer', 'operator', 'tenant_admin', 'system'].indexOf((state.session || {}).role) >= 0) {
+          feedbackAction += '<a class="avatar-tooltip-action" href="/runs/review">Run review and publication</a>';
+        }
         var tip = document.createElement('div');
         tip.className = 'strategyos-avatar-tooltip';
         tip.innerHTML = '<div class="avatar-tooltip-head"><span class="avatar avatar-lg">' + escapeHtml(initials) + '</span><div class="avatar-tooltip-copy"><strong>' + escapeHtml(firstDefined(activePersona.label, 'Group CEO')) + '</strong><span>' + escapeHtml(assistantName) + ' · board data</span></div></div><div class="avatar-tooltip-actions"><button type="button" class="avatar-tooltip-action" data-avatar-action="profile">Profile &amp; settings</button><button type="button" class="avatar-tooltip-action" data-avatar-action="switch">Switch persona</button><button type="button" class="avatar-tooltip-action" data-avatar-action="theme">' + escapeHtml(themeIcon) + ' ' + escapeHtml(themeLabel) + ' theme</button>' + feedbackAction + '<button type="button" class="avatar-tooltip-action avatar-tooltip-action--signout" data-avatar-action="signout">Sign out</button></div>';
