@@ -2225,3 +2225,26 @@ def test_semantic_retrieval_plan_rejects_unavailable_categories_and_extra_assert
     monkeypatch.setattr(llm_qa, '_call_openai_compatible_chat', lambda **kwargs: json.dumps(response))
     with pytest.raises(RuntimeError):
         llm_qa.plan_claim_retrieval('Question', catalog=[{'metric_key': 'valid.metric'}], config=_config())
+
+
+def test_semantic_plan_selects_available_record_types_without_a_row_cutoff(monkeypatch):
+    catalog = [{'metric_key': 'finance.transaction.amount', 'record_count': 11276,
+                'subject_types': ['ap_invoice', 'ar_invoice', 'gl_entry', 'purchase_order']}]
+    monkeypatch.setattr(llm_qa, '_call_openai_compatible_chat', lambda **_: json.dumps({
+        'intent': 'facts', 'metric_keys': ['finance.transaction.amount'],
+        'subject_types': {'finance.transaction.amount': ['ar_invoice']}}))
+    result = llm_qa.plan_claim_retrieval('How are collections doing?', catalog=catalog, config=_config())
+    assert result['subject_types'] == {'finance.transaction.amount': ['ar_invoice']}
+
+
+@pytest.mark.parametrize('types', [
+    {'finance.transaction.amount': ['invented_type']}, {'foreign.metric': ['ar_invoice']},
+    {'finance.transaction.amount': []}, {'finance.transaction.amount': 'ar_invoice'},
+    {'finance.transaction.amount': [{}]}, ['ar_invoice'],
+])
+def test_semantic_type_scope_rejects_invented_or_malformed_types(monkeypatch, types):
+    catalog = [{'metric_key': 'finance.transaction.amount', 'subject_types': ['ar_invoice']}]
+    monkeypatch.setattr(llm_qa, '_call_openai_compatible_chat', lambda **_: json.dumps({
+        'intent': 'facts', 'metric_keys': ['finance.transaction.amount'], 'subject_types': types}))
+    with pytest.raises(RuntimeError):
+        llm_qa.plan_claim_retrieval('Collections?', catalog=catalog, config=_config())

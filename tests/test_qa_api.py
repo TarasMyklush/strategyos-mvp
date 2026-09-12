@@ -5922,7 +5922,7 @@ def test_assistant_claim_hydration_has_no_literal_keyword_gate(monkeypatch):
     assert selected['intent'] == 'facts'
 
 
-@pytest.mark.parametrize('service_failure', [False, True])
+@pytest.mark.parametrize('service_failure', [False, True, 'budget'])
 def test_governed_chat_failures_never_become_source_backed_facts(monkeypatch, service_failure):
     import asyncio
     from strategyos_mvp.fact_rendering import render_selection
@@ -5936,6 +5936,9 @@ def test_governed_chat_failures_never_become_source_backed_facts(monkeypatch, se
     monkeypatch.setattr(api_module.qa_engine, 'answer_question', lambda *a, **k: {
         'matched': False, 'answer': 'No deterministic match', 'citations': [], 'suggestions': []})
     async def provider(*a, **k):
+        if service_failure == 'budget':
+            from strategyos_mvp.inference_audit import InferenceBudgetExceeded
+            raise InferenceBudgetExceeded()
         if service_failure:
             raise RuntimeError('Provider timeout')
         return render_selection({'matched': False, 'fact_refs': []}, {}, run_id='run')
@@ -5945,6 +5948,10 @@ def test_governed_chat_failures_never_become_source_backed_facts(monkeypatch, se
     assert payload['matched'] is False
     assert payload['determinism_tier'] == ('service_error' if service_failure else 'needs_evidence')
     assert payload['citations'] == []
+    if service_failure == 'budget':
+        assert payload['error_code'] == 'workspace_inference_budget_exhausted'
+        assert 'daily AI budget' in payload['answer']
+        assert 'language service failed' not in payload['answer']
 
 
 @pytest.mark.parametrize('question,matched', [

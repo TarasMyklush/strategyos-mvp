@@ -11709,12 +11709,16 @@ def _hydrate_governed_qa_context(
     except PermissionError as exc:
         raise HTTPException(403, str(exc)) from exc
     except RuntimeError as exc:
+        from .inference_audit import InferenceBudgetExceeded
+        if isinstance(exc, InferenceBudgetExceeded):
+            raise HTTPException(429, str(exc)) from None
         raise HTTPException(502, str(exc)) from exc
     try:
         snapshot = ClaimRepository().snapshot(
             f"run:{run_id}",
             context=policy_context,
             metric_keys=retrieval_plan["metric_keys"] if retrieval_plan is not None else None,
+            **({'metric_subject_types': retrieval_plan['subject_types']} if retrieval_plan and retrieval_plan.get('subject_types') else {}),
         )
     except (KeyError, RuntimeError):
         raise HTTPException(
@@ -12154,6 +12158,17 @@ def _honour_suggestion_promise(answer: str, *, suggestions: Any) -> str:
     if has_suggestions:
         return text
     return re.sub(r"\s*(?:Try one of these|Try any of these|Try):\s*$", "", text).strip() or text
+
+
+def _inference_failure_payload(exc: RuntimeError) -> dict[str, Any]:
+    from .inference_audit import InferenceBudgetExceeded
+    budget_exhausted = isinstance(exc, InferenceBudgetExceeded)
+    return {
+        "answer_status": "service_error",
+        "error_code": exc.code if budget_exhausted else "language_service_failed",
+        "answer": str(exc) if budget_exhausted else "I could not finish reading the evidence because the language service failed. Please retry.",
+        "basis": "No conclusion about the available evidence was made.",
+    }
 
 
 def _assistant_response_payload(
@@ -15635,10 +15650,8 @@ async def _assistant_chat_response(
         try:
             result = await _llm_answer_question_async(question, bundle=context["bundle"],
                 findings=context["findings"], summary=context["summary"], config=CONFIG, persona=persona)
-        except RuntimeError:
-            result = {"answer_status": "service_error",
-                      "answer": "I could not finish reading the evidence because the language service failed. Please retry.",
-                      "basis": "Service failure; no conclusion about the available evidence was made."}
+        except RuntimeError as exc:
+            result = _inference_failure_payload(exc)
         return _assistant_response_payload(response_mode="llm", question=question, context=context,
             requested_mode=mode, persona=persona, orchestrated=None, base_result=result,
             llm_status=result.get("llm_status") or llm_status, assistant_context=assistant_context)
@@ -16461,10 +16474,7 @@ async def _assistant_chat_response(
         if getattr(context.get("bundle"), "authorized_claim_records", None) is not None:
             return _assistant_response_payload(response_mode="llm", question=question,
                 context=context, requested_mode=mode, persona=persona, orchestrated=None,
-                base_result={"answer_status": "service_error",
-                             "answer": "I could not finish reading the evidence because the language service failed. Please retry.",
-                             "basis": "Service failure; no conclusion about the available evidence was made.",
-                             "llm_fallback_attempted": True},
+                base_result={**_inference_failure_payload(exc), "llm_fallback_attempted": True},
                 llm_status={**llm_status, "transport": transport_status}, assistant_context=assistant_context)
         if mode == "llm":
             raise HTTPException(
@@ -16655,10 +16665,8 @@ def _data_qa_scoped(request: QaRequest, _: dict[str, Any]) -> dict[str, Any]:
         try:
             result = llm_qa.answer_question(question, bundle=context["bundle"], findings=context["findings"],
                 summary=context["summary"], config=CONFIG, persona=persona)
-        except RuntimeError:
-            result = {"answer_status": "service_error",
-                      "answer": "I could not finish reading the evidence because the language service failed. Please retry.",
-                      "basis": "Service failure; no conclusion about the available evidence was made."}
+        except RuntimeError as exc:
+            result = _inference_failure_payload(exc)
         return _assistant_response_payload(response_mode="llm", question=question, context=context,
             requested_mode=mode, persona=persona, orchestrated=None, base_result=result,
             llm_status=result.get("llm_status") or llm_status, assistant_context=request_context)

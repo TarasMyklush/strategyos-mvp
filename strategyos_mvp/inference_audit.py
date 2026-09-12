@@ -17,6 +17,14 @@ SCHEMA = """CREATE TABLE IF NOT EXISTS strategyos_inference_audit (
 )"""
 
 
+class InferenceBudgetExceeded(RuntimeError):
+    """An application allowance refusal, not a failure of the model provider."""
+    code = 'workspace_inference_budget_exhausted'
+
+    def __init__(self):
+        super().__init__('This workspace’s daily AI budget has been reached. A workspace administrator can adjust the allowance, or retry after the next UTC day begins.')
+
+
 def required():
     return os.getenv('STRATEGYOS_INFERENCE_AUDIT_REQUIRED','false').lower()=='true'
 
@@ -68,11 +76,18 @@ def record(config, messages, max_output):
     with handle as conn:
         state_store.ensure_auxiliary_schema(conn, SCHEMA)
         with conn.cursor() as cur:
+            from .tenant_identity import resolve_tenant_reference
+            tenant = str(resolve_tenant_reference(cur, tenant))
+            cur.execute('SELECT slug FROM strategyos_tenants WHERE id=%s', (tenant,))
+            slug_row = cur.fetchone()
+            if not slug_row:
+                raise RuntimeError('The inference tenant could not be verified. Provider call blocked.')
+            budget_keys = sorted({tenant, str(slug_row[0])})
             cur.execute("SELECT pg_advisory_xact_lock(71380914)")
             cur.execute('SELECT pg_advisory_xact_lock(hashtext(%s))',(tenant+'inference-budget',))
             cur.execute("DELETE FROM strategyos_inference_audit WHERE created_at < now()-interval '30 days'")
             cur.execute('UPDATE strategyos_inference_audit SET prompt_cipher=NULL,response_cipher=NULL WHERE payload_expires_at<now() AND (prompt_cipher IS NOT NULL OR response_cipher IS NOT NULL)')
-            cur.execute("SELECT count(*),coalesce(sum(reserved_units),0) FROM strategyos_inference_audit WHERE tenant_key=%s AND created_at >= date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'",(tenant,))
+            cur.execute("SELECT count(*),coalesce(sum(reserved_units),0) FROM strategyos_inference_audit WHERE tenant_key=any(%s) AND status <> 'budget_blocked' AND created_at >= date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'",(budget_keys,))
             count,used=cur.fetchone();allowed=count<request_limit and used+units<=quota
             cur.execute('''INSERT INTO strategyos_inference_audit (id,tenant_key,subject,provider,model,status,reserved_units,prompt_sha256,prompt_cipher,key_id)
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''',
@@ -81,7 +96,7 @@ def record(config, messages, max_output):
                  protect(prompt,key=key,tenant=tenant,identity=identity,field='prompt') if key and allowed else None,
                  os.getenv('STRATEGYOS_INFERENCE_AUDIT_KEY_ID','v1') if key else None))
         conn.commit()
-    if not allowed:raise RuntimeError('The tenant inference budget is exhausted. Provider call blocked.')
+    if not allowed:raise InferenceBudgetExceeded()
     start=time.monotonic();result={};status='failed'
     try:
         yield result

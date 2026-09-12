@@ -16,12 +16,16 @@ def test_encrypted_retention_budget_and_failure_records(monkeypatch):
     monkeypatch.setenv('STRATEGYOS_INFERENCE_AUDIT_KEY',base64.urlsafe_b64encode(key).decode())
     monkeypatch.setenv('STRATEGYOS_INFERENCE_AUDIT_REQUIRED','true')
     monkeypatch.setenv('STRATEGYOS_INFERENCE_DAILY_REQUESTS','2')
-    tenant='audit-'+uuid.uuid4().hex
-    token=access_scope.principal_scope.set({'tenant_id':tenant,'subject':'test-person','role':'executive'})
+    slug='audit-'+uuid.uuid4().hex
+    with psycopg.connect(url) as conn:
+        state_store.ensure_data_schema(conn)
+        tenant=str(conn.execute("INSERT INTO strategyos_tenants(slug,display_name) VALUES(%s,'Audit proof') RETURNING id",(slug,)).fetchone()[0])
+    token=access_scope.principal_scope.set({'tenant_id':slug,'subject':'test-person','role':'executive'})
     config=SimpleNamespace(llm_provider='fixture',llm_model='model-v1')
     try:
         with audit.record(config,[{'role':'user','content':'protected business question'}],100) as result:
             result['response']='protected response'
+        access_scope.principal_scope.set({'tenant_id':tenant,'subject':'test-person','role':'executive'})
         with pytest.raises(RuntimeError,match='provider error'):
             with audit.record(config,[{'role':'user','content':'another question'}],100):
                 raise RuntimeError('provider error')
@@ -36,6 +40,15 @@ def test_encrypted_retention_budget_and_failure_records(monkeypatch):
         assert b'protected business' not in cipher
         assert 'protected business question' in audit.reveal(cipher,key=key,tenant=tenant,identity=identity,field='prompt')
         with pytest.raises(InvalidTag):audit.reveal(cipher,key=key,tenant='other',identity=identity,field='prompt')
+        # Historical slug records and UUID requests share one allowance. Refusals
+        # do not consume requests when an administrator increases that allowance.
+        with psycopg.connect(url) as conn:
+            conn.execute("UPDATE strategyos_inference_audit SET tenant_key=%s WHERE id=%s",(slug,identity))
+        with pytest.raises(audit.InferenceBudgetExceeded):
+            with audit.record(config,[],100):pytest.fail('Alias bypassed budget')
+        monkeypatch.setenv('STRATEGYOS_INFERENCE_DAILY_REQUESTS','3')
+        with audit.record(config,[],100) as result:
+            result['response']='Allowance restored'
     finally:access_scope.principal_scope.reset(token)
 
 

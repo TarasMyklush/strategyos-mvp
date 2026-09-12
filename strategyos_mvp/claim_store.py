@@ -1079,6 +1079,7 @@ class ClaimRepository:
         *,
         context: PolicyContext,
         metric_keys: Iterable[str] | None = None,
+        metric_subject_types: Mapping[str, Iterable[str]] | None = None,
         revision_id: str | None = None,
         limit: int | None = None,
         offset: int = 0,
@@ -1091,6 +1092,15 @@ class ClaimRepository:
         selected_metric_keys = sorted(
             {str(value).strip() for value in (metric_keys or ()) if str(value).strip()}
         )
+        type_scopes = {}
+        for metric, types in (metric_subject_types or {}).items():
+            if not isinstance(metric, str) or not metric or isinstance(types, str):
+                raise ValueError('Metric subject types require explicit category and type lists.')
+            values = list(types)
+            if not values or any(not isinstance(value, str) or not value for value in values):
+                raise ValueError('A subject-type scope must contain explicit types.')
+            type_scopes[metric] = sorted(set(values))
+        type_scope_json = json.dumps(type_scopes)
         fetch_limit = limit + 1 if limit is not None else None
         from .assistant_scope import domain_read_predicate, domain_read_parameters, business_unit_read_predicate, business_unit_read_parameters
         domain_clause = domain_read_predicate()
@@ -1130,6 +1140,10 @@ class ClaimRepository:
                           cardinality(%s::text[]) = 0
                           or f.metric_key = any(%s::text[])
                       )
+                      and (
+                          not (%s::jsonb ? f.metric_key)
+                          or f.subject_type in (select jsonb_array_elements_text(%s::jsonb -> f.metric_key))
+                      )
                     order by f.metric_key, f.claim_kind_lane, f.subject_key
                     limit %s offset %s
                     """,
@@ -1140,6 +1154,8 @@ class ClaimRepository:
                         *business_unit_read_parameters(context),
                         selected_metric_keys,
                         selected_metric_keys,
+                        type_scope_json,
+                        type_scope_json,
                         fetch_limit,
                         offset,
                     ),
