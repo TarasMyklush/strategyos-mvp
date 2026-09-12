@@ -122,7 +122,7 @@ def main() -> int:
             message = page.locator("#assistant-messages .assistant-message--assistant").last
             expect(message).to_contain_text("Public research", timeout=10_000)
             expect(evidence).to_contain_text("Research boundary · audited")
-            evidence.locator("summary").click()
+            evidence.locator(":scope > summary").click()
             page.wait_for_function(
                 "node => node.open === true",
                 arg=evidence.element_handle(),
@@ -131,7 +131,10 @@ def main() -> int:
             evidence_text = evidence.inner_text()
             assert "Approved public query:" in evidence_text
             assert "No client evidence was sent" in evidence_text
-            assert "Audit " in evidence_text
+            assert consultation["audit_trail_id"] not in evidence_text
+            evidence.get_by_text("Technical details", exact=True).click()
+            evidence_text = evidence.inner_text()
+            assert consultation["audit_trail_id"] in evidence_text
             for private_canary in ("ProTec", "87.4", "confidential", "board limit", "Modern Trade"):
                 assert private_canary.casefold() not in evidence_text.casefold(), evidence_text
             citation_links = message.locator('a[href^="https://en.wikipedia.org/wiki/"]')
