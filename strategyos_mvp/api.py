@@ -11738,6 +11738,7 @@ def _hydrate_governed_qa_context(
         )
     records = [record for record in list(snapshot.get("records") or []) if isinstance(record, Mapping)]
     context["bundle"] = claim_backed_bundle(records)
+    context["bundle"].answer_data_intent = retrieval_plan["intent"] if retrieval_plan is not None else None
     if retrieval_plan is not None and retrieval_plan["intent"] == "facts":
         selected_keys = retrieval_plan.get("selected_metric_keys", retrieval_plan["metric_keys"])
         context["bundle"].answer_metric_keys = frozenset(selected_keys)
@@ -12223,11 +12224,13 @@ def _assistant_response_payload(
     if (base_result or {}).get("fact_contract") == FACT_CONTRACT:
         # The renderer owns all factual presentation fields. Orchestration may
         # select a route but cannot rewrite the approved fact into another claim.
+        model_worded = str((base_result or {}).get("answer_origin") or "").lower() == "llm"
         return {**base_result, "status":"ok", "run_id":context["run_id"],
                 "run_mode":context["run_mode"],"question":question,"persona":persona,
                 "requested_mode":requested_mode,"mode":response_mode,
-                "assistant_mode":"governed_fact","answered_by":"governed_fact_selection",
-                "determinism_tier":("derived_insight" if base_result.get("calculated_comparisons") else "governed_fact") if base_result.get("matched") else ("context_only" if base_result.get("answer_coverage") == "context_only" else "needs_evidence"),
+                "assistant_mode":"llm" if model_worded else "governed_fact",
+                "answered_by":"llm_fact_synthesis" if model_worded else "governed_fact_selection",
+                "determinism_tier":base_result.get("determinism_tier") or (("derived_insight" if base_result.get("calculated_comparisons") else "governed_fact") if base_result.get("matched") else ("context_only" if base_result.get("answer_coverage") == "context_only" else "needs_evidence")),
                 "response_sections":{},"executive_blocks":[]}
     plain_model_scope = str((base_result or {}).get("assistant_scope") or "")
     if plain_model_scope == "general":
@@ -15669,8 +15672,9 @@ async def _assistant_chat_response(
     llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
 
     if not public_safe and mode != "deterministic" and context.get("assistant_data_intent") == "facts":
-        # The semantic planner owns free-form fact lookup. Legacy scenario/KPI
-        # keyword rules must not replace its requested metric or reporting period.
+        # A direct fact lookup stays on the semantic fact contract. Deterministic
+        # calculations and scenarios continue below so the model cannot replace
+        # an existing governed formula or ranking with selected raw cells.
         try:
             result = await _llm_answer_question_async(question, bundle=context["bundle"],
                 findings=context["findings"], summary=context["summary"], config=CONFIG, persona=persona)
@@ -16121,7 +16125,9 @@ async def _assistant_chat_response(
         return payload
 
     scenario_result = None
-    if mode in {"auto", "deterministic"} and not explicit_advisory_request:
+    semantic_intent = context.get("assistant_data_intent")
+    if (mode in {"auto", "deterministic"} and not explicit_advisory_request
+            and semantic_intent in {None, "calculation", "scenario"}):
         parsed = parse_scenario(
             question,
             {
@@ -16854,7 +16860,8 @@ def _data_qa_scoped(request: QaRequest, _: dict[str, Any]) -> dict[str, Any]:
     # Keep the operational Q&A page on the same governed semantic contract as
     # the executive assistant.  Previously /qa and /assistant/chat could give
     # different answers to the same authenticated executive question.
-    if mode in {"auto", "deterministic"}:
+    if (mode in {"auto", "deterministic"}
+            and context.get("assistant_data_intent") in {None, "calculation", "scenario"}):
         cost_lever_result = _governed_cost_lever_result(
             context,
             question=question,

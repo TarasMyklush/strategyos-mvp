@@ -2203,7 +2203,48 @@ def test_claim_backed_qa_rejects_fabricated_citation_numbers(monkeypatch):
     assert result["citations"] == []
 
 
-@pytest.mark.parametrize('intent', ['facts', 'scenario', 'context'])
+def test_context_question_uses_semantic_source_rows_and_resolves_exact_citation(monkeypatch):
+    from strategyos_mvp import model_policy, source_search
+    from strategyos_mvp.governed_qa_context import claim_backed_bundle
+    record = {
+        'claim_revision_id': 'approved-revision', 'traceability': 'present',
+        'value_type': 'text', 'value': 'Current briefing available', 'unit': None,
+        'metric_key': 'briefing.status', 'subject': {'type': 'briefing', 'key': 'weekly'},
+        'claim_kind': 'reported_claim', 'label': 'Reported claim', 'period': {},
+        'formula': None, 'sources': [{'source_key': 'briefings'}],
+    }
+    bundle = claim_backed_bundle([record])
+    bundle.answer_data_intent = 'context'
+    row = {
+        'source_path': 'Briefings/Weekly.txt', 'source_hash': 'source-digest',
+        'locator': 'Text chunk 4',
+        'text': 'The weekly briefing says the tariff decision changes the sourcing review.',
+        'score': .91,
+    }
+    monkeypatch.setattr(model_policy, 'evidence_model_access', lambda _: True)
+    monkeypatch.setattr(source_search, 'retrieve', lambda run_id, question: {
+        'status': 'ready', 'records': [row]})
+    monkeypatch.setattr(llm_qa, '_call_openai_compatible_chat', lambda **kwargs: json.dumps({
+        'matched': True,
+        'answer': 'The tariff decision changes the sourcing review.',
+        'basis': 'Weekly briefing.',
+        'citations': [{'source_path': row['source_path'], 'locator': row['locator']}],
+        'suggestions': [],
+    }))
+    result = llm_qa.answer_question('What changed in this week’s briefing?',
+        bundle=bundle, findings=[], summary={'run_id': 'run', 'source_search': {'status': 'ready'}},
+        config=_config())
+    assert result['matched'] is True
+    assert len(result['citations']) == 1
+    citation = result['citations'][0]
+    assert citation['source_path'] == row['source_path']
+    assert citation['locator'] == row['locator']
+    assert citation['excerpt'] == row['text']
+    assert citation['source_hash'] == row['source_hash']
+    assert citation['resolved'] is True
+
+
+@pytest.mark.parametrize('intent', ['facts', 'calculation', 'scenario', 'context'])
 def test_semantic_retrieval_plan_preserves_question_and_uses_only_available_categories(monkeypatch, intent):
     catalog = [{'metric_key': 'new.dataset.metric', 'record_count': 500}]
     def provider(**kwargs):

@@ -135,6 +135,33 @@ def test_provider_selection_is_rendered_and_orchestrator_cannot_rewrite_it(recor
     assert payload['fact_cells']==answer['fact_cells']
 
 
+def test_provider_can_word_selected_facts_but_cannot_introduce_a_number(record, monkeypatch):
+    from strategyos_mvp import llm_qa, model_policy
+    from tests.test_llm_qa import _config
+    monkeypatch.setattr(model_policy, 'evidence_model_access', lambda _: True)
+    replies = iter([
+        {'matched': True, 'fact_refs': ['approved-revision'], 'answer_supported': True,
+         'answer': 'NUPCO revenue was SAR 1.2M for the current approved period.'},
+        {'matched': True, 'fact_refs': ['approved-revision'], 'answer_supported': True,
+         'answer': 'NUPCO revenue was SAR 2M for the current approved period.'},
+    ])
+    monkeypatch.setattr(llm_qa, '_call_openai_compatible_chat',
+        lambda **kwargs: json.dumps(next(replies)))
+    grounded = llm_qa.answer_question('Revenue for NUPCO?',
+        bundle=SimpleNamespace(authorized_claim_records=(record,)), findings=[],
+        summary={'run_id':'run'}, config=_config())
+    assert grounded['answer'] == 'NUPCO revenue was SAR 1.2M for the current approved period.'
+    assert grounded['answer_origin'] == 'llm'
+    assert grounded['determinism_tier'] == 'derived_insight'
+    assert grounded['human_review_required'] is True
+    rejected = llm_qa.answer_question('Revenue for NUPCO?',
+        bundle=SimpleNamespace(authorized_claim_records=(record,)), findings=[],
+        summary={'run_id':'run'}, config=_config())
+    assert rejected['narrative_validation'] == 'rejected'
+    assert 'SAR 1,200,000.00' in rejected['answer']
+    assert 'SAR 2M' not in rejected['answer']
+
+
 def test_claim_citation_endpoint_reauthorizes_identity_and_hides_missing_fact(monkeypatch):
     from strategyos_mvp import claim_api
     from fastapi import HTTPException
