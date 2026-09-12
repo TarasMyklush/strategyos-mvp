@@ -83,6 +83,20 @@ def test_deployment_only_creates_a_customer_run_when_explicitly_requested() -> N
     assert 'run_smoke' not in worker.get('if', '')
 
 
+def test_full_factual_corpus_is_explicit_and_release_bound() -> None:
+    import yaml
+
+    text = _deploy_yaml()
+    assert 'run_factual_corpus:' in text
+    assert 'description: Collect the fixed 50-question factual corpus through the deployed UI' in text
+    workflow = yaml.safe_load(text)
+    steps = workflow['jobs']['research-ui']['steps']
+    corpus = next(step for step in steps if step.get('name') == 'Collect the fixed factual corpus through the deployed UI')
+    assert corpus['if'] == '${{ !cancelled() && inputs.run_factual_corpus }}'
+    assert '--release "${GITHUB_SHA}"' in corpus['run']
+    assert 'hosted-factual-corpus-ui/' in next(step for step in steps if step.get('name') == 'Upload screenshot and report')['with']['path']
+
+
 def test_ci_requires_signed_package_indexes():
     text = (ROOT / '.github/workflows/strategyos-ci.yml').read_text()
     assert 'AllowInsecureRepositories' not in text

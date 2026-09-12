@@ -16,6 +16,11 @@ on:
         required: false
         type: boolean
         default: false
+      run_factual_corpus:
+        description: Collect the fixed 50-question factual corpus through the deployed UI
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -624,7 +629,7 @@ jobs:
     name: Executive, Intent and Hermes Chromium walkthroughs
     needs: deploy
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 45
     environment: ${{ inputs.target_environment }}
     env:
       STRATEGYOS_PUBLIC_URL: ${{ vars.STRATEGYOS_PUBLIC_URL }}
@@ -661,6 +666,13 @@ jobs:
           HERMES_UI_OUTPUT_DIR: hosted-hermes-ui
         run: python deploy/scripts/verify_hermes_poc_browser.py
 
+      - name: Collect the fixed factual corpus through the deployed UI
+        if: ${{ !cancelled() && inputs.run_factual_corpus }}
+        run: >-
+          python scripts/hosted_factual_corpus_ui.py
+          --output-dir hosted-factual-corpus-ui
+          --release "${GITHUB_SHA}"
+
       - name: Upload screenshot and report
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -670,5 +682,6 @@ jobs:
             hosted-research-ui-acceptance/
             hosted-human-e2e/
             hosted-hermes-ui/
+            hosted-factual-corpus-ui/
           if-no-files-found: error
           retention-days: 30

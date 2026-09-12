@@ -21,6 +21,8 @@ class ReleaseBlocked(RuntimeError):
 
 
 class GitHub:
+    run_factual_corpus = False
+
     def api(self, path, payload=None):
         command = ['gh', 'api', f'repos/{REPO}/{path}']
         if payload is not None:
@@ -47,7 +49,11 @@ class GitHub:
         prior = {r['id'] for r in self.runs(workflow, sha)}
         payload = {'ref': ref}
         if workflow == DEPLOY:
-            payload['inputs'] = {'target_environment':'hetzner-qa', 'run_smoke':'false'}
+            payload['inputs'] = {
+                'target_environment':'hetzner-qa',
+                'run_smoke':'false',
+                'run_factual_corpus':'true' if self.run_factual_corpus else 'false',
+            }
         self.api(f'actions/workflows/{workflow}/dispatches', payload)
         deadline = time.monotonic() + 120
         while time.monotonic() < deadline:
@@ -121,10 +127,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--ref', required=True)
     parser.add_argument('--execute', action='store_true', help='Run the reviewed plan sequentially; otherwise read only.')
+    parser.add_argument('--full-factual-gate', action='store_true',
+                        help='Collect the fixed 50-question corpus after the hosted smoke suite.')
     args = parser.parse_args()
     try:
         with local_lock():
-            print(json.dumps(release(GitHub(), args.ref, args.execute)))
+            github = GitHub()
+            github.run_factual_corpus = args.full_factual_gate
+            print(json.dumps(release(github, args.ref, args.execute)))
     except (ReleaseBlocked, subprocess.CalledProcessError) as exc:
         print(json.dumps({'status':'blocked','reason':str(exc)}))
         raise SystemExit(1)

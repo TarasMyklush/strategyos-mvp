@@ -45,6 +45,13 @@ def main():
         page.locator('#password').fill(password)
         page.get_by_role('button', name='Sign in', exact=True).click()
         page.wait_for_url(lambda u: '/login' not in u)
+        initial_deployment = context.request.get(base + '/api/deployment', timeout=20000)
+        assert initial_deployment.ok
+        initial_identity = initial_deployment.json()
+        assert initial_identity.get('application_revision') == args.release
+        assert initial_identity.get('manifest_application_matches') is True
+        assert initial_identity.get('manifest_run_matches') is True
+        report['initial_deployment'] = initial_identity
         page.goto(base + '/app?persona=ceo', wait_until='domcontentloaded')
         page.locator('#driver-row [data-driver-key="revenue"]').wait_for(timeout=60000)
         page.locator('#topbar-assistant-launch').click()
@@ -106,6 +113,16 @@ def main():
             report['items'].append(item)
             save()
             print(json.dumps({'id': item['id'], 'collection_status': item['collection_status'], 'seconds': item['seconds']}), flush=True)
+        final_deployment = context.request.get(base + '/api/deployment', timeout=20000)
+        assert final_deployment.ok
+        final_identity = final_deployment.json()
+        report['final_deployment'] = final_identity
+        report['release_unchanged'] = (
+            final_identity.get('application_revision') == args.release
+            and final_identity.get('selected_run_id') == report['initial_deployment'].get('selected_run_id')
+            and final_identity.get('source_digest') == report['initial_deployment'].get('source_digest')
+        )
+        assert report['release_unchanged']
         browser.close()
     report['finished_at'] = datetime.now(UTC).isoformat()
     report['collected_count'] = sum(x['collection_status'] == 'collected' for x in report['items'])

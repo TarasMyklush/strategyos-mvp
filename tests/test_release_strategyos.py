@@ -68,3 +68,12 @@ def test_older_green_ci_does_not_override_latest_failed_attempt():
     h=Host();h.history[m.CI]=[{'conclusion':'cancelled'},{'conclusion':'success'}]
     with pytest.raises(m.ReleaseBlocked):m.release(h,'branch',True)
     assert not h.calls
+
+
+def test_factual_gate_is_an_explicit_deploy_input(monkeypatch):
+    github=m.GitHub();github.run_factual_corpus=True;captured=[]
+    run_reads=iter(([],[{'id':99}]))
+    monkeypatch.setattr(github,'runs',lambda workflow,sha:next(run_reads))
+    monkeypatch.setattr(github,'api',lambda path,payload=None:captured.append((path,payload)) or {})
+    assert github.dispatch(m.DEPLOY,'release-ref','release-sha')==99
+    assert captured[0][1]['inputs']['run_factual_corpus']=='true'
