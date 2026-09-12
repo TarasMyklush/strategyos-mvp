@@ -318,7 +318,6 @@ from .twins.api import (
     twin_operational_health_payload,
 )
 from .agent_runtime.api import router as agent_runtime_router
-from .content_studio_api import router as content_studio_router
 
 @asynccontextmanager
 async def _app_lifespan(_: FastAPI):
@@ -17344,4 +17343,3 @@ from .outreach_api import router as outreach_router
 app.include_router(outreach_router)
 from .demo_pack_api import router as demo_pack_router
 app.include_router(demo_pack_router)
-app.include_router(content_studio_router)
