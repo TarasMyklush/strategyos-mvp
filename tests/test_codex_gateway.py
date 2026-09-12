@@ -18,7 +18,8 @@ def payload(**changes):
 
 
 def client(runner=None):
-    async def answer(settings, messages, json_mode):
+    async def answer(settings, messages, json_mode, allow_web_search):
+        assert allow_web_search is False
         return '{"answer":"Grounded answer"}' if json_mode else "Grounded answer"
     return TestClient(gateway.create_app(gateway.Settings(TOKEN), runner or answer))
 
@@ -50,9 +51,10 @@ def test_packet_limit():
 
 def test_roles_and_history_are_preserved():
     seen = []
-    async def runner(settings, messages, json_mode):
+    async def runner(settings, messages, json_mode, allow_web_search):
         seen.extend(messages)
         assert json_mode
+        assert allow_web_search is False
         return '{"answer":"yes"}'
     messages = [{"role": role, "content": role} for role in ("system", "user", "assistant", "user")]
     result = client(runner).post("/v1/chat/completions", json=payload(messages=messages, response_format={"type": "json_object"}), headers={"Authorization": "Bearer " + TOKEN})
@@ -75,6 +77,36 @@ def test_no_credentials_or_tool_authority_in_child_environment(monkeypatch, tmp_
         assert command[command.index(feature) - 1] == "--disable"
     assert "--model" not in command
     assert command[-1] == "-"
+
+
+def test_live_search_is_explicit_and_keeps_action_tools_disabled(tmp_path):
+    command, _ = gateway.invocation(
+        gateway.Settings(TOKEN), tmp_path, "Find current sources", allow_web_search=True
+    )
+    assert 'web_search="live"' in command
+    assert "browser_use" not in command
+    assert "browser_use_external" not in command
+    for feature in set(gateway.DISABLED_FEATURES) - gateway.WEB_SEARCH_FEATURES:
+        assert command[command.index(feature) - 1] == "--disable"
+
+
+def test_live_search_header_is_forwarded_only_to_runner():
+    seen = []
+
+    async def runner(settings, messages, json_mode, allow_web_search):
+        seen.append(allow_web_search)
+        return '{"answer":"yes"}'
+
+    result = client(runner).post(
+        "/v1/chat/completions",
+        json=payload(response_format={"type": "json_object"}),
+        headers={
+            "Authorization": "Bearer " + TOKEN,
+            "X-StrategyOS-Web-Search": "live",
+        },
+    )
+    assert result.status_code == 200
+    assert seen == [True]
 
 
 def test_explicit_model_is_server_controlled(tmp_path):
