@@ -2256,6 +2256,19 @@ def test_semantic_retrieval_plan_preserves_question_and_uses_only_available_cate
     assert result == {'intent': intent, 'metric_keys': frozenset({'new.dataset.metric'})}
 
 
+def test_semantic_retrieval_plan_answers_general_question_in_same_call(monkeypatch):
+    catalog = [{'metric_key': 'finance.ebitda', 'record_count': 12}]
+    monkeypatch.setattr(llm_qa, '_call_openai_compatible_chat', lambda **_: json.dumps({
+        'intent': 'general', 'metric_keys': [], 'subject_types': {},
+        'answer': 'Kyiv is the capital of Ukraine.'}))
+    result = llm_qa.plan_claim_retrieval('What is the capital of Ukraine?',
+        catalog=catalog, config=_config())
+    assert result == {
+        'intent': 'general', 'metric_keys': frozenset(),
+        'answer': 'Kyiv is the capital of Ukraine.',
+    }
+
+
 def test_semantic_retrieval_plan_distinguishes_existing_comparators_from_arithmetic(monkeypatch):
     def provider(**kwargs):
         instruction = kwargs['messages'][0]['content']
@@ -2273,6 +2286,8 @@ def test_semantic_retrieval_plan_distinguishes_existing_comparators_from_arithme
     {'intent': 'invent', 'metric_keys': ['valid.metric']},
     {'metric_keys': ['valid.metric']},
     {'intent': 'facts', 'metric_keys': ['valid.metric'], 'answer': 'Invented company value'},
+    {'intent': 'general', 'metric_keys': ['valid.metric'], 'answer': 'Invented company value'},
+    {'intent': 'general', 'metric_keys': [], 'answer': ''},
 ])
 def test_semantic_retrieval_plan_rejects_unavailable_categories_and_extra_assertions(monkeypatch, response):
     monkeypatch.setattr(llm_qa, '_call_openai_compatible_chat', lambda **kwargs: json.dumps(response))

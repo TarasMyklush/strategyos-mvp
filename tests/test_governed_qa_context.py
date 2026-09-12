@@ -88,3 +88,31 @@ def test_hydration_keeps_dashboard_records_but_separates_semantic_answer_scope(m
     assert seen[0]['metric_keys'] == frozenset({'new.metric', 'ceo.cash_floor'})
     assert len(result['bundle'].authorized_claim_records) == 2
     assert result['bundle'].answer_metric_keys == frozenset({'new.metric'})
+
+
+def test_hydration_returns_general_answer_without_loading_claim_values(monkeypatch):
+    from types import SimpleNamespace
+    from strategyos_mvp import api
+    class Repository:
+        def snapshot(self, *_args, **_kwargs):
+            raise AssertionError('general routing must not load claim values')
+    monkeypatch.setattr(api, 'ClaimRepository', Repository)
+    monkeypatch.setattr(api, '_assistant_claim_retrieval_plan', lambda *args, **kwargs: {
+        'intent': 'general', 'metric_keys': frozenset(),
+        'answer': 'GDP means gross domestic product.',
+    })
+    monkeypatch.setattr(api.llm_qa, 'chat_status', lambda _: {
+        'enabled': True, 'provider': 'openai-compatible', 'model': 'gpt-test',
+    })
+    monkeypatch.setattr(api, 'CONFIG', SimpleNamespace(
+        llm_provider='openai-compatible', llm_model='gpt-test'))
+    context = {'run_id': 'run', 'summary': {
+        '_claim_policy_context': {'tenant_id': 'tenant-a'},
+    }}
+    result = api._hydrate_governed_qa_context(context,
+        principal={'tenant_id': 'tenant-a', 'subject': 'reader', 'role': 'executive'},
+        question='What is GDP?')
+    assert result['assistant_data_intent'] == 'general'
+    assert result['assistant_general_result']['answer'] == 'GDP means gross domestic product.'
+    assert result['assistant_general_result']['citations'] == []
+    assert result['data_boundary'] == 'no_company_evidence'

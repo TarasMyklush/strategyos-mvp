@@ -1504,8 +1504,8 @@ def test_assistant_chat_llm_mode_sanitizes_raw_json_answer(monkeypatch):
         _restore_env(original)
 
 
-def test_semantic_llm_route_answers_before_company_data_is_loaded(monkeypatch):
-    """A general turn is answered by the classifier without loading evidence."""
+def test_semantic_plan_answers_general_question_without_loading_claim_values(monkeypatch):
+    """The unified planner returns general knowledge before a claim snapshot."""
     original = _apply_env(
         {
             "STRATEGYOS_API_AUTH_ENABLED": "true",
@@ -1520,28 +1520,18 @@ def test_semantic_llm_route_answers_before_company_data_is_loaded(monkeypatch):
     )
     try:
         client = TestClient(api_module.app)
-        monkeypatch.setattr(
-            api_module,
-            "_resolve_qa_context",
-            lambda _run_id: (_ for _ in ()).throw(
-                AssertionError("the LLM route must not load company data")
-            ),
-        )
-        monkeypatch.setattr(
-            api_module.llm_qa,
-            "classify_question_route",
-            lambda *_args, **_kwargs: {
-                "route": "llm",
-                "matched": True,
-                "answer": "Paris is the capital of France.",
-                "basis": "General assistant response; no company evidence used.",
-                "citations": [],
-                "suggestions": [],
-                "assistant_scope": "general",
-                "classification_status": "classified",
-                "llm_status": {"enabled": True, "model": "gpt-test"},
-            },
-        )
+        monkeypatch.setattr(api_module, "_resolve_qa_context", lambda _run_id: {
+            "bundle": None, "findings": [], "kg_nodes": [], "kg_edges": [],
+            "summary": {"run_id": "run-1"}, "run_id": "run-1", "run_mode": "full",
+        })
+        monkeypatch.setattr(api_module, "_assistant_claim_retrieval_plan", lambda *args, **kwargs: {
+            "intent": "general", "metric_keys": frozenset(),
+            "answer": "Paris is the capital of France.",
+        })
+        class Repository:
+            def snapshot(self, *_args, **_kwargs):
+                raise AssertionError("a general question must not load claim values")
+        monkeypatch.setattr(api_module, "ClaimRepository", Repository)
 
         response = client.post(
             "/assistant/chat",
@@ -4803,7 +4793,7 @@ def test_unresolved_identifier_never_reaches_general_knowledge_model(monkeypatch
         _restore_env(original)
 
 
-def test_auto_chat_uses_semantic_data_route_before_governed_resolution(monkeypatch):
+def test_auto_chat_does_not_make_a_duplicate_classifier_call(monkeypatch):
     original, client = _client_with_auth()
     calls = []
     try:
@@ -4828,7 +4818,7 @@ def test_auto_chat_uses_semantic_data_route_before_governed_resolution(monkeypat
 
         assert response.status_code == 200
         payload = response.json()
-        assert calls == ["What is INV-2026-0577?"]
+        assert calls == []
         assert payload["answered_by"] == "governed_reference"
         assert "F-006" in payload["answer"]
     finally:

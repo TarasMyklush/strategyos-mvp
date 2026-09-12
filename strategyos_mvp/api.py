@@ -11719,6 +11719,25 @@ def _hydrate_governed_qa_context(
         if isinstance(exc, InferenceDeadlineExceeded):
             raise HTTPException(504, str(exc)) from None
         raise HTTPException(502, str(exc)) from exc
+    if retrieval_plan is not None and retrieval_plan["intent"] == "general":
+        context["assistant_data_intent"] = "general"
+        context["assistant_general_result"] = {
+            "route": "llm",
+            "answer": retrieval_plan["answer"],
+            "matched": True,
+            "basis": "General assistant response; no company evidence used.",
+            "citations": [],
+            "suggestions": [],
+            "assistant_scope": "general",
+            "classification_status": "classified",
+            "classification_reason": "semantic_classification",
+            "llm_status": llm_qa.chat_status(CONFIG),
+            "model": CONFIG.llm_model,
+            "provider": CONFIG.llm_provider,
+            "public_safe": False,
+        }
+        context["data_boundary"] = "no_company_evidence"
+        return context
     try:
         snapshot = ClaimRepository().snapshot(
             f"run:{run_id}",
@@ -11773,6 +11792,8 @@ def _assistant_claim_retrieval_plan(
     catalog = ClaimRepository().snapshot_metric_catalog(
         run_id, context=replace(context, purpose=UsePurpose.EXTERNAL_MODEL))
     plan = llm_qa.plan_claim_retrieval(question, catalog=catalog, config=CONFIG)
+    if plan["intent"] == "general":
+        return plan
     return {**plan, "selected_metric_keys": plan["metric_keys"],
             "metric_keys": plan["metric_keys"] | FINANCE_HEADLINE_METRIC_KEYS | FINANCE_PRESENTATION_METRIC_KEYS}
 
@@ -15536,36 +15557,6 @@ async def _assistant_chat_response(
             llm_status=llm_status,
         )
 
-    # The authenticated conversational surface has one semantic routing
-    # boundary. It sees only the user's message. A general turn is answered in
-    # that same provider call; a data turn proceeds to the governed context
-    # below. Invalid or unavailable classification returns the data route, so
-    # model failure can never expose company evidence to the general path.
-    if not public_safe and mode == "auto" and not explicit_advisory_request:
-        route_result = await _classify_assistant_question_async(
-            question,
-            persona=persona,
-        )
-        if route_result.get("route") == "llm":
-            general_context = {
-                "run_id": request.run_id,
-                "run_mode": "general",
-            }
-            payload = _assistant_response_payload(
-                response_mode="llm",
-                question=question,
-                context=general_context,
-                requested_mode=mode,
-                persona=persona,
-                orchestrated=None,
-                base_result=route_result,
-                llm_status=route_result.get("llm_status"),
-                assistant_context=assistant_context,
-            )
-            payload["llm_fallback_attempted"] = False
-            payload["llm_general_answer"] = True
-            return payload
-
     from .assistant_scope import current_scope
     from .authority_matrix import DOMAINS
     scope = current_scope.get()
@@ -15670,6 +15661,18 @@ async def _assistant_chat_response(
         context = await _run_bounded_provider(_hydrate_governed_qa_context, context,
             principal=principal_context, question=question if mode != "deterministic" else None)
     llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
+
+    if not public_safe and mode != "deterministic" and context.get("assistant_data_intent") == "general":
+        route_result = context["assistant_general_result"]
+        payload = _assistant_response_payload(
+            response_mode="llm", question=question, context=context, requested_mode=mode,
+            persona=persona, orchestrated=None, base_result=route_result,
+            llm_status=route_result.get("llm_status") or llm_status,
+            assistant_context=assistant_context,
+        )
+        payload["llm_fallback_attempted"] = False
+        payload["llm_general_answer"] = True
+        return payload
 
     if not public_safe and mode != "deterministic" and context.get("assistant_data_intent") == "facts":
         # A direct fact lookup stays on the semantic fact contract. Deterministic
@@ -16696,6 +16699,14 @@ def _data_qa_scoped(request: QaRequest, _: dict[str, Any]) -> dict[str, Any]:
             context["summary"], principal=_,
         )
         context = _hydrate_governed_qa_context(context, principal=_, question=question)
+    if mode != "deterministic" and context.get("assistant_data_intent") == "general":
+        route_result = context["assistant_general_result"]
+        payload = _assistant_response_payload(response_mode="llm", question=question, context=context,
+            requested_mode=mode, persona=persona, orchestrated=None, base_result=route_result,
+            llm_status=route_result.get("llm_status") or llm_status, assistant_context=request_context)
+        payload["llm_fallback_attempted"] = False
+        payload["llm_general_answer"] = True
+        return payload
     if mode != "deterministic" and context.get("assistant_data_intent") == "facts":
         try:
             result = llm_qa.answer_question(question, bundle=context["bundle"], findings=context["findings"],
