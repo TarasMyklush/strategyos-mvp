@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from decimal import Decimal, InvalidOperation
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -22,7 +23,7 @@ from ..quality import (
 )
 from ..runtime_artifacts import AUDIT_LOG_FILENAME
 from ..prompt_injection import document_excerpt_for_display
-from ..skills.finance_controls import compute_working_capital_drifts, run_all_finance_skills
+from ..skills.finance_controls import compute_working_capital_drifts, run_all_finance_skills, _role_source_path
 
 
 class FinanceAnalystAgent:
@@ -585,6 +586,9 @@ def render_qa(findings: list[Finding], bundle: DataBundle) -> str:
             f"Direct citations: {_citation_list(top_single_event.citations, limit=4)}.",
             "",
         ])
+    else:
+        lines.extend(['## Q1. Which vendor has the largest single-event cash leakage?', '',
+                      'No evidence-qualified finding is available to identify a largest leakage event.', ''])
     lines.extend([
         "## Q2. What is the top-five recovery impact?",
         "",
@@ -592,6 +596,7 @@ def render_qa(findings: list[Finding], bundle: DataBundle) -> str:
     ])
     if ebitda.get("available"):
         lines.extend([
+            'Scope: the supplied GL and trial balance; group consolidation is not inferred.',
             f"Baseline H1 EBITDA from GL/TB: SAR {ebitda['baseline_ebitda_sar']:,.2f} on revenue SAR {ebitda['revenue_sar']:,.2f}, for an EBITDA margin of {ebitda['baseline_margin']:.2%} before recovery.",
             f"Of the top five, SAR {ebitda_recovery:,.2f} maps directly to current-period EBITDA lines; pro-forma EBITDA becomes SAR {ebitda['baseline_ebitda_sar'] + ebitda_recovery:,.2f} and margin becomes {((ebitda['baseline_ebitda_sar'] + ebitda_recovery) / ebitda['revenue_sar']):.2%}.",
             f"The remaining SAR {non_ebitda_recovery:,.2f} is recovery value, but not H1 EBITDA uplift: prior-period credit / balance-sheet recovery plus control-dependent exposure remain outside the EBITDA bridge until separately realized.",
@@ -599,16 +604,14 @@ def render_qa(findings: list[Finding], bundle: DataBundle) -> str:
         ])
     else:
         lines.append(
-            "EBITDA bridge not computed for this run: it requires the trial balance, chart of accounts, and GL extract, which were not all present in the selected source pack."
+            "EBITDA bridge not computed for this run: " + ebitda.get('reason', 'A verified baseline is unavailable.')
         )
     lines.extend([
-        "Top-five finding citations:",
         "",
+        "Top-five finding citations: " + '; '.join(
+            f"{finding.finding_id}: SAR {finding.recoverable_sar:,.2f}, {finding.title}, {_impact_label(finding)} [{_citation_list(finding.citations, limit=3)}]"
+            for finding in top_five),
     ])
-    for finding in top_five:
-        lines.append(
-            f"- {finding.finding_id}: SAR {finding.recoverable_sar:,.2f} / {finding.title} / {_impact_label(finding)} [{_citation_list(finding.citations, limit=3)}]"
-        )
     lines.extend([
         "",
         "## Q3. Which patterns would recur in H2?",
@@ -619,19 +622,15 @@ def render_qa(findings: list[Finding], bundle: DataBundle) -> str:
             f"Projected H2 recurring exposure is SAR {recurring_h2:,.2f} if H2 mirrors H1 and the cited process/contract failures remain unfixed. Of that, SAR {recurring_h2_ebitda:,.2f} is EBITDA-linked operating leakage and SAR {recurring_h2 - recurring_h2_ebitda:,.2f} is treasury/FX exposure below the EBITDA bridge."
         )
         lines.append("")
-        lines.append("Recurring patterns:")
-        for finding in recurring:
-            lines.append(
-                f"- {finding.finding_id}: {finding.title}: SAR {finding.recoverable_sar:,.2f} H1 exposure and SAR {finding.recoverable_sar:,.2f} projected H2 exposure unless fixed. [{_citation_list(finding.citations, limit=3)}]"
-            )
+        lines.append("Recurring patterns: " + '; '.join(
+            f"{finding.finding_id}: {finding.title}: SAR {finding.recoverable_sar:,.2f} H1 exposure and SAR {finding.recoverable_sar:,.2f} projected H2 exposure unless fixed. [{_citation_list(finding.citations, limit=3)}]"
+            for finding in recurring))
     else:
-        lines.append("- No recurring exposure classified by current deterministic run.")
+        lines.append("No recurring exposure classified by current deterministic run.")
     if non_recurring:
-        lines.extend(["", "One-time / non-run-rate items:"])
-        for finding in non_recurring:
-            lines.append(
-                f"- {finding.finding_id}: {finding.title}: SAR {finding.recoverable_sar:,.2f} recovery opportunity, but projected H2 recurring exposure = SAR 0.00 under the current classification. [{_citation_list(finding.citations, limit=2)}]"
-            )
+        lines.append("One-time / non-run-rate items: " + '; '.join(
+            f"{finding.finding_id}: {finding.title}: SAR {finding.recoverable_sar:,.2f} recovery opportunity, but projected H2 recurring exposure = SAR 0.00 under the current classification. [{_citation_list(finding.citations, limit=2)}]"
+            for finding in non_recurring))
     return "\n".join(lines)
 
 
@@ -726,6 +725,9 @@ def _render_detector_coverage(bundle: DataBundle) -> list[str]:
 
 def _ebitda_inputs_available(bundle: DataBundle) -> bool:
     """EBITDA bridge needs trial balance, chart of accounts, and GL together."""
+    available = (bundle.run_metadata or {}).get('available_roles')
+    if available is not None and not {'trial_balance', 'chart_of_accounts', 'gl_extract'}.issubset(available):
+        return False
     for frame, columns in (
         (bundle.trial_balance, ("Account", "Credit_Total", "Debit_Total")),
         (bundle.coa, ("Account", "Account_Description", "Type")),
@@ -738,56 +740,88 @@ def _ebitda_inputs_available(bundle: DataBundle) -> bool:
     return True
 
 
-def _compute_ebitda_baseline(bundle: DataBundle) -> dict[str, float | bool | list[int]]:
+def _compute_ebitda_baseline(bundle: DataBundle) -> dict:
     if not _ebitda_inputs_available(bundle):
-        return {"available": False}
-    tb = bundle.trial_balance.merge(
-        bundle.coa[["Account", "Account_Description", "Type"]],
-        on=["Account", "Account_Description"],
-        how="left",
-    )
-    revenues = tb[tb["Type"].eq("Revenue")].copy()
-    expenses = tb[tb["Type"].eq("Expense")].copy()
-    revenue_sar = float((revenues["Credit_Total"] - revenues["Debit_Total"]).sum())
-    expense_total_sar = float((expenses["Debit_Total"] - expenses["Credit_Total"]).sum())
-    addback_accounts = {6500, 6510, 6620}
-    addbacks_sar = float(
-        (
-            expenses.loc[expenses["Account"].isin(addback_accounts), "Debit_Total"]
-            - expenses.loc[expenses["Account"].isin(addback_accounts), "Credit_Total"]
-        ).sum()
-    )
+        return {"available": False, "reason": "The GL, trial balance and account classification are required."}
+
+    def account(value):
+        text = str(value).strip()
+        return text[:-2] if text.endswith('.0') else text
+
+    def money(value):
+        result = Decimal(str(value).replace(',', '').strip())
+        if not result.is_finite():
+            raise ValueError('Non-finite financial value')
+        return result
+
+    from ..evidence import sha256_file
+    citations = []
+    for role, frame in [('trial_balance', bundle.trial_balance), ('chart_of_accounts', bundle.coa), ('gl_extract', bundle.gl)]:
+        path = _role_source_path(bundle, role)
+        expected = bundle.evidence.hash_for(path)
+        source = bundle.dataset_root / path
+        if not expected or not source.is_file() or sha256_file(source) != expected:
+            return {'available': False, 'reason': 'A baseline source changed or has no verified evidence hash.'}
+        citations.append({'source_path': path, 'locator': f'rows 2–{len(frame) + 1}', 'sha256': expected})
+
+    coa = {}
+    for _, row in bundle.coa.iterrows():
+        key = account(row['Account'])
+        if not key or key in coa:
+            return {'available': False, 'reason': 'Account classification keys are absent or duplicated.'}
+        coa[key] = row
+    trial, ledger = {}, {}
+    try:
+        for _, row in bundle.trial_balance.iterrows():
+            key = account(row['Account'])
+            if key in trial or key not in coa:
+                return {'available': False, 'reason': 'Trial-balance account mapping is incomplete or duplicated.'}
+            trial[key] = (money(row['Debit_Total']), money(row['Credit_Total']))
+        for _, row in bundle.gl.iterrows():
+            key = account(row['Account'])
+            if key not in coa:
+                return {'available': False, 'reason': 'A ledger account has no account classification.'}
+            previous = ledger.get(key, (Decimal(0), Decimal(0)))
+            ledger[key] = (previous[0] + money(row['Debit']), previous[1] + money(row['Credit']))
+    except (ValueError, InvalidOperation):
+        return {'available': False, 'reason': 'The baseline contains an invalid financial value.'}
+    variance = max((abs(trial.get(key, (Decimal(0), Decimal(0)))[side] - ledger.get(key, (Decimal(0), Decimal(0)))[side])
+                    for key in trial.keys() | ledger.keys() for side in (0, 1)), default=Decimal(0))
+    if variance >= Decimal('.01'):
+        return {'available': False, 'reason': 'The GL does not reconcile to the trial balance.',
+                'gl_tb_reconciled': False, 'gl_tb_max_variance_sar': float(variance), 'citations': citations}
+    revenue_sar = expense_total_sar = addbacks_sar = Decimal(0)
+    exclusions = re.compile(r'\b(depreciation|amorti[sz]ation|interest|income tax|zakat)\b', re.I)
+    for key, (debit, credit) in trial.items():
+        kind = str(coa[key]['Type']).strip().casefold()
+        if kind == 'revenue':
+            revenue_sar += credit - debit
+        elif kind == 'expense':
+            expense_total_sar += debit - credit
+            if exclusions.search(str(coa[key]['Account_Description'])):
+                addbacks_sar += debit - credit
+        elif kind not in {'asset', 'liability', 'equity'}:
+            return {'available': False, 'reason': 'The account classification contains an unsupported type.'}
+    if revenue_sar <= 0:
+        return {'available': False, 'reason': 'A positive reconciled revenue denominator is required for the margin.'}
     baseline_ebitda_sar = revenue_sar - expense_total_sar + addbacks_sar
-    gl_rollup = bundle.gl.groupby(["Account", "Account_Description"], as_index=False)[["Debit", "Credit"]].sum()
-    reconciliation = tb.merge(gl_rollup, on=["Account", "Account_Description"], how="left").fillna(0.0)
-    debit_variance = float((reconciliation["Debit_Total"] - reconciliation["Debit"]).abs().max())
-    credit_variance = float((reconciliation["Credit_Total"] - reconciliation["Credit"]).abs().max())
     return {
         "available": True,
-        "revenue_sar": revenue_sar,
-        "expense_total_sar": expense_total_sar,
-        "addbacks_sar": addbacks_sar,
-        "baseline_ebitda_sar": baseline_ebitda_sar,
-        "baseline_margin": baseline_ebitda_sar / revenue_sar if revenue_sar else 0.0,
-        "gl_tb_reconciled": debit_variance < 0.01 and credit_variance < 0.01,
-        "gl_tb_max_variance_sar": max(debit_variance, credit_variance),
-        "revenue_rows": [37, 38, 39, 40],
-        "addback_rows": [61, 62, 65],
-        "coa_rows": [40, 41, 42, 43, 66, 67, 70],
+        "revenue_sar": float(revenue_sar),
+        "expense_total_sar": float(expense_total_sar),
+        "addbacks_sar": float(addbacks_sar),
+        "baseline_ebitda_sar": float(baseline_ebitda_sar),
+        "baseline_margin": float(baseline_ebitda_sar / revenue_sar),
+        "gl_tb_reconciled": True,
+        "gl_tb_max_variance_sar": float(variance),
+        "citations": citations,
     }
 
 
-def _format_ebitda_citations(ebitda: dict[str, float | bool | list[int]]) -> str:
-    revenue_rows = ", ".join(str(row) for row in ebitda["revenue_rows"])
-    addback_rows = ", ".join(str(row) for row in ebitda["addback_rows"])
-    coa_rows = ", ".join(str(row) for row in ebitda["coa_rows"])
-    return (
-        "02_ERP_Extracts/Trial_Balance_June_2026.xlsx - revenue rows "
-        f"{revenue_rows}; 02_ERP_Extracts/Trial_Balance_June_2026.xlsx - add-back rows {addback_rows}; "
-        "03_Master_Data/Chart_of_Accounts.xlsx - account type rows "
-        f"{coa_rows}; 02_ERP_Extracts/GL_Extract_H1_2026.csv - account roll-up reconciles to TB with max variance "
-        f"SAR {ebitda['gl_tb_max_variance_sar']:,.2f}"
-    )
+def _format_ebitda_citations(ebitda: dict) -> str:
+    return '; '.join(f"{item['source_path']} - {item['locator']}" for item in ebitda.get('citations', [])) + (
+        f"; account roll-up reconciles to TB with max variance SAR {ebitda['gl_tb_max_variance_sar']:,.2f}"
+        if ebitda.get('gl_tb_reconciled') else '')
 
 
 def write_markdown_pdf(markdown_text: str, output_path: Path, *, title: str) -> Path:

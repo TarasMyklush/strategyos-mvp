@@ -57,6 +57,13 @@ def test_case_file_writer_emits_phase5_deliverables(tmp_path: Path):
     assert "Task 1 leakage overlap" in working_capital
     assert "Driver citations" in working_capital
     qa = artifacts["qa"].read_text(encoding="utf-8")
+    import re
+    answers = re.split(r'^## Q\d\.', qa, flags=re.M)[1:]
+    assert len(answers) == 3
+    for answer in answers:
+        body = answer.split('\n', 1)[1].strip()
+        assert len(re.split(r'\n\s*\n', body)) <= 2
+        assert not re.search(r'^- ', body, flags=re.M)
     assert "has the largest single-event cash leakage in this run" in qa
     assert str(findings[0].vendor_name) in qa
     assert "Baseline H1 EBITDA from GL/TB: SAR 215,741,310.56" in qa
