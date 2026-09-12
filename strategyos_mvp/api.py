@@ -11710,8 +11710,11 @@ def _hydrate_governed_qa_context(
         raise HTTPException(403, str(exc)) from exc
     except RuntimeError as exc:
         from .inference_audit import InferenceBudgetExceeded
+        from .inference_deadline import InferenceDeadlineExceeded
         if isinstance(exc, InferenceBudgetExceeded):
             raise HTTPException(429, str(exc)) from None
+        if isinstance(exc, InferenceDeadlineExceeded):
+            raise HTTPException(504, str(exc)) from None
         raise HTTPException(502, str(exc)) from exc
     try:
         snapshot = ClaimRepository().snapshot(
@@ -12162,7 +12165,8 @@ def _honour_suggestion_promise(answer: str, *, suggestions: Any) -> str:
 
 def _inference_failure_payload(exc: RuntimeError) -> dict[str, Any]:
     from .inference_audit import InferenceBudgetExceeded
-    budget_exhausted = isinstance(exc, InferenceBudgetExceeded)
+    from .inference_deadline import InferenceDeadlineExceeded
+    budget_exhausted = isinstance(exc, (InferenceBudgetExceeded, InferenceDeadlineExceeded))
     return {
         "answer_status": "service_error",
         "error_code": exc.code if budget_exhausted else "language_service_failed",
@@ -13192,14 +13196,26 @@ def _supplemental_grounding_payload(
     return payload
 
 
-async def _llm_answer_question_async(*args: Any, **kwargs: Any) -> dict[str, Any]:
+async def _run_bounded_provider(function, *args: Any, **kwargs: Any):
+    """Cancellation must not free a slot while its blocking call still runs."""
     loop = asyncio.get_running_loop()
     authorized_context = copy_context()
-    async with _LLM_PROVIDER_SEMAPHORE:
-        return await loop.run_in_executor(
+    semaphore = _LLM_PROVIDER_SEMAPHORE
+    await semaphore.acquire()
+    try:
+        future = loop.run_in_executor(
             _LLM_PROVIDER_EXECUTOR,
-            lambda: authorized_context.run(llm_qa.answer_question, *args, **kwargs),
+            lambda: authorized_context.run(function, *args, **kwargs),
         )
+    except BaseException:
+        semaphore.release()
+        raise
+    future.add_done_callback(lambda _: semaphore.release())
+    return await asyncio.shield(future)
+
+
+async def _llm_answer_question_async(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    return await _run_bounded_provider(llm_qa.answer_question, *args, **kwargs)
 
 
 async def _classify_assistant_question_async(
@@ -13208,18 +13224,8 @@ async def _classify_assistant_question_async(
     persona: str | None,
 ) -> dict[str, Any]:
     """Run the no-evidence semantic router without blocking the API loop."""
-    loop = asyncio.get_running_loop()
-    request_context = copy_context()
-    async with _LLM_PROVIDER_SEMAPHORE:
-        return await loop.run_in_executor(
-            _LLM_PROVIDER_EXECUTOR,
-            lambda: request_context.run(
-                llm_qa.classify_question_route,
-                question,
-                config=CONFIG,
-                persona=persona,
-            ),
-        )
+    return await _run_bounded_provider(llm_qa.classify_question_route,
+                                      question, config=CONFIG, persona=persona)
 
 
 def _assistant_question_is_challenge_closure(question: str) -> bool:
@@ -15411,6 +15417,18 @@ def _free_text_ceo_kpi_key(
     return None
 
 
+async def _assistant_chat_response_with_deadline(request, **kwargs):
+    from .inference_deadline import bound, InferenceDeadlineExceeded
+    # Leave delivery headroom before the browser's 60-second request deadline.
+    seconds = min(55.0, float(CONFIG.llm_timeout_seconds or 60))
+    try:
+        with bound(seconds):
+            async with asyncio.timeout(seconds):
+                return await _assistant_chat_response(request, **kwargs)
+    except (TimeoutError, InferenceDeadlineExceeded):
+        raise HTTPException(504, str(InferenceDeadlineExceeded())) from None
+
+
 async def _assistant_chat_response(
     request: AssistantChatRequest | QaRequest,
     *,
@@ -15639,9 +15657,8 @@ async def _assistant_chat_response(
             principal=principal_context,
         )
         context["authenticated_role"] = str(principal_context.get("role") or "")
-        async with _LLM_PROVIDER_SEMAPHORE:
-            context = await asyncio.to_thread(_hydrate_governed_qa_context, context,
-                principal=principal_context, question=question if mode != "deterministic" else None)
+        context = await _run_bounded_provider(_hydrate_governed_qa_context, context,
+            principal=principal_context, question=question if mode != "deterministic" else None)
     llm_status = _public_safe_llm_status() if public_safe else llm_qa.chat_status(CONFIG)
 
     if not public_safe and mode != "deterministic" and context.get("assistant_data_intent") == "facts":
@@ -16603,8 +16620,13 @@ def data_qa(
     if denied is not None:
         return denied
     from .assistant_scope import bind_assistant
+    from .inference_deadline import bound, InferenceDeadlineExceeded
     with bind_assistant(request, _, get_authority_matrix(_principal_tenant_id(_))):
-        return _data_qa_scoped(request, _)
+        try:
+            with bound(float(CONFIG.llm_timeout_seconds or 60)):
+                return _data_qa_scoped(request, _)
+        except InferenceDeadlineExceeded as exc:
+            raise HTTPException(504, str(exc)) from None
 
 
 def _data_qa_scoped(request: QaRequest, _: dict[str, Any]) -> dict[str, Any]:
@@ -17376,7 +17398,7 @@ async def assistant_chat(
     public_safe = not authenticated and not CONFIG.login_required
     with bind_assistant(request, principal, get_authority_matrix(_principal_tenant_id(principal))):
         if public_safe:
-            return await _assistant_chat_response(request, public_safe=True)
+            return await _assistant_chat_response_with_deadline(request, public_safe=True)
         if not llm_qa.chat_status(CONFIG).get('enabled'):
             from .governed_finance import EVIDENCE_COMPONENTS
             selection = {**(request.context or {}), **(request.assistant_context or {})}
@@ -17388,7 +17410,7 @@ async def assistant_chat(
                 return {**local, 'question': request.question, 'language_status': 'unavailable',
                         'answer': 'The language layer is unavailable. ' + local['answer'],
                         'llm_status': llm_qa.chat_status(CONFIG)}
-        return await _assistant_chat_response(request, public_safe=False,
+        return await _assistant_chat_response_with_deadline(request, public_safe=False,
             authenticated_role=role, authenticated_principal=principal)
 
 

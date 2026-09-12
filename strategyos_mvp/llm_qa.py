@@ -1470,6 +1470,8 @@ def _call_openai_compatible_chat(*, config: Any, messages: list[dict[str, str]],
     max_tokens: int = 900, response_format: dict[str, str] | None = None,
     transport_trace: list[dict[str, Any]] | None = None) -> str:
     from .inference_audit import record
+    from .inference_deadline import remaining
+    remaining(float(getattr(config, 'llm_timeout_seconds', 30) or 30))
     with record(config, messages, max_tokens) as audit:
         result = _call_openai_compatible_chat_transport(config=config, messages=messages,
             temperature=temperature, max_tokens=max_tokens, response_format=response_format,
@@ -1578,11 +1580,20 @@ def _call_bedrock_converse(
     ]
     if not conversation:
         raise RuntimeError("Bedrock request has no conversation content.")
-    client = boto3.client("bedrock-runtime", region_name=region)
+    from .inference_deadline import deadline, remaining, sleep
+    client = None
     retry = provider_retry_config(config)
     attempts = max(1, min(int(retry["max_attempts"]), 5))
     reasons: list[str] = []
     for attempt in range(1, attempts + 1):
+        if deadline.get() is not None:
+            from botocore.config import Config as ClientConfig
+            seconds = remaining(float(getattr(config, 'llm_timeout_seconds', 30) or 30))
+            client = boto3.client('bedrock-runtime', region_name=region,
+                config=ClientConfig(connect_timeout=min(5, seconds), read_timeout=seconds,
+                                    retries={'max_attempts': 0}))
+        elif client is None:
+            client = boto3.client('bedrock-runtime', region_name=region)
         try:
             response = client.converse(
                 modelId=str(config.llm_model),
@@ -1617,7 +1628,7 @@ def _call_bedrock_converse(
             reasons.append(type(exc).__name__)
             if attempt == attempts:
                 raise RuntimeError("Bedrock provider is unavailable.") from exc
-            time.sleep(min(float(retry["max_backoff_seconds"]), float(retry["backoff_seconds"]) * (2 ** (attempt - 1))))
+            sleep(min(float(retry["max_backoff_seconds"]), float(retry["backoff_seconds"]) * (2 ** (attempt - 1))))
     raise RuntimeError("Bedrock provider is unavailable.")
 
 
@@ -1632,11 +1643,13 @@ def _post_with_retry(
     transport_trace: list[dict[str, Any]] | None = None,
 ) -> str:
     attempts = max(1, min(int(max_attempts), 5))
+    from .inference_deadline import remaining, sleep
     retry_reasons: list[str] = []
     last_error: RuntimeError | None = None
     for attempt in range(1, attempts + 1):
+        call_timeout = remaining(timeout_seconds)
         try:
-            with urlopen(request, timeout=timeout_seconds) as response:
+            with urlopen(request, timeout=call_timeout) as response:
                 body = response.read().decode("utf-8")
             if transport_trace is not None:
                 transport_trace.append(
@@ -1645,7 +1658,7 @@ def _post_with_retry(
                         "attempts": attempt,
                         "retries": attempt - 1,
                         "retry_reasons": list(retry_reasons),
-                        "timeout_seconds": timeout_seconds,
+                        "timeout_seconds": call_timeout,
                         "outcome": "success",
                     }
                 )
@@ -1676,7 +1689,7 @@ def _post_with_retry(
             reason = type(exc).__name__
         if retryable and attempt < attempts:
             retry_reasons.append(reason)
-            time.sleep(min(max_backoff_seconds, backoff_seconds * (2 ** (attempt - 1))))
+            sleep(min(max_backoff_seconds, backoff_seconds * (2 ** (attempt - 1))))
             continue
         if transport_trace is not None:
             transport_status = {
@@ -1692,7 +1705,7 @@ def _post_with_retry(
                     "attempts": attempt,
                     "retries": attempt - 1,
                     "retry_reasons": list(retry_reasons),
-                    "timeout_seconds": timeout_seconds,
+                    "timeout_seconds": call_timeout,
                     "outcome": "failed",
                     "final_error": str(last_error) if last_error else f"{provider_label} provider failed.",
                 }
