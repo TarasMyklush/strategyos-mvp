@@ -304,3 +304,19 @@ def test_fx_hedge_anchors_derive_from_finding_not_a_hardcoded_vendor_literal():
         "an invoice citation still points at the original vendor-specific invoice PDF "
         "after the AP row vendor name was changed"
     )
+
+
+def test_identity_and_off_contract_exposure_are_not_cash_loss_or_recovery():
+    bundle = load_dataset(SOURCE_DATASET)
+    findings = run_all_finance_skills(bundle)
+    for kind in ('entity_resolution_duplicate', 'off_contract_single_approver'):
+        finding = next(f for f in findings if f.pattern_type == kind)
+        assert finding.calculation['paid_exposure_sar'] > 0
+        assert finding.recoverable_sar == finding.recoverable_usd == finding.leakage_sar == 0
+        assert finding.classification.startswith('CONTROLS ONLY')
+    fx = next(f for f in findings if f.pattern_type == 'fx_hedge_unapplied')
+    assert fx.calculation['hedge_id'] == 'HD-2026-019'
+    assert fx.calculation['hedge_rate'] == 3.73
+    assert fx.leakage_sar == 42912
+    assert fx.recoverable_sar == 0
+    assert any(c.locator == 'Hedges!Excel row 5' and 'HD-2026-019' in c.excerpt for c in fx.citations)

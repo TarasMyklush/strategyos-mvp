@@ -68,10 +68,11 @@ def test_case_file_writer_emits_phase5_deliverables(tmp_path: Path):
     assert str(findings[0].vendor_name) in qa
     assert "Baseline H1 EBITDA from GL/TB: SAR 215,741,310.56" in qa
     assert "EBITDA margin of 56.03% before recovery" in qa
-    assert "margin becomes 56.15%" in qa
-    assert "Projected H2 recurring exposure is SAR 353,570.00" in qa
+    assert "SAR 514,870.00 maps directly" in qa
+    assert "margin becomes 56.16%" in qa
+    assert "Projected H2 recurring exposure is SAR 307,082.00" in qa
     assert "SAR 307,082.00 is EBITDA-linked operating leakage" in qa
-    assert "SAR 46,488.00 is treasury/FX exposure below the EBITDA bridge" in qa
+    assert "SAR 0.00 is treasury/FX exposure below the EBITDA bridge" in qa
     assert "02_ERP_Extracts/Trial_Balance_June_2026.xlsx" in qa
 
 

@@ -519,7 +519,7 @@ def _handle_recoverable(question: str, bundle: _DataBundle, findings: list[_Find
         }
     return {
         "matched": True,
-        "answer": f"Total recoverable identified is {_sar(total)} across {len(findings)} findings.",
+        "answer": f"Estimated recovery and conditional savings opportunities total {_sar(total)} across {len(findings)} findings. This is not confirmed cash recovery; unproven control exposure and unconfirmed FX recovery are excluded.",
         "value": round(total, 2), "unit": "SAR",
         "basis": f"sum of recoverable_sar over {len(findings)} findings.",
         "citations": _finding_citations(findings),

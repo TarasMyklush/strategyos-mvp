@@ -647,6 +647,11 @@ def render_qa(findings: list[Finding], bundle: DataBundle) -> str:
         lines.append("One-time / non-run-rate items: " + '; '.join(
             f"{finding.finding_id}: {finding.title}: SAR {finding.recoverable_sar:,.2f} recovery opportunity, but projected H2 recurring exposure = SAR 0.00 under the current classification. [{_citation_list(finding.citations, limit=2)}]"
             for finding in non_recurring))
+    unconfirmed = [finding for finding in findings if finding.leakage_sar > 0 and finding.recoverable_sar == 0]
+    if unconfirmed:
+        lines.append("Recovery and future exposure remain unconfirmed: " + '; '.join(
+            f"{finding.finding_id}: {finding.title}: SAR {finding.leakage_sar:,.2f} historical avoidable cost; no refund or H2 amount is established by these records. [{_citation_list(finding.citations, limit=2)}]"
+            for finding in unconfirmed))
     return "\n".join(lines)
 
 

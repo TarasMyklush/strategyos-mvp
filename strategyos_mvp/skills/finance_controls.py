@@ -12,7 +12,7 @@ from ..config import CONFIG
 from ..data_roles import role_target_paths
 from ..evidence import page_locator, row_locator
 from ..ingestion import DataBundle
-from ..models import Citation, Finding
+from ..models import Citation, Finding, DataQualityIssue
 from ..plugins import load_configured_plugins
 from ..sensitive_ids import tokenize_sensitive_identifier
 from ..quality import apply_fail_closed_evidence_policy
@@ -556,12 +556,12 @@ def detect_entity_resolution_duplicates(bundle: DataBundle) -> list[Finding]:
                     pattern_type="entity_resolution_duplicate",
                     vendor_id="/".join(vendor_ids),
                     vendor_name=" / ".join(group["Vendor_Name"].astype(str).tolist()),
-                    leakage_sar=exposure,
-                    recoverable_sar=exposure,
-                    recoverable_usd=usd(exposure),
+                    leakage_sar=0.0,
+                    recoverable_sar=0.0,
+                    recoverable_usd=0.0,
                     confidence="HIGH",
-                    classification="CASH (recoverable/control dependent)",
-                    rationale=f"Multiple active vendor records share the same {field}, creating duplicate-payment and contract-bypass risk.",
+                    classification="CONTROLS ONLY (duplicate vendor identity; loss unproven)",
+                    rationale=f"Multiple active vendor records share the same {field}, creating duplicate-payment and contract-bypass risk. Related paid spend is SAR {exposure:,.2f}; shared identity alone does not establish duplicate payments or recoverable loss.",
                     remediation="Vendor master owner should merge the duplicate records, freeze the non-contract vendor, and review paid invoices for duplicate or off-contract recovery.",
                     citations=citations,
                     calculation={"identity_field": field, "identity_value": shared_token, "paid_exposure_sar": exposure},
@@ -604,7 +604,7 @@ def detect_off_contract_single_approver(bundle: DataBundle) -> list[Finding]:
                 pattern_type="off_contract_single_approver",
                 vendor_id=str(vendor_id),
                 vendor_name=vendor_name,
-                leakage_sar=exposure,
+                leakage_sar=0.0,
                 recoverable_sar=0.0,
                 recoverable_usd=0.0,
                 confidence="HIGH" if len(citations) >= 3 else "MEDIUM",
@@ -612,7 +612,7 @@ def detect_off_contract_single_approver(bundle: DataBundle) -> list[Finding]:
                 rationale="Paid AP spend has no contract, no PO reference, and is concentrated under one approver.",
                 remediation="Procurement and AP should block future no-PO spend, require dual approval, and run a pricing reasonableness review before renewal or recovery discussions.",
                 citations=citations,
-                calculation={"paid_exposure_sar": exposure, "invoice_count": len(rows), "approver": top_approver},
+                calculation={"paid_exposure_sar": exposure, "exposure_type": "paid_spend_not_proven_loss", "invoice_count": len(rows), "approver": top_approver},
             )
         )
     return findings
@@ -820,126 +820,118 @@ def detect_fx_hedge_unapplied(bundle: DataBundle) -> list[Finding]:
     hedges = bundle.cash_forecast.get("Hedges")
     if hedges is None:
         return findings
-    hedge_text = " ".join(str(x) for x in hedges.fillna("").to_numpy().ravel())
-    rate_values = [float(x) for x in re.findall(r"\b3\.\d{2,4}\b", hedge_text)]
-    hedge_rate = min(rate_values) if rate_values else CONFIG.finance_fx_hedge_default_rate
-    invoice_ids = _invoice_ids_from_text(hedge_text)
-    rows = bundle.ap[
-        bundle.ap["Currency"].astype(str).str.upper().eq("EUR")
-        & bundle.ap["Status"].eq("Paid")
-    ].copy()
-    if invoice_ids:
-        rows = rows[rows["Invoice_ID"].astype(str).isin(invoice_ids)].copy()
-    if rows.empty:
-        return findings
-    # Pick the invoice whose SAR/EUR rate diverges most from hedge rate. When
-    # the hedge note names no specific invoice, this selection alone (across
-    # every EUR/Paid row) is the general case -- no vendor-name literal
-    # needed to narrow it down.
-    rows["applied_rate"] = rows["Amount_SAR"] / rows["Amount_Original_Currency"]
-    rows["rate_delta"] = rows["applied_rate"] - hedge_rate
-    target = rows.sort_values("rate_delta", ascending=False).iloc[0]
-    exposure = float((target["applied_rate"] - hedge_rate) * float(target["Amount_Original_Currency"]))
-    if exposure <= 0:
-        return findings
-    invoice_id = str(target.Invoice_ID)
-    vendor_name = str(target.Vendor_Name)
-    eur_amount_text = f"{float(target.Amount_Original_Currency):,.2f}"
-    applied_rate_text = f"{float(target.applied_rate):.4f}"
-    # Two-word vendor-name prefix, e.g. "Bordeaux Wines": specific enough to
-    # anchor the OCR/email excerpt search to this vendor without needing the
-    # full legal name (which may be truncated or abbreviated in scanned bank
-    # statement text -- see vendor_name_filename_needle for the matching
-    # filename-oriented derivation).
-    vendor_prefix_words = [w for w in re.findall(r"[A-Za-z0-9]+", vendor_name) if w][:2]
-    vendor_prefix = " ".join(vendor_prefix_words)
-    # Bank statements commonly carry the beneficiary, settled amount and rate,
-    # but not the AP invoice identifier. The AP row and correspondence provide
-    # the invoice-reference bridge; requiring that identifier inside the bank
-    # scan made valid OCR evidence impossible to verify. Amount and settlement
-    # rate form the hard bank anchor; counterparty identity remains a preferred
-    # term because source-quality QA separately reports identity conflicts.
-    bank_required_terms = [eur_amount_text, applied_rate_text]
-    bank_preferred_terms = [term for term in (vendor_prefix, invoice_id) if term]
+    from ..hedge_matching import match_unapplied_hedges
+    matches, issues = match_unapplied_hedges(bundle.ap, hedges)
+    for detail in issues:
+        issue = DataQualityIssue('warning', _role_source_path(bundle, 'cash_forecast'), detail)
+        if issue not in bundle.quality_issues:
+            bundle.quality_issues.append(issue)
+    for match in matches:
+        target = bundle.ap.loc[match['invoice_index']].copy()
+        target['applied_rate'] = float(match['applied_rate'])
+        hedge_rate = float(match['rate'])
+        exposure = float(match['exposure_sar'])
+        currency = match['currency']
+        hedge = hedges.loc[match['hedge_index']]
+        hedge_text = '; '.join(f'{key}: {value}' for key, value in hedge.items())
+        invoice_id = str(target.Invoice_ID)
+        vendor_name = str(target.Vendor_Name)
+        foreign_amount_text = f"{float(target.Amount_Original_Currency):,.2f}"
+        applied_rate_text = f"{float(target.applied_rate):.4f}"
+        # Two-word vendor-name prefix, e.g. "Bordeaux Wines": specific enough to
+        # anchor the OCR/email excerpt search to this vendor without needing the
+        # full legal name (which may be truncated or abbreviated in scanned bank
+        # statement text -- see vendor_name_filename_needle for the matching
+        # filename-oriented derivation).
+        vendor_prefix_words = [w for w in re.findall(r"[A-Za-z0-9]+", vendor_name) if w][:2]
+        vendor_prefix = " ".join(vendor_prefix_words)
+        # Bank statements commonly carry the beneficiary, settled amount and rate,
+        # but not the AP invoice identifier. The AP row and correspondence provide
+        # the invoice-reference bridge; requiring that identifier inside the bank
+        # scan made valid OCR evidence impossible to verify. Amount and settlement
+        # rate form the hard bank anchor; counterparty identity remains a preferred
+        # term because source-quality QA separately reports identity conflicts.
+        bank_required_terms = [foreign_amount_text, applied_rate_text]
+        bank_preferred_terms = [term for term in (vendor_prefix, invoice_id) if term]
 
-    citations = [
-        excel_citation(bundle, _role_source_path(bundle, "ap_ledger"), int(target.name), f"{target.Invoice_ID}; EUR {target.Amount_Original_Currency:,.2f}; SAR {target.Amount_SAR:,.2f}; applied rate {target.applied_rate:.4f}"),
-        bundle.evidence.citation(_role_source_path(bundle, "cash_forecast"), "Hedges sheet", hedge_text[:400]),
-    ]
-    invoice_pdf = rel_invoice_pdf(vendor_name_filename_needle(vendor_name), bundle)
-    if invoice_pdf:
-        invoice_citation = pdf_citation(
-            bundle,
-            invoice_pdf,
-            "EUR invoice",
-            [str(target.Invoice_ID)],
-        )
-        if invoice_citation is not None:
-            citations.append(invoice_citation)
-    bank_rel = _ocr_required_bank_statement(bundle)
-    bank_match = None
-    missing_bank_ocr = False
-    if bank_rel and bank_rel in bundle.evidence.manifest:
-        missing_bank_ocr = missing_ocr_required_evidence(bundle, bank_rel, bank_required_terms)
-        bank_citation = pdf_citation_with_anchor(
-            bundle,
-            bank_rel,
-            "OCR bank statement settlement row",
-            bank_required_terms,
-            bank_preferred_terms,
-        )
-        if bank_citation is not None:
-            bank_match = (bank_rel, bank_citation)
-    if bank_match is None:
-        bank_match = _find_pdf_by_anchor(
-            bundle,
-            "01_Bank_Statements/",
-            "OCR bank statement settlement row",
-            bank_required_terms,
-            bank_preferred_terms,
-        )
-    if bank_match is not None:
-        bank_rel, bank_citation = bank_match
-        citations.append(bank_citation)
-        if not missing_bank_ocr:
+        citations = [
+            excel_citation(bundle, _role_source_path(bundle, "ap_ledger"), int(target.name), f"{target.Invoice_ID}; {currency} {target.Amount_Original_Currency:,.2f}; SAR {target.Amount_SAR:,.2f}; applied rate {target.applied_rate:.4f}"),
+            bundle.evidence.citation(_role_source_path(bundle, "cash_forecast"), f"Hedges!Excel row {int(match['hedge_index']) + 2}", hedge_text),
+        ]
+        invoice_pdf = rel_invoice_pdf(vendor_name_filename_needle(vendor_name), bundle)
+        if invoice_pdf:
+            invoice_citation = pdf_citation(
+                bundle,
+                invoice_pdf,
+                f"{currency} invoice",
+                [str(target.Invoice_ID)],
+            )
+            if invoice_citation is not None:
+                citations.append(invoice_citation)
+        bank_rel = _ocr_required_bank_statement(bundle)
+        bank_match = None
+        missing_bank_ocr = False
+        if bank_rel and bank_rel in bundle.evidence.manifest:
             missing_bank_ocr = missing_ocr_required_evidence(bundle, bank_rel, bank_required_terms)
-    elif bank_rel and bank_rel in bundle.evidence.manifest:
-        missing_bank_ocr = True
-        citations.append(
-            _pending_pdf_citation(
+            bank_citation = pdf_citation_with_anchor(
                 bundle,
                 bank_rel,
-                "OCR bank statement settlement row (verification pending)",
-                f"OCR-required bank statement evidence pending verification for {invoice_id} / {vendor_prefix} / EUR {eur_amount_text} / {applied_rate_text}.",
+                "OCR bank statement settlement row",
+                bank_required_terms,
+                bank_preferred_terms,
+            )
+            if bank_citation is not None:
+                bank_match = (bank_rel, bank_citation)
+        if bank_match is None:
+            bank_match = _find_pdf_by_anchor(
+                bundle,
+                "01_Bank_Statements/",
+                "OCR bank statement settlement row",
+                bank_required_terms,
+                bank_preferred_terms,
+            )
+        if bank_match is not None:
+            bank_rel, bank_citation = bank_match
+            citations.append(bank_citation)
+            if not missing_bank_ocr:
+                missing_bank_ocr = missing_ocr_required_evidence(bundle, bank_rel, bank_required_terms)
+        elif bank_rel and bank_rel in bundle.evidence.manifest:
+            missing_bank_ocr = True
+            citations.append(
+                _pending_pdf_citation(
+                    bundle,
+                    bank_rel,
+                    "OCR bank statement settlement row (verification pending)",
+                    f"OCR-required bank statement evidence pending verification for {invoice_id} / {vendor_prefix} / {currency} {foreign_amount_text} / {applied_rate_text}.",
+                )
+            )
+        email_citation = _find_email_text_citation(bundle, invoice_id.lower())
+        if email_citation is None and vendor_prefix:
+            email_citation = _find_email_text_citation(bundle, vendor_prefix.lower())
+        if email_citation is not None:
+            citations.append(email_citation)
+        confidence = "LOW" if missing_bank_ocr else "HIGH" if len(citations) >= 3 else "MEDIUM"
+        rationale = f"The {currency} invoice settled above the explicitly linked hedge rate during its trade-to-maturity window. The difference is historical avoidable cost, not a verified refund or future recovery commitment."
+        if missing_bank_ocr:
+            rationale += " OCR-required bank statement evidence is missing, so the finding is downgraded pending verified OCR output."
+        findings.append(
+            Finding(
+                finding_id="draft",
+                title=f"FX hedge not applied for {target.Invoice_ID}",
+                pattern_type="fx_hedge_unapplied",
+                vendor_id=str(target.Vendor_ID),
+                vendor_name=str(target.Vendor_Name),
+                leakage_sar=exposure,
+                recoverable_sar=0.0,
+                recoverable_usd=0.0,
+                confidence=confidence,
+                classification="CASH (historical avoidable cost; recovery unconfirmed)",
+                rationale=rationale,
+                remediation=f"Treasury and AP should enforce hedge application checks before {currency} vendor settlement and include hedge IDs in payment approval. Confirm any recovery separately; the historical rate difference is not a refund receivable.",
+                citations=citations,
+                calculation={"applied_rate": float(target.applied_rate), "hedge_rate": hedge_rate, "exposure_sar": exposure, "hedge_id": match["hedge_id"], "currency": currency, "foreign_amount": str(match["foreign_amount"]), "recovery_status": "unconfirmed"},
             )
         )
-    email_citation = _find_email_text_citation(bundle, invoice_id.lower())
-    if email_citation is None and vendor_prefix:
-        email_citation = _find_email_text_citation(bundle, vendor_prefix.lower())
-    if email_citation is not None:
-        citations.append(email_citation)
-    confidence = "LOW" if missing_bank_ocr else "HIGH" if len(citations) >= 3 else "MEDIUM"
-    rationale = "EUR invoice was settled at a rate above an available hedge rate in the treasury forecast."
-    if missing_bank_ocr:
-        rationale += " OCR-required bank statement evidence is missing, so the finding is downgraded pending verified OCR output."
-    findings.append(
-        Finding(
-            finding_id="draft",
-            title=f"FX hedge not applied for {target.Invoice_ID}",
-            pattern_type="fx_hedge_unapplied",
-            vendor_id=str(target.Vendor_ID),
-            vendor_name=str(target.Vendor_Name),
-            leakage_sar=exposure,
-            recoverable_sar=exposure,
-            recoverable_usd=usd(exposure),
-            confidence=confidence,
-            classification="CASH (recoverable going-forward)",
-            rationale=rationale,
-            remediation="Treasury and AP should enforce hedge application checks before EUR vendor settlement and include hedge IDs in payment approval.",
-            citations=citations,
-            calculation={"applied_rate": float(target.applied_rate), "hedge_rate": hedge_rate, "eur_amount": float(target.Amount_Original_Currency), "exposure_sar": exposure},
-        )
-    )
     return findings
 
 

@@ -56,7 +56,7 @@ def test_recoverable_findings_and_unmatched_questions(qa_context):
         "what is the total recoverable?", bundle=bundle, findings=findings
     )
     assert recoverable["matched"] is True
-    assert recoverable["value"] == pytest.approx(794_108.0)
+    assert recoverable["value"] == pytest.approx(642_870.0)
     assert recoverable["basis"] == "sum of recoverable_sar over 8 findings."
 
     by_pattern = qa.answer_question(
@@ -64,11 +64,11 @@ def test_recoverable_findings_and_unmatched_questions(qa_context):
     )
     assert by_pattern["value"][0]["recoverable_sar"] > 0
     assert sum(row["finding_count"] for row in by_pattern["value"]) == 8
-    assert sum(row["recoverable_sar"] for row in by_pattern["value"]) == pytest.approx(794_108.0)
+    assert sum(row["recoverable_sar"] for row in by_pattern["value"]) == pytest.approx(642_870.0)
     assert by_pattern["reconciliation"] == {
         "status": "passed",
-        "component_total_sar": 794_108.0,
-        "stated_total_sar": 794_108.0,
+        "component_total_sar": 642_870.0,
+        "stated_total_sar": 642_870.0,
         "delta_sar": 0.0,
         "finding_count": 8,
         "displayed_finding_count": 8,
@@ -141,7 +141,7 @@ def test_colloquial_phrasing_routes_to_the_right_intent(qa_context):
         result = qa.answer_question(phrasing, bundle=bundle, findings=findings)
         assert result["matched"] is True, phrasing
         assert result["intent"] == "recoverable", phrasing
-        assert result["value"] == pytest.approx(794_108.0), phrasing
+        assert result["value"] == pytest.approx(642_870.0), phrasing
 
     # "supplier" should reach the vendor intents just like "vendor".
     top_suppliers = qa.answer_question(
