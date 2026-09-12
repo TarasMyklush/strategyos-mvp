@@ -86,12 +86,23 @@ def translated(value, language):
     return value.en if language == 'en' else value.ar if language == 'ar' else value.en + ' | ' + value.ar
 
 
+def reference_numbers(numbers):
+    """Lossless compact ranges; never truncate a finding's contributing sources."""
+    ranges = []
+    for n in sorted(set(numbers)):
+        if ranges and n == ranges[-1][1] + 1:
+            ranges[-1][1] = n
+        else:
+            ranges.append([n, n])
+    return ' '.join('[' + (str(a) if a == b else f'{a}–{b}') + ']' for a, b in ranges)
+
+
 def compose(principal, analysis_id, request):
     tenant, _ = store._scope(principal)
     result = store.read_analysis(principal, analysis_id)
     # Bound work and export size. Never silently truncate a board report.
-    if len(result['cells']) > 200 or len(result['rollups']) > 30:
-        raise ValueError('This composer supports up to 200 cells and 30 metrics. Use a smaller reporting plan.')
+    if len(result['cells']) > 10000 or len(result['rollups']) > 200:
+        raise ValueError('This reporting range exceeds the export budget of 10,000 cells or 200 metrics. Select a smaller reporting range.')
     with store._connection() as conn:
         plan = store._plan(conn, tenant, result['plan_id'], result['plan_version'])
         actual = store._actuals(conn, tenant, result['actual_revision'])
@@ -133,6 +144,8 @@ def compose(principal, analysis_id, request):
 def compose_snapshot(result, request, *, analysis_id, plan_digest, actual_digest,
                      warnings=None, newer_records=None, evidence_url=None):
     """Compose the same deterministic pages from an already verified analysis snapshot."""
+    if len(result['cells']) > 10000 or len(result['rollups']) > 200:
+        raise ValueError('This reporting range exceeds the export budget of 10,000 cells or 200 metrics. Select a smaller reporting range.')
     warnings = list(warnings or [])
     newer_records = dict(newer_records or {})
     if evidence_url is None:
@@ -141,21 +154,22 @@ def compose_snapshot(result, request, *, analysis_id, plan_digest, actual_digest
             urlencode({'side': side, 'cell_id': cell_id}))
     lang, template = request.language, request.template
     def label(value):
-        return translated(template.labels[value], lang) if value in template.labels else value
+        return translated(template.labels[value], lang) if value in template.labels else str(value).replace('_', ' ')
     def amount(value):
         return word('missing', lang) if value is None else value
     pages = []
     def add(title, lines, links=None):
-        # Explicit bounds prevent content disappearing off a page in either format.
-        for line in lines:
-            if len(line) > 420:
-                raise ValueError('A report line exceeds 420 characters. Shorten template labels or plan identifiers.')
-        pages.append({'title': title, 'lines': lines, 'links': links or {}})
+        from .board_layout import wrap
+        expanded = [(part, (links or {}).get(str(i))) for i, line in enumerate(lines)
+                    for part in wrap(line, 880, 17)]
+        for start in range(0, len(expanded), 9):
+            chunk = expanded[start:start + 9]
+            pages.append({'title': title, 'lines': [text for text, _ in chunk],
+                          'links': {str(i): link for i, (_, link) in enumerate(chunk) if link}})
     add(translated(template.title, lang), [translated(template.client, lang),
-        f"{result['plan_id']} / v{result['plan_version']}",
+        f"Plan version / إصدار الخطة: {result['plan_version']}",
         f"{result['period']['start']} — {result['period']['end']}",
         f"As of / كما في: {result['as_of']}",
-        f"Actual revision / الإصدار الفعلي: {result['actual_revision']}",
         word('snapshot', lang), word('assurance', lang)])
     for key in warnings:
         add(word('summary', lang), [word(key, lang)])
@@ -170,6 +184,7 @@ def compose_snapshot(result, request, *, analysis_id, plan_digest, actual_digest
         if rollup['unplanned_actuals']: lines.append(word('unplanned', lang) + str(len(rollup['unplanned_actuals'])))
         add(word('summary', lang), lines)
     evidence = []
+    cell_rows, cell_keys, cell_links = [], [], []
     for c in result['cells']:
         refs = []
         for side, key in [('plan', 'plan_source'), ('actuals', 'actual_source')]:
@@ -179,13 +194,15 @@ def compose_snapshot(result, request, *, analysis_id, plan_digest, actual_digest
                 path = evidence_url(side, c['cell_id'])
                 evidence.append({'number': number, 'cell_id': c['cell_id'], 'side': side, 'source': source, 'path': path})
                 refs.append('[' + str(number) + ']')
-        add(word('cells', lang), [c['cell_id'] + ' · ' + label(c['metric']) + ' (' + c['unit'] + ')',
-            ' · '.join(label(k) + ': ' + label(v) for k, v in sorted(c['dimensions'].items())),
-            word('owner', lang) + ': ' + c['owner'],
-            word('target', lang) + ': ' + amount(c['target']),
-            word('actual', lang) + ': ' + amount(c['actual']),
-            word('variance', lang) + ': ' + amount(c['variance']),
-            word('status', lang) + ': ' + word(c['status'], lang), word('evidence', lang) + ': ' + ' '.join(refs)])
+        cell_keys.append(c['cell_id'])
+        cell_rows.append([
+            label(c['metric']) + ' (' + c['unit'] + ')\n' + ' · '.join(label(v) for k, v in sorted(c['dimensions'].items())),
+            c['owner'], amount(c['target']), amount(c['actual']), amount(c['variance']),
+            word(c['status'], lang), ' '.join(refs),
+        ])
+        cell_links.append({str(column): evidence_url(side, c['cell_id'])
+                           for column, side, source in [(2, 'plan', c['plan_source']), (3, 'actuals', c['actual_source'])]
+                           if source})
     for bridge in result.get('price_volume_mix', []):
         if bridge.get('status') != 'reconciled':
             continue
@@ -223,7 +240,7 @@ def compose_snapshot(result, request, *, analysis_id, plan_digest, actual_digest
                 word('observed_variance', lang) + ': ' + effects['observed_variance'],
                 word('reconstructed_variance', lang) + ': ' + effects['reconstructed_variance'],
                 word('reconciliation', lang) + ': ' + ('✓' if finding['reconciles'] else '✕'),
-                word('evidence', lang) + ': ' + ' '.join('[' + str(number) + ']' for number in refs),
+                word('evidence', lang) + ': ' + reference_numbers(refs),
             ]
             add(word('price_volume_mix', lang), lines)
         elif finding_type == 'offset':
@@ -233,7 +250,7 @@ def compose_snapshot(result, request, *, analysis_id, plan_digest, actual_digest
                 word('behind', lang) + ': ' + arithmetic['actual_minus_plan_behind'],
                 word('ahead', lang) + ': ' + arithmetic['actual_minus_plan_ahead'],
                 word('variance', lang) + ': ' + arithmetic['net_variance'],
-                word('evidence', lang) + ': ' + ' '.join('[' + str(number) + ']' for number in refs),
+                word('evidence', lang) + ': ' + reference_numbers(refs),
             ])
         elif finding_type == 'concentration':
             refs = [number for side in ('plan', 'actuals')
@@ -242,23 +259,33 @@ def compose_snapshot(result, request, *, analysis_id, plan_digest, actual_digest
                 label(finding['metric']) + ' · ' + label(finding['dimension']) + ': ' + label(finding['member']),
                 word('share', lang) + ': ' + finding['share_percent'] + '%',
                 word('threshold', lang) + ': ' + finding['threshold_percent'] + '%',
-                word('evidence', lang) + ': ' + ' '.join('[' + str(number) + ']' for number in refs),
+                word('evidence', lang) + ': ' + reference_numbers(refs),
             ])
+    from .board_layout import table_pages
+    pages.extend(table_pages(word('cells', lang),
+        [word('cells', lang), word('owner', lang), word('target', lang), word('actual', lang),
+         word('variance', lang), word('status', lang), word('evidence', lang)],
+        [250, 140, 100, 100, 100, 90, 100], cell_rows, keys=cell_keys, links=cell_links))
+    # Each value links to its exact governed evidence. Preserve the full register
+    # in the PDF attachment/PPTX notes instead of hundreds of one-source slides.
+    documents = {}
     for e in evidence:
-        source = e['source']
-        add(word('evidence', lang) + ' [' + str(e['number']) + ']',
-            [e['cell_id'] + ' / ' + e['side'], source['path'], source['locator'], 'SHA-256: ' + source['sha256']],
-            {'1': e['path']})
-    binding = {'composer_version': 'board-pack.v3', 'analysis_hash': analysis_id, 'plan_digest': plan_digest,
+        key = (e['source']['path'], e['source']['sha256'])
+        documents.setdefault(key, []).append(e)
+    for number, entries in enumerate(documents.values(), 1):
+        add(word('evidence', lang) + ' · ' + str(number), [
+            word('evidence', lang) + ': ' + str(len(entries)),
+            'Open verified source / افتح المصدر الموثق',
+            'Exact row references are retained in the attached evidence register. / مراجع الصفوف محفوظة في سجل الأدلة المرفق.',
+        ], {'1': entries[0]['path']})
+    binding = {'composer_version': 'board-pack.v4', 'analysis_hash': analysis_id, 'plan_digest': plan_digest,
                'actual_digest': actual_digest, 'template': template.model_dump(mode='json'),
                'language': lang, 'warnings': warnings, 'newer_records': newer_records}
     add('Snapshot references / مراجع اللقطة', [
-        'Analysis: ' + analysis_id,
-        'Plan SHA-256: ' + plan_digest,
-        'Actuals SHA-256: ' + actual_digest,
-        'Template SHA-256: ' + fingerprint(template.model_dump(mode='json')),
-        'Pack SHA-256: ' + fingerprint(binding),
-        'Composer: board-pack.v3', word('assurance', lang)])
+        word('snapshot', lang), word('assurance', lang),
+        'Technical provenance is retained in the PDF attachment and slide notes.',
+        'حُفظت المراجع التقنية في مرفق ملف PDF وملاحظات الشرائح.',
+    ])
     return {'schema_version': 1, 'pack_hash': fingerprint(binding), 'binding': binding,
             'checked_at': datetime.now(timezone.utc).isoformat(), 'pages': pages, 'evidence': evidence,
             'untranslated_labels': sorted({v for c in result['cells'] for v in [c['metric'], *c['dimensions'].keys(), *c['dimensions'].values()] if v not in template.labels}) if lang != 'en' else []}
@@ -311,15 +338,41 @@ def export_pdf(pack, public_url):
         pdf.setFillColor(HexColor(pack['binding']['template']['accent']))
         draw(page['title'], 40, 478, 28, 880)
         pdf.setFillColor(HexColor('#192C35'))
-        for n, line in enumerate(page['lines']):
-            y = 426 - n * 43
-            draw(line, 40, y, 17, 880)
-            if str(n) in page['links'] and public_url:
-                pdf.linkURL(public_url + page['links'][str(n)], (40, y-5, 920, y+22), relative=0)
-        draw(f"Kyvern · {i+1}/{len(pack['pages'])} · {pack['binding']['analysis_hash']}", 40, 28, 8, 880)
+        if page.get('table'):
+            from .board_layout import wrap
+            table = page['table']
+            y = 440
+            rows = [table['headers'], *table['rows']]
+            heights = [table['header_height'], *table['row_heights']]
+            for row_index, (row, height) in enumerate(zip(rows, heights)):
+                x = 40
+                for column, (value, column_width) in enumerate(zip(row, table['widths'])):
+                    for line_index, line in enumerate(wrap(value, column_width - 12, table['font_size'])):
+                        draw(line, x + 6, y - 17 - line_index * 15, table['font_size'], column_width - 12)
+                    link = table['links'][row_index - 1].get(str(column)) if row_index else None
+                    if link and public_url:
+                        pdf.linkURL(public_url + link, (x, y-height, x+column_width, y), relative=0)
+                    x += column_width
+                y -= height
+                pdf.setStrokeColor(HexColor('#D8D4CC')); pdf.setLineWidth(.5)
+                pdf.line(40, y, 920, y)
+        else:
+            for n, line in enumerate(page['lines']):
+                y = 426 - n * 43
+                draw(line, 40, y, 17, 880)
+                if str(n) in page['links'] and public_url:
+                    pdf.linkURL(public_url + page['links'][str(n)], (40, y-5, 920, y+22), relative=0)
+        draw(f"Kyvern · {i+1}/{len(pack['pages'])}", 40, 28, 8, 880)
         pdf.showPage()
     pdf.save()
-    return output.getvalue()
+    from pypdf import PdfReader, PdfWriter
+    writer = PdfWriter()
+    writer.clone_document_from_reader(PdfReader(BytesIO(output.getvalue())))
+    writer.add_attachment('kyvern-evidence-register.json', store._encode({
+        'pack_hash': pack['pack_hash'], 'binding': pack['binding'], 'evidence': pack['evidence'],
+    }).encode('utf-8'))
+    attached = BytesIO(); writer.write(attached)
+    return attached.getvalue()
 
 
 def export_pptx(pack, public_url):
@@ -346,11 +399,40 @@ def export_pptx(pack, public_url):
         slide = deck.slides.add_slide(deck.slide_layouts[6])
         slide.background.fill.solid(); slide.background.fill.fore_color.rgb = RGBColor.from_string('FBF8F2')
         text(slide, page['title'], .4, 28, pack['binding']['template']['accent'][1:])
-        for n, line in enumerate(page['lines']):
-            # Conservative sizing for bounded long bilingual references.
-            size = min(17, max(8, 1000 / max(len(line), 1)))
-            text(slide, line, 1.22 + n * .597, size, '192C35', page['links'].get(str(n)))
-        text(slide, f"Kyvern · {i+1}/{len(pack['pages'])} · {pack['binding']['analysis_hash']}", 6.95, 8, '72533F')
-        slide.notes_slide.notes_text_frame.text = store._encode({'pack_hash': pack['pack_hash'], 'binding': pack['binding'], 'checked_at': pack['checked_at']})
+        if page.get('table'):
+            from .board_layout import wrap
+            data = page['table']
+            heights = [data['header_height'], *data['row_heights']]
+            shape = slide.shapes.add_table(len(data['rows']) + 1, len(data['headers']),
+                Pt(40), Pt(100), Pt(880), Pt(sum(heights)))
+            table = shape.table
+            for column, width in zip(table.columns, data['widths']): column.width = Pt(width)
+            for row_index, (values, height) in enumerate(zip([data['headers'], *data['rows']], heights)):
+                table.rows[row_index].height = Pt(height)
+                for column, (value, width) in enumerate(zip(values, data['widths'])):
+                    cell = table.cell(row_index, column)
+                    cell.fill.solid(); cell.fill.fore_color.rgb = RGBColor.from_string('FBF8F2')
+                    cell.margin_left = cell.margin_right = Pt(6)
+                    cell.margin_top = cell.margin_bottom = Pt(6)
+                    tf = cell.text_frame; tf.clear(); tf.word_wrap = False
+                    for line_index, line in enumerate(wrap(value, width - 12, data['font_size'])):
+                        p = tf.paragraphs[0] if line_index == 0 else tf.add_paragraph()
+                        p.space_before = p.space_after = Pt(0); p.line_spacing = Pt(15)
+                        if pack['binding']['language'] == 'ar': p._p.get_or_add_pPr().set('rtl', '1')
+                        run = p.add_run(); run.text = mark_ltr(line)
+                        run.font.name = 'Noto Sans'; run.font.size = Pt(data['font_size'])
+                        run.font.bold = False; run.font.color.rgb = RGBColor.from_string('192C35')
+                        cs = OxmlElement('a:cs'); cs.set('typeface', 'Noto Sans Arabic'); run._r.get_or_add_rPr().append(cs)
+                        link = data['links'][row_index - 1].get(str(column)) if row_index else None
+                        if link and public_url: run.hyperlink.address = public_url + link
+        else:
+            for n, line in enumerate(page['lines']):
+                size = min(17, max(8, 1000 / max(len(line), 1)))
+                text(slide, line, 1.22 + n * .597, size, '192C35', page['links'].get(str(n)))
+        text(slide, f"Kyvern · {i+1}/{len(pack['pages'])}", 6.95, 8, '72533F')
+        provenance = {'pack_hash': pack['pack_hash'], 'binding': pack['binding'], 'checked_at': pack['checked_at']}
+        if i == 0: provenance['evidence'] = pack['evidence']
+        if page.get('table'): provenance['cell_ids'] = page['table']['keys']
+        slide.notes_slide.notes_text_frame.text = store._encode(provenance)
     output = BytesIO(); deck.save(output)
     return output.getvalue()

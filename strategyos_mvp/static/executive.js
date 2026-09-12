@@ -138,6 +138,11 @@
   }
 
   function evidenceReferenceLabel(reference) {
+    // Claim identity is provenance, not an executive-facing source name.
+    if (reference && typeof reference === 'object' &&
+        (reference.claim_revision_id || /^claim:\/\//.test(String(reference.source_path || '')))) {
+      return 'Approved business fact';
+    }
     if (typeof reference === "string") {
       return reference.split(";").map(function (chunk) {
         var raw = String(chunk || "").trim();
@@ -7345,16 +7350,18 @@
           ? '<details class="assistant-citation-list"><summary>Evidence · ' + escapeHtml(String(safeArray(payload.citations).length)) + ' source' + (safeArray(payload.citations).length === 1 ? '' : 's') + '</summary><div>' + safeArray(payload.citations).map(function (citation) {
               var citationHref = String(citation.href || '');
               var factLink = /^\/api\/claims\/snapshots\/[^/]+\/revisions\/[^/]+$/.test(citationHref)
-                ? '<a href="' + escapeHtml(citationHref) + '" target="_blank" rel="noopener">Open approved fact</a>' : '';
+                ? '<a href="' + escapeHtml(citationHref) + '?view=human" target="_blank" rel="noopener">Open approved fact</a>' : '';
               var publicLink = /^https:\/\/en\.wikipedia\.org\/wiki\/[A-Za-z0-9_%().,:-]+$/.test(citationHref)
                 ? '<a href="' + escapeHtml(citationHref) + '" target="_blank" rel="noopener noreferrer">Open public source ↗</a>' : '';
-              return '<article><strong>' + escapeHtml(evidenceReferenceLabel(citation)) + '</strong>' + (citation.excerpt ? '<span>' + escapeHtml(wordSlice(citation.excerpt, 120)) + '</span>' : '') + factLink + publicLink + '</article>';
+              var technical = citation.claim_revision_id
+                ? '<details><summary>Technical details</summary><div>Record: ' + escapeHtml(citation.claim_revision_id) + '</div></details>' : '';
+              return '<article><strong>' + escapeHtml(evidenceReferenceLabel(citation)) + '</strong>' + (citation.excerpt ? '<span>' + escapeHtml(wordSlice(citation.excerpt, 120)) + '</span>' : '') + factLink + publicLink + technical + '</article>';
             }).join('') + '</div></details>'
           : '';
         var consultation = payload.external_consultation && typeof payload.external_consultation === 'object'
           ? payload.external_consultation : {};
         var researchMarkup = role === 'assistant' && consultation.used
-          ? '<details class="assistant-message__evidence assistant-research-evidence"><summary>Research boundary · audited</summary><div>Approved public query: ' + escapeHtml(firstDefined(consultation.query, 'catalogue template')) + ' · No client evidence was sent · Audit ' + escapeHtml(firstDefined(consultation.audit_trail_id, 'recorded')) + '</div></details>'
+          ? '<details class="assistant-message__evidence assistant-research-evidence"><summary>Research boundary · audited</summary><div>Approved public query: ' + escapeHtml(firstDefined(consultation.query, 'catalogue template')) + ' · No client evidence was sent</div><details><summary>Technical details</summary><div>Audit: ' + escapeHtml(firstDefined(consultation.audit_trail_id, 'recorded')) + '</div></details></details>'
           : '';
         var evidenceRefsMarkup = role === 'assistant' && safeArray(message.evidence_refs).length
           ? '<div class="assistant-message__actions">' + safeArray(message.evidence_refs).map(function (reference) {

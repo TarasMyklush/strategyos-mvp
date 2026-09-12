@@ -83,6 +83,25 @@ def test_claim_citation_endpoint_reauthorizes_identity_and_hides_missing_fact(mo
     assert seen[0][1]['revision_id']=='foreign-revision'
 
 
+def test_human_fact_view_uses_same_authorized_record_and_escapes_source_text(record, monkeypatch):
+    from strategyos_mvp import claim_api
+    record['label'] = '<script>alert(1)</script>'
+    seen = []
+    class Repository:
+        def snapshot(self, key, **kwargs):
+            seen.append(kwargs['context'])
+            return {'records': [record], 'snapshot_key': key, 'analysis_as_of': '2026-06-30'}
+    monkeypatch.setattr(claim_api, 'ClaimRepository', Repository)
+    response = claim_api.resolve_snapshot_fact('run', 'approved-revision', view='human',
+        principal={'tenant_id': 'tenant-b', 'subject': 'reader', 'role': 'bu', 'business_units': ['east']})
+    text = response.body.decode()
+    assert 'SAR 1,200,000.00' in text and 'NUPCO' in text
+    assert '<script>' not in text and '&lt;script&gt;' in text
+    assert 'approved-revision' not in text.split('<details>')[0]
+    assert response.headers['cache-control'] == 'private, no-store'
+    assert seen[0].tenant_id == 'tenant-b' and seen[0].business_units == frozenset({'east'})
+
+
 @pytest.mark.parametrize('question', ['my number for ebidta??', 'what did we earn before financing, tax and depreciation?', 'كم أرباحنا قبل الفوائد والضرائب والإهلاك؟'])
 def test_semantic_selection_sees_all_facts_without_literal_or_eighty_record_cutoff(record, monkeypatch, question):
     from strategyos_mvp import llm_qa, model_policy

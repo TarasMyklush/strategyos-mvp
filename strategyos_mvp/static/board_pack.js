@@ -33,13 +33,26 @@
     recorded = record; $('pack-preview').replaceChildren();
     record.pack.pages.forEach(function (page) {
       var section = node('section'); section.className = 'pack-page'; section.appendChild(node('h3', page.title));
-      page.lines.forEach(function (line, i) { var p = node('p');
+      if (page.table) {
+        var table = node('table'), head = node('thead'), header = node('tr'), body = node('tbody');
+        page.table.headers.forEach(function (label) { var th = node('th', label); th.scope = 'col'; header.appendChild(th); });
+        head.appendChild(header); table.appendChild(head);
+        page.table.rows.forEach(function (row, rowIndex) {
+          var tr = node('tr');
+          row.forEach(function (value, column) {
+            var td = node('td'), link = (page.table.links[rowIndex] || {})[String(column)];
+            td.dir = 'auto'; td.style.whiteSpace = 'pre-wrap';
+            if (link) { var a = node('a', value); a.href = link; td.appendChild(a); } else td.textContent = value;
+            tr.appendChild(td);
+          }); body.appendChild(tr);
+        }); table.appendChild(body); section.style.overflowX = 'auto'; section.appendChild(table);
+      } else page.lines.forEach(function (line, i) { var p = node('p');
         if (page.links[String(i)]) { var a = node('a', line); a.href = page.links[String(i)]; p.appendChild(a); } else p.textContent = line;
         p.dir = 'auto'; section.appendChild(p);
       }); $('pack-preview').appendChild(section);
     });
     var fresh = record.freshness.status === 'current' ? 'Current against governed records.' : 'Stale: ' + record.freshness.reasons.join(', ').replace(/_/g, ' ') + '. Generate a new pack after reviewing the newer records.';
-    $('pack-status').textContent = record.pack.pages.length + ' pages · Pack ' + record.pack_id.slice(0, 16) + '… · ' + fresh +
+    $('pack-status').textContent = record.pack.pages.length + ' pages · ' + fresh +
       (record.pack.untranslated_labels.length ? ' Missing EN/AR labels: ' + record.pack.untranslated_labels.join(', ') + '.' : ' All requested labels are translated.');
     updateDownloads();
   }
@@ -110,7 +123,7 @@
     if (!recorded) throw new Error('Generate or open a recorded pack first.');
     var blob = await request('/board-packs/' + recorded.pack_id + '/' + format, undefined, true);
     save(blob, 'kyvern-board-' + recorded.pack_id.slice(0, 16) + '.' + format);
-    $('pack-status').textContent = format.toUpperCase() + ' downloaded from recorded pack ' + recorded.pack_id.slice(0, 16) + '… · ' + recorded.freshness.status + '.';
+    $('pack-status').textContent = format.toUpperCase() + ' downloaded from the recorded snapshot · ' + recorded.freshness.status + '.';
   }); }); });
   updateDownloads();
 })();

@@ -732,14 +732,21 @@ def test_board_pack_exports_bound_snapshot_and_translations(setup, tmp_path, mon
     assert len(pack['evidence']) == len(result['cells']) * 2
     assert any('الإيرادات' in line for p in pack['pages'] for line in p['lines'])
     assert any('masks' in line for p in pack['pages'] for line in p['lines'])
+    rows = [(key, row) for page in pack['pages'] if 'table' in page
+            for key, row in zip(page['table']['keys'], page['table']['rows'])]
+    assert len(rows) == len(result['cells'])
+    assert len(dict(rows)) == len(rows)
     for c in result['cells']:
-        page = next(p for p in pack['pages'] if p['lines'][0].startswith(c['cell_id'] + ' ·'))
-        assert page['lines'][3].endswith(': ' + c['target'])
-        assert page['lines'][4].endswith(': ' + c['actual'])
+        row = dict(rows)[c['cell_id']]
+        assert row[2] == c['target']
+        assert row[3] == c['actual']
     assert board_pack.compose(s['executive'], result['analysis_hash'], request)['pack_hash'] == pack['pack_hash']
     pdf = board_pack.export_pdf(pack, 'https://kyvern.example')
     pptx = board_pack.export_pptx(pack, 'https://kyvern.example')
-    assert len(PdfReader(BytesIO(pdf)).pages) == len(pack['pages'])
+    reader = PdfReader(BytesIO(pdf))
+    assert len(reader.pages) == len(pack['pages'])
+    register = json.loads(reader.attachments['kyvern-evidence-register.json'][0])
+    assert register['evidence'] == pack['evidence']
     deck = Presentation(BytesIO(pptx))
     assert len(deck.slides) == len(pack['pages'])
     assert result['analysis_hash'] in deck.slides[0].notes_slide.notes_text_frame.text
@@ -1045,13 +1052,13 @@ def test_price_volume_mix_runs_through_durable_analysis_and_board_pack(setup):
     assert response.status_code == 200
     assert response.json()['price_volume_mix'][0]['formula_version'] == 'price-volume-mix.v1'
     pack = board_pack.compose(s['executive'], result['analysis_hash'], board_pack.PackRequest(language='bilingual'))
-    assert pack['binding']['composer_version'] == 'board-pack.v3'
+    assert pack['binding']['composer_version'] == 'board-pack.v4'
     assert {'plan_price', 'plan_volume', 'actual_price', 'actual_volume'} <= {
         item['side'] for item in pack['evidence']}
-    bridge_page = next(page for page in pack['pages'] if 'Price / volume / mix bridge' in page['title'])
-    assert any('60.00' in line for line in bridge_page['lines'])
-    assert any('33.00' in line for line in bridge_page['lines'])
-    assert any('[1]' in line for line in bridge_page['lines'])
+    bridge_lines = [line for page in pack['pages'] if 'Price / volume / mix bridge' in page['title'] for line in page['lines']]
+    assert any('60.00' in line for line in bridge_lines)
+    assert any('33.00' in line for line in bridge_lines)
+    assert any('[1–12]' in line for line in bridge_lines)
     for side in ['plan_price', 'plan_volume', 'actual_price', 'actual_volume']:
         filename, content = store.evidence_bytes(s['executive'], result['analysis_hash'], 'item-a', side)
         assert filename == 'evidence.csv'
@@ -1117,7 +1124,9 @@ def test_decomposition_requires_ratified_parent_and_is_idempotent(setup):
     from strategyos_mvp import board_pack
     pack = board_pack.compose(s['executive'], result['analysis_hash'], board_pack.PackRequest(language='en'))
     assert pack['binding']['plan_digest'] == proposal['digest']
-    assert any(line.startswith('regional-hospital') for page in pack['pages'] for line in page['lines'])
+    exported = {key: row for page in pack['pages'] if 'table' in page
+                for key, row in zip(page['table']['keys'], page['table']['rows'])}
+    assert exported['regional-hospital'][2:4] == ['33.33', '10']
 
 
 def test_decomposition_api_and_generic_lineage_spoofing_boundaries(setup):

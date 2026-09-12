@@ -32,7 +32,7 @@ def test_configured_pack_runs_three_evidence_bound_stories_into_board_pages():
         detail = demo_pack.story_detail(story.story_id, pack)
         assert detail["analysis"]["approval_status"] == "ratified"
         assert all(cell["plan_source"]["sha256"] for cell in detail["analysis"]["cells"])
-        assert detail["board_pack"]["binding"]["composer_version"] == "board-pack.v3"
+        assert detail["board_pack"]["binding"]["composer_version"] == "board-pack.v4"
         assert detail["board_pack"]["binding"]["analysis_hash"] == detail["analysis"]["analysis_hash"]
         assert detail["board_pack"]["evidence"]
         assert any(any("\u0600" <= character <= "\u06ff" for character in line)

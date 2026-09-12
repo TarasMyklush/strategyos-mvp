@@ -397,7 +397,8 @@ def resolve_snapshot_fact(
     principal: dict[str, Any] = require_role(
         "executive", "analyst", "auditor", "reviewer", "operator", "tenant_admin", "system", "bu"
     ),
-) -> dict[str, Any]:
+    view: Literal['json', 'human'] = 'json',
+):
     """Resolve a displayed fact with current tenant, BU, source and lineage policy."""
     context = _policy_context(principal, UsePurpose.EXECUTIVE_BRIEFING)
     try:
@@ -406,8 +407,12 @@ def resolve_snapshot_fact(
         records = snapshot.get("records") or []
         if not records:
             raise HTTPException(404,"This fact is not available in the authorized snapshot.")
-        return {"status":"ok","snapshot_key":snapshot["snapshot_key"],
-                "analysis_as_of":snapshot["analysis_as_of"],"record":records[0]}
+        result = {"status":"ok","snapshot_key":snapshot["snapshot_key"],
+                  "analysis_as_of":snapshot["analysis_as_of"],"record":records[0]}
+        if view == 'human':
+            from .fact_view import fact_page
+            return fact_page(result)
+        return result
     except KeyError:
         raise HTTPException(404,"This fact is not available in the authorized snapshot.") from None
     except (ValueError, RuntimeError):

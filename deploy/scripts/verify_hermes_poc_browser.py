@@ -102,10 +102,13 @@ with sync_playwright() as p:
                     evidence=popup.value
                     evidence.wait_for_load_state('domcontentloaded')
                     evidence_text=evidence.locator('body').inner_text()
+                    assert 'Business fact' in evidence_text and '617,000,000' in evidence_text
+                    assert not any(c['claim_revision_id'] in evidence_text for c in payload['citations'])
+                    evidence.get_by_text('Technical details and source lineage', exact=True).click()
                     item['citation_url']=evidence.url
                     (out/'ebitda-citation.txt').write_text(evidence_text)
                     from decimal import Decimal
-                    citation_record = json.loads(evidence_text)['record']
+                    citation_record = json.loads(evidence.locator('pre').inner_text())['record']
                     assert citation_record['claim_revision_id'] in {c['claim_revision_id'] for c in payload['citations']}
                     assert citation_record['metric_key'] == 'ceo.ebitda'
                     assert Decimal(str(citation_record['value'])) * Decimal(str(citation_record['scale'])) == Decimal('617000000')

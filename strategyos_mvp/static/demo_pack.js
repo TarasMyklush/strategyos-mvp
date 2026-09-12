@@ -83,10 +83,19 @@
       var board = document.getElementById('demo-story-board'); board.replaceChildren();
       detail.board_pack.pages.forEach(function (page) {
         var wrapper = el('details'), title = el('summary', page.title), lines = el('ul');
-        page.lines.forEach(function (line) { lines.appendChild(el('li', line)); }); wrapper.append(title, lines); board.appendChild(wrapper);
+        if (page.table) {
+          lines = el('div'); lines.style.overflowX = 'auto';
+          table(lines, page.table.headers, page.table.rows.map(function (row, i) {
+            return row.map(function (value, j) {
+              var href = (page.table.links[i] || {})[String(j)];
+              if (!href) return value;
+              var link = el('a', value); link.href = href; return link;
+            });
+          }));
+        } else page.lines.forEach(function (line) { lines.appendChild(el('li', line)); }); wrapper.append(title, lines); board.appendChild(wrapper);
       });
       document.getElementById('demo-pack-stories').hidden = true; document.getElementById('demo-story-detail').hidden = false;
-      document.getElementById('demo-pack-close').hidden = false; status('Fixed synthetic snapshot · ' + detail.analysis.analysis_hash);
+      document.getElementById('demo-pack-close').hidden = false; status('Fixed synthetic snapshot');
       panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (error) { status(error.message, true); }
   }
