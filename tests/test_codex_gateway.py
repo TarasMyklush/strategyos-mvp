@@ -1,4 +1,5 @@
 import asyncio
+import sys
 
 import httpx
 import pytest
@@ -72,6 +73,28 @@ def test_no_credentials_or_tool_authority_in_child_environment(monkeypatch):
     assert command[-1] == "app-server"
     assert environment["HOME"] == server.settings.home
     assert environment["CODEX_HOME"] == server.settings.home
+
+
+def test_protocol_reader_accepts_events_larger_than_asyncio_default(tmp_path):
+    script = """
+import json, sys
+for line in sys.stdin:
+    request = json.loads(line)
+    if request.get("method") == "initialize":
+        print(json.dumps({"id": request["id"], "result": {"padding": "x" * 100_000}}), flush=True)
+"""
+
+    class LargeEventServer(gateway.CodexAppServer):
+        def command(self):
+            return [sys.executable, "-u", "-c", script]
+
+    async def scenario():
+        server = LargeEventServer(gateway.Settings(TOKEN, home=str(tmp_path)))
+        await server.start()
+        assert server.reader_task is not None and not server.reader_task.done()
+        await server.close()
+
+    asyncio.run(scenario())
 
 
 class FakeAppServer(gateway.CodexAppServer):

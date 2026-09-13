@@ -55,6 +55,11 @@ DISABLED_FEATURES = (
 )
 MAX_BODY = 1_048_576
 MAX_OUTPUT = 131_072
+# App-server notifications include protocol metadata in addition to the submitted
+# evidence packet.  asyncio's subprocess reader otherwise defaults to 64 KiB and
+# can stop consuming stdout on a valid large JSONL event while the child remains
+# alive.  Keep this bounded, but comfortably above the accepted request size.
+MAX_PROTOCOL_LINE = MAX_BODY * 4
 
 
 class CodexAppServer:
@@ -92,7 +97,12 @@ class CodexAppServer:
 
     async def start(self) -> None:
         async with self.start_lock:
-            if self.process is not None and self.process.returncode is None:
+            if (
+                self.process is not None
+                and self.process.returncode is None
+                and self.reader_task is not None
+                and not self.reader_task.done()
+            ):
                 return
             await self.close()
             self.workspace = tempfile.mkdtemp(prefix="strategyos-codex-workspace-")
@@ -105,6 +115,7 @@ class CodexAppServer:
                     cwd=self.workspace,
                     env=self.environment(),
                     start_new_session=True,
+                    limit=MAX_PROTOCOL_LINE,
                 )
             except OSError:
                 self._remove_workspace()
@@ -135,6 +146,7 @@ class CodexAppServer:
         process = self.process
         if process is None or process.stdout is None:
             return
+        reader_error: Exception | None = None
         try:
             while line := await process.stdout.readline():
                 try:
@@ -152,13 +164,27 @@ class CodexAppServer:
                 queue = self.notifications.get(thread_id) if isinstance(thread_id, str) else None
                 if queue is not None:
                     queue.put_nowait(payload)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            reader_error = exc
         finally:
-            error = RuntimeError("Codex app-server stopped")
+            error = RuntimeError("Codex app-server protocol reader stopped")
+            if reader_error is not None:
+                error.__cause__ = reader_error
             for future in list(self.pending.values()):
                 if not future.done():
                     future.set_exception(error)
             for queue in list(self.notifications.values()):
                 queue.put_nowait({"method": "transport/closed", "params": {}})
+            # A process with an unread stdout pipe can remain alive indefinitely.
+            # Mark it for termination so the next request can start a clean
+            # protocol process instead of waiting on a dead reader.
+            if process.returncode is None:
+                try:
+                    process.terminate()
+                except ProcessLookupError:
+                    pass
 
     async def _write(self, payload: dict) -> None:
         process = self.process
@@ -183,7 +209,9 @@ class CodexAppServer:
                 payload["params"] = params
             await self._write(payload)
             response = await asyncio.wait_for(future, timeout)
-        except (TimeoutError, RuntimeError):
+        except asyncio.CancelledError:
+            raise
+        except Exception:
             raise HTTPException(503, "Codex runner is unavailable") from None
         finally:
             self.pending.pop(request_id, None)
@@ -315,6 +343,13 @@ class CodexAppServer:
                 await reader
             except asyncio.CancelledError:
                 pass
+        elif reader is not None:
+            # Retrieve any terminal reader exception so asyncio does not report an
+            # unhandled task while a replacement process is started.
+            try:
+                reader.exception()
+            except asyncio.CancelledError:
+                pass
         self._remove_workspace()
 
     def _remove_workspace(self) -> None:
@@ -339,8 +374,10 @@ def create_app(settings: Settings, runner=None) -> FastAPI:
 
     @app.get("/healthz")
     async def health():
-        # Liveness is not a claim that the subscription has remaining quota.
-        return {"status": "ok", "provider": "codex_cli"}
+        # Readiness includes a functioning protocol reader. It does not claim
+        # that the subscription has remaining quota or that a model turn works.
+        await app_server.start()
+        return {"status": "ready", "provider": "codex_cli"}
 
     @app.post("/v1/chat/completions")
     async def chat(request: Request):
