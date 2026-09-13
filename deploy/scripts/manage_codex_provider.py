@@ -124,7 +124,8 @@ def main():
             # retain a small bounded queue for overlapping prototype users.
             "STRATEGYOS_CODEX_MODEL=gpt-5.6-sol",
             "STRATEGYOS_CODEX_REASONING_EFFORT=medium",
-            "STRATEGYOS_CODEX_CONCURRENCY=2",
+            "STRATEGYOS_CODEX_SERVICE_TIER=priority",
+            "STRATEGYOS_CODEX_CONCURRENCY=4",
             "STRATEGYOS_CODEX_QUEUE_TIMEOUT=15",
             "",
         ]))

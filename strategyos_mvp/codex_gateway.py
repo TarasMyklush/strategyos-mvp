@@ -27,6 +27,7 @@ class Settings:
     command: str = "/usr/local/bin/codex"
     model: str = ""  # Same as WebAgents: empty means the authenticated CLI default.
     reasoning_effort: str = "medium"
+    service_tier: str = "priority"
     timeout: float = 120
     concurrency: int = 2
     queue_timeout: float = 15
@@ -42,6 +43,8 @@ class Settings:
             raise ValueError("Invalid provider resource limits")
         if self.reasoning_effort not in {"low", "medium", "high"}:
             raise ValueError("Invalid provider reasoning effort")
+        if self.service_tier != "priority":
+            raise ValueError("The Hermes gateway requires the priority service tier")
 
 
 DISABLED_FEATURES = (
@@ -209,6 +212,7 @@ class CodexAppServer:
             ),
             "developerInstructions": system,
             "ephemeral": True,
+            "serviceTier": self.settings.service_tier,
             **({"model": self.settings.model} if self.settings.model else {}),
         })
         thread = thread_result.get("thread")
@@ -226,6 +230,7 @@ class CodexAppServer:
                 "approvalPolicy": "never",
                 "sandboxPolicy": {"type": "readOnly", "networkAccess": False},
                 "effort": self.settings.reasoning_effort,
+                "serviceTier": self.settings.service_tier,
                 **({"model": self.settings.model} if self.settings.model else {}),
             })
             turn = turn_result.get("turn")
@@ -389,6 +394,7 @@ def app_factory():
         home=os.environ.get("STRATEGYOS_CODEX_HOME", "/var/lib/strategyos-codex"),
         model=os.environ.get("STRATEGYOS_CODEX_MODEL", ""),
         reasoning_effort=os.environ.get("STRATEGYOS_CODEX_REASONING_EFFORT", "medium"),
+        service_tier=os.environ.get("STRATEGYOS_CODEX_SERVICE_TIER", "priority"),
         timeout=float(os.environ.get("STRATEGYOS_CODEX_TIMEOUT", "120")),
         concurrency=int(os.environ.get("STRATEGYOS_CODEX_CONCURRENCY", "2")),
         queue_timeout=float(os.environ.get("STRATEGYOS_CODEX_QUEUE_TIMEOUT", "15")),

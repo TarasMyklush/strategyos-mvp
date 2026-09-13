@@ -12,6 +12,8 @@ import os
 import re
 import socket
 import time
+from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 from dataclasses import asdict, is_dataclass
 from http.client import BadStatusLine, IncompleteRead, RemoteDisconnected
 from typing import Any
@@ -420,10 +422,12 @@ def answer_question(
         from .fact_rendering import fact_batches
         selected_refs = []
         selected_answers: list[str] = []
-        batch_count = 0
+        batches = list(fact_batches(registry))
+        batch_count = len(batches)
         answer_supported = False
-        for batch in fact_batches(registry):
-            batch_count += 1
+
+        def select_batch(batch):
+            batch_trace: list[dict[str, Any]] = []
             messages = [
                 {"role": "system", "content":
                  'Select immutable fact references relevant to answering the question by meaning. '
@@ -452,26 +456,45 @@ def answer_question(
                     "facts": [{"ref": ref, "text": fact["text"], "formula": fact["record"].get("formula")}
                               for ref, fact in batch.items()]}, ensure_ascii=False)},
             ]
-            try:
-                raw = _call_openai_compatible_chat(config=config, messages=messages,
-                    response_format={"type": "json_object"}, transport_trace=transport_trace,
-                    max_tokens=max(900, len(batch) * 32 + 50))
-                selection = json.loads(raw)
-                if (not isinstance(selection, dict)
-                        or set(selection) not in ({"matched", "fact_refs", "answer_supported"},
-                                                  {"matched", "fact_refs", "answer_supported", "answer"})
-                        or not isinstance(selection["answer_supported"], bool)
-                        or (selection["answer_supported"] and not selection["matched"])):
-                    raise ValueError("Invalid answer coverage assessment")
-                answer_supported = selection.pop("answer_supported")
-                selected_answer = _clean_visible_answer(selection.pop("answer", ""))
-                render_selection(selection, batch, run_id=run_id)
-                selected_refs.extend(selection["fact_refs"])
+            raw = _call_openai_compatible_chat(config=config, messages=messages,
+                response_format={"type": "json_object"}, transport_trace=batch_trace,
+                max_tokens=max(900, len(batch) * 32 + 50))
+            selection = json.loads(raw)
+            if (not isinstance(selection, dict)
+                    or set(selection) not in ({"matched", "fact_refs", "answer_supported"},
+                                              {"matched", "fact_refs", "answer_supported", "answer"})
+                    or not isinstance(selection["answer_supported"], bool)
+                    or (selection["answer_supported"] and not selection["matched"])):
+                raise ValueError("Invalid answer coverage assessment")
+            supported = selection.pop("answer_supported")
+            selected_answer = _clean_visible_answer(selection.pop("answer", ""))
+            render_selection(selection, batch, run_id=run_id)
+            return selection["fact_refs"], supported, selected_answer, batch_trace
+
+        try:
+            if batch_count == 1:
+                batch_results = [select_batch(batches[0])]
+            else:
+                # Every authorized fact is still evaluated. Independent bounded
+                # batches run concurrently so packet size cannot turn complete
+                # retrieval into a serial chain of model round trips.
+                with ThreadPoolExecutor(
+                    max_workers=min(4, batch_count), thread_name_prefix="strategyos-fact-selection"
+                ) as executor:
+                    futures = [
+                        executor.submit(copy_context().run, select_batch, batch)
+                        for batch in batches
+                    ]
+                    batch_results = [future.result() for future in futures]
+            for refs, supported, selected_answer, batch_trace in batch_results:
+                selected_refs.extend(refs)
+                answer_supported = supported
                 if selected_answer:
                     selected_answers.append(selected_answer)
-            except (ValueError, TypeError) as exc:
-                # Invalid output is a provider failure, never proof of missing data.
-                raise RuntimeError("The language service returned an invalid evidence selection. Please retry.") from exc
+                transport_trace.extend(batch_trace)
+        except (ValueError, TypeError) as exc:
+            # Invalid output is a provider failure, never proof of missing data.
+            raise RuntimeError("The language service returned an invalid evidence selection. Please retry.") from exc
         rendered = render_selection({"matched": bool(selected_refs), "fact_refs": selected_refs}, registry, run_id=run_id)
         if selected_refs and batch_count > 1:
             # Assess the union: a batch can contain useful context while only

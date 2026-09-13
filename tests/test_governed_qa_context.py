@@ -90,6 +90,24 @@ def test_hydration_keeps_dashboard_records_but_separates_semantic_answer_scope(m
     assert result['bundle'].answer_metric_keys == frozenset({'new.metric'})
 
 
+def test_calculation_fallback_uses_only_semantically_selected_categories(monkeypatch):
+    from strategyos_mvp import api
+    records = [{'metric_key': 'selected.metric', 'value': '123'},
+               {'metric_key': 'ceo.cash_floor', 'value': '456'}]
+    class Repository:
+        def snapshot(self, key, **kwargs):
+            return {'records': records}
+    monkeypatch.setattr(api, 'ClaimRepository', Repository)
+    monkeypatch.setattr(api, '_assistant_claim_retrieval_plan', lambda *args, **kwargs: {
+        'intent': 'calculation', 'selected_metric_keys': frozenset({'selected.metric'}),
+        'metric_keys': frozenset({'selected.metric', 'ceo.cash_floor'})})
+    context = {'run_id':'run', 'summary':{'_claim_policy_context':{'tenant_id':'tenant-a'}}}
+    result = api._hydrate_governed_qa_context(context,
+        principal={'tenant_id':'tenant-a','subject':'reader','role':'executive'}, question='Compare values')
+    assert len(result['bundle'].authorized_claim_records) == 2
+    assert result['bundle'].answer_metric_keys == frozenset({'selected.metric'})
+
+
 def test_hydration_returns_general_answer_without_loading_claim_values(monkeypatch):
     from types import SimpleNamespace
     from strategyos_mvp import api

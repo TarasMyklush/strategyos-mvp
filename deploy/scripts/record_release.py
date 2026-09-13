@@ -51,6 +51,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--base', type=Path, required=True)
     parser.add_argument('--container', required=True)
+    parser.add_argument('--provider-container')
+    parser.add_argument('--provider-image-ref')
     parser.add_argument('--target', required=True)
     parser.add_argument('--approval-basis', required=True)
     args = parser.parse_args()
@@ -60,6 +62,24 @@ def main():
     revision = meta['Config']['Labels'].get('org.opencontainers.image.revision')
     if not revision or revision == 'unknown':
         raise SystemExit('The application image needs an immutable revision label.')
+    if bool(args.provider_container) != bool(args.provider_image_ref):
+        raise SystemExit('Provider container and immutable image reference must be supplied together.')
+    provider_component = None
+    if args.provider_container:
+        provider_meta = json.loads(subprocess.check_output(
+            ['docker', 'inspect', args.provider_container]))[0]
+        if provider_meta['State'].get('Health', {}).get('Status') != 'healthy':
+            raise SystemExit('Codex provider container must be healthy before attestation.')
+        provider_revision = provider_meta['Config']['Labels'].get('org.opencontainers.image.revision')
+        if provider_revision != revision:
+            raise SystemExit('Application and Codex provider revisions differ.')
+        if provider_meta['Config'].get('Image') != args.provider_image_ref:
+            raise SystemExit('Running Codex provider does not use the selected immutable image.')
+        provider_component = {
+            'revision': provider_revision,
+            'configured_image': args.provider_image_ref,
+            'image_digest': provider_meta['Image'],
+        }
     mounted = [m for m in meta['Mounts'] if m['Destination'] == '/app/workspace']
     if len(mounted) != 1:
         raise SystemExit('Exactly one governed workspace mount is required.')
@@ -109,6 +129,7 @@ finally:
         'source_file_count': len(manifest['files']), 'source_classification': manifest['classification'],
         'source_period': manifest['period'], 'approval_status': summary['approval_status'],
         'approval_basis': args.approval_basis, 'provider': env.get('STRATEGYOS_LLM_PROVIDER', 'disabled'),
+        'provider_component': provider_component,
         'source_search': summary.get('source_search'), 'projection_rebuild': summary.get('projection_rebuild'),
         'recorded_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
     }

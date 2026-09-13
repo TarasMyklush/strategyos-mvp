@@ -11758,7 +11758,10 @@ def _hydrate_governed_qa_context(
     records = [record for record in list(snapshot.get("records") or []) if isinstance(record, Mapping)]
     context["bundle"] = claim_backed_bundle(records)
     context["bundle"].answer_data_intent = retrieval_plan["intent"] if retrieval_plan is not None else None
-    if retrieval_plan is not None and retrieval_plan["intent"] == "facts":
+    if retrieval_plan is not None and retrieval_plan["intent"] != "context":
+        # The complete bundle remains available to deterministic calculations.
+        # Model fallback sees only the semantically selected categories, never
+        # the unrelated headline/presentation records preloaded for rendering.
         selected_keys = retrieval_plan.get("selected_metric_keys", retrieval_plan["metric_keys"])
         context["bundle"].answer_metric_keys = frozenset(selected_keys)
     from .assistant_scope import current_scope

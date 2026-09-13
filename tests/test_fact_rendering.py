@@ -1,6 +1,8 @@
 from copy import deepcopy
 from types import SimpleNamespace
 import json
+import threading
+import time
 import pytest
 
 from strategyos_mvp.fact_rendering import fact_registry, render_selection
@@ -226,18 +228,33 @@ def test_large_evidence_packets_are_lossless_and_every_batch_is_validated(record
     monkeypatch.setattr(fact_rendering, 'fact_batches', lambda registry: original_batches(registry, max_bytes=1200))
     monkeypatch.setattr(model_policy, 'evidence_model_access', lambda _: True)
     seen = []
+    active = 0
+    max_active = 0
+    lock = threading.Lock()
     def provider(**kwargs):
+        nonlocal active, max_active
         packet = json.loads(kwargs['messages'][-1]['content'])
         if 'approved_comparisons' in packet:
             assert len(packet['facts']) == 27
             return json.dumps({'answer_supported': True})
         facts = packet['facts']
-        seen.extend(fact['ref'] for fact in facts)
-        return json.dumps({'matched': True, 'fact_refs': [fact['ref'] for fact in facts], 'answer_supported': False})
+        with lock:
+            active += 1
+            max_active = max(max_active, active)
+        try:
+            time.sleep(0.02)
+            with lock:
+                seen.extend(fact['ref'] for fact in facts)
+            return json.dumps({'matched': True, 'fact_refs': [fact['ref'] for fact in facts], 'answer_supported': False})
+        finally:
+            with lock:
+                active -= 1
     monkeypatch.setattr(llm_qa, '_call_openai_compatible_chat', provider)
     result = llm_qa.answer_question('Show all values', bundle=SimpleNamespace(authorized_claim_records=records),
         findings=[], summary={'run_id': 'run'}, config=_config())
-    assert seen == [r['claim_revision_id'] for r in records]
+    assert set(seen) == {r['claim_revision_id'] for r in records}
+    assert len(seen) == len(records)
+    assert max_active > 1
     assert len(result['fact_cells']) == 27  # No hidden 20-result limit either.
     assert result['retrieval']['batches_completed'] > 1
     assert result['retrieval']['complete'] is True

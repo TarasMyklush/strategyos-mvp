@@ -48,7 +48,9 @@ fi
 # no application image pins and is enabled only after provider acceptance tests.
 PROVIDER_ENV_ARGS=""
 RUNTIME_ENV_ARGS=""
+PROVIDER_ACTIVE=false
 if ssh ${SSH_OPTS} "${TARGET_HOST}" "test -f '${TARGET_DIR}/provider-codex/enabled' && test -f '${TARGET_DIR}/provider-codex/provider.env' && test -f '${TARGET_DIR}/provider-codex/compose.yml'"; then
+  PROVIDER_ACTIVE=true
   COMPOSE_FILE_ARGS="${COMPOSE_FILE_ARGS} -f ${TARGET_DIR}/provider-codex/compose.yml"
   PROVIDER_ENV_ARGS=" --env-file ${TARGET_DIR}/provider-codex/provider.env"
 fi
@@ -90,6 +92,20 @@ rsync -az --delete "${RSYNC_SSH_ARGS[@]}" \
 
 rsync -az "${RSYNC_SSH_ARGS[@]}" "${LOCAL_ENV}" "${TARGET_HOST}:${TARGET_DIR}/app/deploy/.env"
 rsync -az "${RSYNC_SSH_ARGS[@]}" "${LOCAL_SECRETS_ENV}" "${TARGET_HOST}:${TARGET_DIR}/app/deploy/.env.secrets"
+
+if [ "${PROVIDER_ACTIVE}" = true ]; then
+  if [[ ! "${STRATEGYOS_CODEX_IMAGE:-}" =~ ^ghcr\.io/[a-z0-9_.-]+/[a-z0-9_.-]+@sha256:[0-9a-f]{64}$ ]]; then
+    echo "An enabled Codex provider requires the immutable release gateway image." >&2
+    exit 1
+  fi
+  # The host-managed auth/token files remain outside the release tree. Advance
+  # only the reviewed overlay and immutable gateway image/configuration.
+  rsync -az "${RSYNC_SSH_ARGS[@]}" deploy/docker-compose.codex.yml \
+    "${TARGET_HOST}:${TARGET_DIR}/provider-codex/compose.yml"
+  ssh ${SSH_OPTS} "${TARGET_HOST}" \
+    "python3 '${TARGET_DIR}/app/deploy/scripts/update_codex_provider_release.py' --env-file '${TARGET_DIR}/provider-codex/provider.env' --image '${STRATEGYOS_CODEX_IMAGE}'"
+  ssh ${SSH_OPTS} "${TARGET_HOST}" "docker pull '${STRATEGYOS_CODEX_IMAGE}'"
+fi
 
 dump_remote_compose_diagnostics() {
   ssh ${SSH_OPTS} "${TARGET_HOST}" "cd '${TARGET_DIR}/app' && \

@@ -130,6 +130,14 @@ jobs:
           STRATEGYOS_API_IMAGE: ghcr.io/example/strategyos-mvp:test
         run: docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.release.yml -f deploy/docker-compose.hetzner-qa.yml --env-file deploy/.env.ci --env-file deploy/.env.secrets.ci config -q
 
+      - name: Validate Codex provider compose
+        env:
+          STRATEGYOS_CODEX_IMAGE: ghcr.io/example/strategyos-codex-gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          STRATEGYOS_CODEX_GATEWAY_TOKEN: ci-only-token
+          STRATEGYOS_CODEX_TOKEN_PATH: /tmp/strategyos-ci-token
+          STRATEGYOS_CODEX_AUTH_DIR: /tmp/strategyos-ci-auth
+        run: docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.codex.yml --env-file deploy/.env.ci --env-file deploy/.env.secrets.ci config -q
+
   docker-build:
     name: Docker build
     runs-on: ubuntu-24.04
@@ -154,4 +162,15 @@ jobs:
           cache-to: type=gha,mode=max,scope=strategyos-runtime,ignore-error=true
           build-args: |
             POPPLER_UTILS_VERSION=25.03.0-5+deb13u4
+            STRATEGYOS_RELEASE_SHA=${{ github.sha }}
+
+      - name: Build Codex gateway image
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf
+        with:
+          context: .
+          file: deploy/Dockerfile.codex-gateway
+          push: false
+          cache-from: type=gha,scope=strategyos-codex-gateway
+          cache-to: type=gha,mode=max,scope=strategyos-codex-gateway,ignore-error=true
+          build-args: |
             STRATEGYOS_RELEASE_SHA=${{ github.sha }}

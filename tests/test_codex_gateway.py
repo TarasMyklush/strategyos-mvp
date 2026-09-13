@@ -114,11 +114,13 @@ def test_model_reasoning_and_sandbox_are_server_controlled():
     thread_params = next(params for method, params, _ in server.calls if method == "thread/start")
     turn_params = next(params for method, params, _ in server.calls if method == "turn/start")
     assert thread_params["model"] == "gpt-5.6-sol"
+    assert thread_params["serviceTier"] == "priority"
     assert thread_params["ephemeral"] is True
     assert thread_params["approvalPolicy"] == "never"
     assert thread_params["sandbox"] == "read-only"
     assert turn_params["model"] == "gpt-5.6-sol"
     assert turn_params["effort"] == "medium"
+    assert turn_params["serviceTier"] == "priority"
     assert turn_params["sandboxPolicy"] == {"type": "readOnly", "networkAccess": False}
     assert [method for method, _, _ in server.calls][-1] == "thread/unsubscribe"
 
@@ -131,6 +133,11 @@ def test_text_mode_returns_plain_text():
 def test_invalid_reasoning_effort_is_rejected():
     with pytest.raises(ValueError):
         gateway.Settings(TOKEN, reasoning_effort="unbounded")
+
+
+def test_non_priority_service_tier_is_rejected():
+    with pytest.raises(ValueError):
+        gateway.Settings(TOKEN, service_tier="default")
 
 
 def test_bounded_concurrency_and_recovery():

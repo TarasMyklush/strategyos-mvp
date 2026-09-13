@@ -3,6 +3,7 @@ ARG CODEX_VERSION=0.149.0
 RUN npm install --global @openai/codex@${CODEX_VERSION}
 
 FROM python:3.12-slim-bookworm
+ARG STRATEGYOS_RELEASE_SHA=unrecorded
 COPY --from=codex /usr/local/bin/node /usr/local/bin/node
 COPY --from=codex /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s /usr/local/lib/node_modules/@openai/codex/bin/codex.js /usr/local/bin/codex \
@@ -12,4 +13,5 @@ WORKDIR /app
 COPY strategyos_mvp/codex_gateway.py /app/codex_gateway.py
 USER gateway
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+LABEL org.opencontainers.image.revision=${STRATEGYOS_RELEASE_SHA}
 CMD ["uvicorn", "codex_gateway:app_factory", "--factory", "--host", "0.0.0.0", "--port", "8091", "--workers", "1", "--no-access-log"]
