@@ -1,6 +1,4 @@
 import asyncio
-import json
-from pathlib import Path
 
 import httpx
 import pytest
@@ -60,33 +58,74 @@ def test_roles_and_history_are_preserved():
     assert seen == messages
 
 
-def test_no_credentials_or_tool_authority_in_child_environment(monkeypatch, tmp_path):
+def test_no_credentials_or_tool_authority_in_child_environment(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "secret-db")
     monkeypatch.setenv("OPENAI_API_KEY", "secret-api")
     monkeypatch.setenv("STRATEGYOS_CODEX_GATEWAY_TOKEN", TOKEN)
-    command, environment = gateway.invocation(gateway.Settings(TOKEN), tmp_path, "Use evidence")
+    server = gateway.CodexAppServer(gateway.Settings(TOKEN))
+    command, environment = server.command(), server.environment()
     assert not {"DATABASE_URL", "OPENAI_API_KEY", "STRATEGYOS_CODEX_GATEWAY_TOKEN"} & environment.keys()
-    assert "--ignore-user-config" in command and "--ephemeral" in command
-    assert command[command.index("--sandbox") + 1] == "read-only"
     assert 'approval_policy="never"' in command and 'web_search="disabled"' in command
-    assert 'model_reasoning_effort="medium"' in command
     assert "mcp_servers={}" in command
     for feature in gateway.DISABLED_FEATURES:
-        assert command[command.index(feature) - 1] == "--disable"
-    assert "--model" not in command
-    assert command[-1] == "-"
+        assert f"features.{feature}=false" in command
+    assert command[-1] == "app-server"
+    assert environment["HOME"] == server.settings.home
+    assert environment["CODEX_HOME"] == server.settings.home
 
 
-def test_explicit_model_is_server_controlled(tmp_path):
-    command, _ = gateway.invocation(gateway.Settings(TOKEN, model="chosen-model"), tmp_path, "")
-    assert command[command.index("--model") + 1] == "chosen-model"
+class FakeAppServer(gateway.CodexAppServer):
+    def __init__(self, settings, *, answer='{"answer":"Grounded"}', complete=True):
+        super().__init__(settings)
+        self.workspace = "/tmp/isolated"
+        self.calls = []
+        self.fake_answer = answer
+        self.complete = complete
+
+    async def start(self):
+        self.workspace = "/tmp/isolated"
+
+    async def _request_raw(self, method, params=None, *, timeout=15.0):
+        self.calls.append((method, params, timeout))
+        if method == "thread/start":
+            return {"thread": {"id": "thread-1"}}
+        if method == "turn/start":
+            queue = self.notifications["thread-1"]
+            turn = {"id": "turn-1"}
+            if self.complete:
+                queue.put_nowait({
+                    "method": "item/completed",
+                    "params": {"threadId": "thread-1", "turnId": "turn-1", "item": {
+                        "type": "agentMessage", "phase": "final_answer", "text": self.fake_answer,
+                    }},
+                })
+                queue.put_nowait({
+                    "method": "turn/completed",
+                    "params": {"threadId": "thread-1", "turn": {"id": "turn-1", "status": "completed"}},
+                })
+            return {"turn": turn}
+        return {}
 
 
-def test_reasoning_effort_is_server_controlled(tmp_path):
-    command, _ = gateway.invocation(
-        gateway.Settings(TOKEN, reasoning_effort="medium"), tmp_path, ""
-    )
-    assert 'model_reasoning_effort="medium"' in command
+def test_model_reasoning_and_sandbox_are_server_controlled():
+    server = FakeAppServer(gateway.Settings(TOKEN, model="gpt-5.6-sol", reasoning_effort="medium"))
+    answer = asyncio.run(server.answer(payload()["messages"], True))
+    assert answer == '{"answer":"Grounded"}'
+    thread_params = next(params for method, params, _ in server.calls if method == "thread/start")
+    turn_params = next(params for method, params, _ in server.calls if method == "turn/start")
+    assert thread_params["model"] == "gpt-5.6-sol"
+    assert thread_params["ephemeral"] is True
+    assert thread_params["approvalPolicy"] == "never"
+    assert thread_params["sandbox"] == "read-only"
+    assert turn_params["model"] == "gpt-5.6-sol"
+    assert turn_params["effort"] == "medium"
+    assert turn_params["sandboxPolicy"] == {"type": "readOnly", "networkAccess": False}
+    assert [method for method, _, _ in server.calls][-1] == "thread/unsubscribe"
+
+
+def test_text_mode_returns_plain_text():
+    server = FakeAppServer(gateway.Settings(TOKEN), answer="Grounded")
+    assert asyncio.run(server.answer(payload()["messages"], False)) == "Grounded"
 
 
 def test_invalid_reasoning_effort_is_rejected():
@@ -118,44 +157,33 @@ def test_bounded_concurrency_and_recovery():
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize("returncode,output,expected", [(0, "hello", None), (0, "", 502), (1, "", 502)])
-def test_process_results(monkeypatch, returncode, output, expected):
-    async def spawn(*command, **kwargs):
-        path = Path(command[command.index("--output-last-message") + 1])
-        class Process:
-            async def communicate(self, prompt):
-                assert b"conversation" in prompt
-                path.write_text(output)
-            async def wait(self):
-                return returncode
-        process = Process()
-        process.returncode = returncode
-        return process
-    monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
-    if expected:
-        with pytest.raises(HTTPException) as exc:
-            asyncio.run(gateway.complete(gateway.Settings(TOKEN), payload()["messages"], False))
-        assert exc.value.status_code == expected
-    else:
-        assert asyncio.run(gateway.complete(gateway.Settings(TOKEN), payload()["messages"], False)) == output
-
-
-def test_timeout_kills_process_group(monkeypatch):
-    killed = []
-    class Process:
-        pid = 12345
-        async def communicate(self, prompt):
-            raise TimeoutError()
-        async def wait(self):
-            pass
-    async def spawn(*args, **kwargs):
-        return Process()
-    monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
-    monkeypatch.setattr(gateway.os, "killpg", lambda *args: killed.append(args))
+def test_timeout_interrupts_turn_and_unsubscribes():
+    server = FakeAppServer(gateway.Settings(TOKEN, timeout=1), complete=False)
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(gateway.complete(gateway.Settings(TOKEN), payload()["messages"], False))
+        asyncio.run(server.answer(payload()["messages"], False))
     assert exc.value.status_code == 504
-    assert killed == [(12345, gateway.signal.SIGKILL)]
+    assert [method for method, _, _ in server.calls][-2:] == ["turn/interrupt", "thread/unsubscribe"]
+
+
+def test_request_cancellation_interrupts_turn_and_unsubscribes():
+    async def scenario():
+        server = FakeAppServer(gateway.Settings(TOKEN), complete=False)
+        task = asyncio.create_task(server.answer(payload()["messages"], False))
+        while not any(method == "turn/start" for method, _, _ in server.calls):
+            await asyncio.sleep(0)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert [method for method, _, _ in server.calls][-2:] == ["turn/interrupt", "thread/unsubscribe"]
+
+    asyncio.run(scenario())
+
+
+def test_invalid_structured_answer_fails_closed():
+    server = FakeAppServer(gateway.Settings(TOKEN), answer="not json")
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(server.answer(payload()["messages"], True))
+    assert exc.value.status_code == 502
 
 
 def test_provider_failure_does_not_leak_or_fallback():
